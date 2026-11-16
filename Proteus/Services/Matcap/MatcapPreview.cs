@@ -74,6 +74,7 @@ internal static class MatcapPreview
         var temps = new List<string> { req.MaskTemp };
         if (req.FlatNormalTemp != null) temps.Add(req.FlatNormalTemp);
         temps.AddRange(req.Materials.Select(m => m.ImageTexTemp).OfType<string>());
+        temps.AddRange(req.Materials.Select(m => m.RowNormalTemp).OfType<string>());
         try
         {
             var files = new List<LiveBrushPreview.PreviewFile>
@@ -85,6 +86,8 @@ internal static class MatcapPreview
                 files.Add(new(m.GamePaths, ".mtrl", m.Bytes));
                 if (m.ImageTexTemp != null && m.Source.Tex is { } tex)
                     files.Add(new([tex.GamePath], ".tex", File.ReadAllBytes(m.ImageTexTemp)));
+                if (m.RowNormalTemp != null && m.RowNormalGamePath != null)
+                    files.Add(new([m.RowNormalGamePath], ".tex", File.ReadAllBytes(m.RowNormalTemp)));
             }
             files.Add(new([MatcapWriter.MaskGamePath(req.Token)], ".tex", File.ReadAllBytes(req.MaskTemp)));
             if (req.FlatNormalTemp != null)

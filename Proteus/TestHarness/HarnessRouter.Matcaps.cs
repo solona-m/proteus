@@ -143,8 +143,19 @@ internal sealed partial class HarnessRouter
     /// </summary>
     private async Task<HarnessResponse> MatcapPreviewAction(HarnessRequest request)
     {
-        var (body, bad) = JsonBody(request, "parts", "image", "pack", "library", "group", "option", "end");
+        var (body, bad) = JsonBody(request, "parts", "image", "pack", "library", "group", "option", "end", "row", "sub");
         if (bad != null) return bad;
+        // PROTOTYPE: the row matcap — row 1–16 (0 = whole part), sub "A", "B" or "both".
+        int row = 0;
+        if (body.TryGetProperty("row", out var rv) && (rv.ValueKind != JsonValueKind.Number || !rv.TryGetInt32(out row) || row is < 0 or > 16))
+            return HarnessResponse.Error(400, "invalid-field", "row must be 0 to 16");
+        string? subText = OptionalString(body, "sub", out bad); if (bad != null) return bad;
+        var sub = subText?.ToLowerInvariant() switch
+        {
+            null or "both" => Services.SubRowPick.Both, "a" => Services.SubRowPick.A, "b" => Services.SubRowPick.B,
+            _ => (Services.SubRowPick)(-1),
+        };
+        if ((int)sub < 0) return HarnessResponse.Error(400, "invalid-field", "sub must be A, B or both");
         string? image = OptionalString(body, "image", out bad); if (bad != null) return bad;
         string? library = OptionalString(body, "library", out bad); if (bad != null) return bad;
         string? group = OptionalString(body, "group", out bad); if (bad != null) return bad;
@@ -182,7 +193,7 @@ internal sealed partial class HarnessRouter
                 return HarnessResponse.Error(400, "invalid-field", "a preview takes parts and an image or library, or end");
         }
         if (changes.Stopping) return HarnessResponse.Error(503, "harness-stopping", "the test harness is stopping");
-        var req = new StudioMatcapPreviewRequest(labels, image, pack, library, group, option, end);
+        var req = new StudioMatcapPreviewRequest(labels, image, pack, library, group, option, end, row, sub);
         var result = await OnFramework(() => changes.Gate(jobs.Busy, Game.AutoRefit().Busy) ?? changes.StudioMatcapPreview(req));
         return StudioAnswer(result);
     }

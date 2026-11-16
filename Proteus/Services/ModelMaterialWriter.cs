@@ -69,7 +69,10 @@ internal static class ModelMaterialWriter
     /// The parts are <see cref="ModelPartReader.Read"/>'s, read from THIS <paramref name="mdl"/>.
     /// </summary>
     /// <exception cref="Refused">The model or the parts can't take it; nothing was changed.</exception>
-    public static Result MoveToMaterial(byte[] mdl, IReadOnlyList<ModelPart> parts, string materialName)
+    /// <param name="overlayPush">PROTOTYPE (row matcaps): above 0, the parts are COPIED rather than moved — the source
+    /// keeps every triangle, every touched mesh gets a copy (none is rebound whole), and the copy's vertices are pushed
+    /// out along their normals by this many metres so it draws over the original without fighting it.</param>
+    public static Result MoveToMaterial(byte[] mdl, IReadOnlyList<ModelPart> parts, string materialName, float overlayPush = 0f)
     {
         if (parts.Count == 0) throw new Refused(CodeUnknownPart, "no parts were chosen");
         if (string.IsNullOrEmpty(materialName) || Encoding.ASCII.GetByteCount(materialName) != materialName.Length)
@@ -98,7 +101,7 @@ internal static class ModelMaterialWriter
         List<(int Source, int Drawn)> meshes;
         try
         {
-            (o, meshes) = Emit(s, src, parts, materialName);
+            (o, meshes) = Emit(s, src, parts, materialName, overlayPush);
         }
         catch (Refused) { throw; }
         catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or IOException or OverflowException)
@@ -123,8 +126,9 @@ internal static class ModelMaterialWriter
     }
 
     private static (byte[] Model, List<(int Source, int Drawn)> Meshes) Emit(
-        byte[] s, SecondSkinWriter.Source src, IReadOnlyList<ModelPart> parts, string materialName)
+        byte[] s, SecondSkinWriter.Source src, IReadOnlyList<ModelPart> parts, string materialName, float overlayPush = 0f)
     {
+        bool overlay = overlayPush > 0f;
         int mh = src.Mh;
         bool v6 = U32(s, 0) >= SecondSkinWriter.MdlVersionV6;
         ushort meshCount = U16(s, mh + 4), attrCount = U16(s, mh + 6), submeshCount = U16(s, mh + 8);
@@ -184,7 +188,7 @@ internal static class ModelMaterialWriter
             int mo = src.MeshStart + mesh * MeshSize;
             uint ic = U32(s, mo + 4), start = U32(s, mo + 16);
             if ((long)ib + ((long)start + ic) * 2 > s.Length) Layout($"mesh {mesh}'s indices run past the end of the file");
-            bool whole = true;
+            bool whole = !overlay;   // an overlay keeps the source drawing: always a copy
             for (uint t = 0; t + 3 <= ic && whole; t += 3)
             {
                 long slot = start + t;
@@ -457,17 +461,51 @@ internal static class ModelMaterialWriter
             uint ic = U32(s, mo + 4), start = U32(s, mo + 16), newStart = copyStart[m];
             for (uint t = 0; t + 3 <= ic; t += 3)
             {
-                // Moved: gone from the source. Not moved: gone from the copy.
-                if (set.Contains(start + t)) collapse.Add(start + t);
+                // Moved: gone from the source (an overlay keeps it there too). Not moved: gone from the copy.
+                if (set.Contains(start + t)) { if (!overlay) collapse.Add(start + t); }
                 else collapse.Add(newStart + t);
             }
         }
         if (collapse.Count > 0) ModelPartHider.CollapseTriangles(o, collapse);
 
+        // PROTOTYPE: push each copy's vertices (shape-key spares included: they sit in the same streams) out along
+        // their own normals, so the overlay sits just above the surface it copies.
+        if (overlay)
+            for (int k = 0; k < copies.Count; k++)
+                PushAlongNormals(o, (int)vbOut, meshAt + (meshCount + k) * MeshSize,
+                                 copies[k] < src.Decls.Length ? src.Decls[copies[k]] : [], overlayPush);
+
         var result = new List<(int, int)>();
         foreach (var m in moving.Keys)
             result.Add(wholes.Contains(m) ? (m, m) : (m, meshCount + copies.IndexOf(m)));
         return (o, result);
+    }
+
+    /// <summary>Move every vertex of the mesh record at <paramref name="mo"/> by <paramref name="push"/> along its normal.</summary>
+    private static void PushAlongNormals(byte[] o, int vb, int mo, SecondSkinWriter.VElem[] decl, float push)
+    {
+        SecondSkinWriter.VElem? pEl = null, nEl = null;
+        foreach (var el in decl)
+        {
+            if (el.Usage == SecondSkinWriter.UsePosition) pEl ??= el;
+            else if (el.Usage == SecondSkinWriter.UseNormal) nEl ??= el;
+        }
+        if (pEl is not { } pe || nEl is not { } ne) { Layout("a copied mesh has no position or normal to push along"); return; }
+        if (Array.IndexOf(ModelAttributeWriter.PositionTypes, pe.Type) < 0) Layout($"a copied mesh stores positions as type {pe.Type}");
+        ushort vc = U16(o, mo);
+        Span<float> p = stackalloc float[4], n = stackalloc float[4];
+        for (int v = 0; v < vc; v++)
+        {
+            int pa = vb + (int)U32(o, mo + 20 + pe.Stream * 4) + v * o[mo + 32 + pe.Stream] + pe.Offset;
+            int na = vb + (int)U32(o, mo + 20 + ne.Stream * 4) + v * o[mo + 32 + ne.Stream] + ne.Offset;
+            SecondSkinWriter.ReadTyped(o, pa, pe.Type, p);
+            SecondSkinWriter.ReadTyped(o, na, ne.Type, n);
+            if (ne.Type == 8) for (int i = 0; i < 3; i++) n[i] = n[i] * 2f - 1f;   // Ubyte4n is biased
+            float len = MathF.Sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+            if (len < 1e-6f) continue;
+            float k = push / len;
+            SecondSkinWriter.WriteXYZ(o, pa, pe.Type, p[0] + n[0] * k, p[1] + n[1] * k, p[2] + n[2] * k);
+        }
     }
 
     private static void Layout(string why) => throw new Refused(CodeLayout, why);

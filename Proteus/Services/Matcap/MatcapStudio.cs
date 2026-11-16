@@ -27,8 +27,17 @@ internal static class MatcapStudio
     /// <param name="Compress">Bake own images as BC7.</param>
     /// <param name="TempDir">Where prepared textures wait until they are placed.</param>
     /// <param name="WornFolder">The material folder the worn variant uses (gear), when known.</param>
+    /// <param name="RowOnly">PROTOTYPE: 1–16 puts the matcap only on the texels of that colour-table row pair (an overlay
+    /// copy of the ticked parts, cut by a baked normal alpha); 0 is the normal whole-part matcap.</param>
+    /// <param name="RowSub">PROTOTYPE: which sub-row of <paramref name="RowOnly"/> (Dawntrail index maps only).</param>
     public sealed record Environment(Func<string, byte[]?> ReadGameFile, TextureLoader Loader, bool Compress, string TempDir,
-                                     int? WornFolder = null);
+                                     int? WornFolder = null, int RowOnly = 0, SubRowPick RowSub = SubRowPick.Both);
+
+    /// <summary>PROTOTYPE: how far the row overlay sits above the surface it copies, in metres.</summary>
+    internal const float RowOverlayPush = 0.0006f;
+
+    /// <summary>PROTOTYPE: the overlay's alpha cut (its baked normal alpha is 0 or 255).</summary>
+    internal const float RowAlphaThreshold = 0.5f;
 
     /// <summary>The ticked parts mix parts with and without a matcap (Apply's and Prepare's refusal).</summary>
     internal const string AlreadyMatcapText =
@@ -186,7 +195,8 @@ internal static class MatcapStudio
                 try
                 {
                     if (mine.Any(p => p == null)) throw new ModelMaterialWriter.Refused(ModelMaterialWriter.CodeUnknownPart, "a part moved during the split");
-                    var r = ModelMaterialWriter.MoveToMaterial(m.Current, mine!, names[si]);
+                    var r = ModelMaterialWriter.MoveToMaterial(m.Current, mine!, names[si],
+                                                               env.RowOnly > 0 ? RowOverlayPush : 0f);
                     meshesOf[names[si]].AddRange(r.Meshes.Select(x => (m.Rel, x.Source, x.Drawn)));
                     running[mi] = m with { Current = r.Model, Cut = m.Cut || r.Lod0Cut };
                 }
@@ -285,18 +295,95 @@ internal static class MatcapStudio
             var gamePaths = MatcapPlan.MaterialGamePaths(target, name, publishedAt, folders);
             if (gamePaths.Count == 0)
                 return Prepared.Refuse("no-name", ProteusLoc.Localize("Matcap.Refused.NoName", "Proteus could not tell where the game reads this model's materials."));
+
+            // PROTOTYPE: the overlay reads a normal of its own whose alpha keeps only the chosen row's texels.
+            string? rowTemp = null, rowPath = null;
+            if (env.RowOnly > 0)
+            {
+                if (sh == null || string.IsNullOrEmpty(sh.TextureOf(MatcapMaterial.SamplerNormal)))
+                    return Prepared.Refuse("row-no-normal", "Row matcap (prototype): the part's material has no normal map to cut by.");
+                rowTemp = Path.Combine(env.TempDir, $"rownormal_{stamp}_{si}.tex");
+                if (BakeRowNormal(modRoot, redirects, env, sh, rowTemp) is { } why)
+                    return Prepared.Refuse("row-bake", "Row matcap (prototype): " + why);
+                rowPath = $"{MatcapWriter.TextureFolder(token)}/{MatcapWriter.StemOf(name).ToLowerInvariant()}_row.tex";
+                normal = rowPath;
+                alpha = RowAlphaThreshold;
+            }
+
             byte[] mtrl;
-            try { mtrl = MatcapMaterial.Build(template, normal!, MatcapWriter.MaskGamePath(token), matcapPath, alpha); }
+            try
+            {
+                mtrl = MatcapMaterial.Build(template, normal!, MatcapWriter.MaskGamePath(token), matcapPath, alpha);
+                if (env.RowOnly > 0) mtrl = TextureLoader.EnsureConstantValues(mtrl, MatcapMaterial.ConstAlphaThreshold, RowAlphaThreshold).data;
+            }
             catch (InvalidDataException ex)
             {
                 return Prepared.Refuse("no-template", string.Format(ProteusLoc.Localize("Matcap.Refused.Failed.Fmt", "The matcap could not be written ({0}). Nothing was changed."), ex.Message));
             }
             plans.Add(new MatcapWriter.MaterialPlan(name, mtrl, gamePaths, normal!, alpha, source, texTemp,
-                                                    meshesOf[name].Where(x => okModels.Any(m => m.Rel == x.Rel)).ToList()));
+                                                    meshesOf[name].Where(x => okModels.Any(m => m.Rel == x.Rel)).ToList())
+                      { RowNormalTemp = rowTemp, RowNormalGamePath = rowPath });
         }
 
         var req = new MatcapWriter.ApplyRequest(token, plans, edits, maskTemp, flatTemp);
         return new Prepared(req, "", "", skipped, alphaTested, cut);
+    }
+
+    /// <summary>
+    /// PROTOTYPE: bake the overlay's normal — the part's own normal map, at the larger of its and the index map's size,
+    /// with alpha 255 (and blue as it was) where the texel uses row <see cref="Environment.RowOnly"/>, and alpha and blue 0
+    /// elsewhere, so the cut holds whichever channel the reflection shader reads it from. The row comes from the index map
+    /// (<c>_id</c>: red = row pair, green = sub-row A at 255), or for a material without one from the normal's alpha.
+    /// Null when written, else why not.
+    /// </summary>
+    private static string? BakeRowNormal(string modRoot, List<PenumbraModMeta.Redirect> redirects, Environment env,
+                                         MatcapMaterial.Header sh, string outPath)
+    {
+        (byte[] Rgba, int W, int H)? Load(string? gamePath)
+        {
+            if (string.IsNullOrEmpty(gamePath)) return null;
+            var gp = gamePath.Replace('\\', '/');
+            byte[]? bytes = null;
+            foreach (var r in redirects.Where(r => string.Equals(r.GamePath.Replace('\\', '/'), gp, StringComparison.OrdinalIgnoreCase))
+                                       .OrderBy(r => r.Source.Length == 0 ? 0 : 1))
+            {
+                try { var full = MatcapWriter.Full(modRoot, r.File); if (File.Exists(full)) { bytes = File.ReadAllBytes(full); break; } }
+                catch { }
+            }
+            bytes ??= env.ReadGameFile(gp);
+            if (bytes == null) return null;
+            var t = env.Loader.LoadTexBytesAsRgba(bytes, gp);
+            return t is { } x ? (x.rgba, x.width, x.height) : null;
+        }
+
+        var nrm = Load(sh.TextureOf(MatcapMaterial.SamplerNormal));
+        if (nrm is not { } n) return "its normal map could not be read";
+        var idPath = sh.TextureOf(ShaderUpgradePlan.SamplerIndex);
+        var id = Load(idPath);
+        if (!string.IsNullOrEmpty(idPath) && id == null) return "its index map could not be read";
+
+        int w = Math.Max(n.W, id?.W ?? 0), h = Math.Max(n.H, id?.H ?? 0);
+        var normal = (n.W, n.H) == (w, h) ? n.Rgba : env.Loader.ScaleRgba(n.Rgba, n.W, n.H, w, h);
+        var outp = (byte[])normal.Clone();
+        int row = env.RowOnly;
+        long kept = 0;
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                int p = (y * w + x) * 4;
+                bool on;
+                if (id is { } ix)
+                {
+                    int q = ((y * ix.H / h) * ix.W + x * ix.W / w) * 4;
+                    on = ContentIndexTexture.RowOf(ix.Rgba[q]) == row
+                         && (env.RowSub == SubRowPick.Both || (ix.Rgba[q + 1] > 127) == (env.RowSub == SubRowPick.A));
+                }
+                else on = ContentIndexTexture.RowOf(normal[p + 3]) == row;
+                if (on) { outp[p + 3] = 255; kept++; }
+                else { outp[p + 2] = 0; outp[p + 3] = 0; }
+            }
+        if (kept == 0) return $"no texel of this part uses row {row}{(env.RowSub == SubRowPick.Both ? "" : env.RowSub.ToString())}";
+        return env.Loader.WriteTex(outp, w, h, outPath) ? null : "the cut normal could not be written";
     }
 
     /// <summary>

@@ -129,6 +129,31 @@ public class ModelMaterialWriterTests
         Assert.False(result.Lod0Cut);
     }
 
+    /// <summary>PROTOTYPE (row matcap): an overlay keeps every original triangle and adds a pushed-out copy of the chosen.</summary>
+    [Fact]
+    public void Overlay_keeps_source_and_adds_pushed_copy()
+    {
+        // Explicit corners, so the meshes carry normals (+z for these flat triangles).
+        (float, float, float)[] tri(float x) => [(x, 0f, 0f), (x + 0.05f, 0f, 0f), (x, 0.05f, 0f)];
+        var before = SyntheticModel.Build([],
+            [new SyntheticModel.Mesh("/mt_c0201e6255_top_a.mtrl", new SyntheticModel.Sub(0, Corners: tri(0f))),
+             new SyntheticModel.Mesh("/mt_c0201e6255_top_b.mtrl", new SyntheticModel.Sub(0, Corners: tri(0.5f)))],
+            SyntheticModel.V6, (IReadOnlyList<string>?)null);
+        var chosen = Part(before, "2.1");                       // a whole mesh: an overlay still copies it
+        var result = ModelMaterialWriter.MoveToMaterial(before, [chosen], NewMat, overlayPush: 0.01f);
+
+        var was = Drawn(before);
+        var now = Drawn(result.Model);
+        Assert.Equal(1, result.MeshesAdded);
+        // Every original triangle still drawn, on its own material.
+        Assert.Equal(Geometry(was), Geometry(now.Where(d => !d.StartsWith(NewMat + "|", StringComparison.Ordinal))));
+        // The copy: as many triangles as the part, none at the original corners (pushed).
+        var copy = WithMaterial(now, NewMat);
+        Assert.Equal(GeometryOf(before, [chosen]).Count, copy.Count);
+        Assert.Empty(copy.Intersect(GeometryOf(before, [chosen])));
+        Assert.NotNull(ModelPartReader.Read(result.Model));
+    }
+
     [Fact]
     [Trait("Plan", "AC-matcaps-4")]
     public void Readback_parses_with_parser_part_reader_and_geometry_reader()

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Utility;
 using Proteus.Localization;
 using Proteus.Services;
 using Proteus.Services.Matcap;
@@ -97,7 +99,40 @@ public sealed partial class PartsPanel
 
     private MatcapStudio.Environment MatcapEnv() =>
         new(path => textureLoader.LoadRawFile(null, path), textureLoader, matcapConfig.EnableCompression,
-            Path.Combine(Path.GetTempPath(), "Proteus", "matcap"));
+            Path.Combine(Path.GetTempPath(), "Proteus", "matcap"), RowOnly: matcapRowOnly, RowSub: matcapRowSub);
+
+    /// <summary>PROTOTYPE: the colour-table row pair a matcap preview is cut to (0 = the whole part), and its sub-row.</summary>
+    private int matcapRowOnly;
+    private SubRowPick matcapRowSub = SubRowPick.Both;
+
+    /// <summary>PROTOTYPE: set the row from the harness (row 0 = whole part).</summary>
+    internal void SetMatcapRow(int row, SubRowPick sub)
+    {
+        matcapRowOnly = Math.Clamp(row, 0, 16);
+        matcapRowSub = sub;
+        PumpMatcapPreview();
+    }
+
+    private static readonly string[] MatcapRowLabels =
+        ["Whole part", .. Enumerable.Range(1, 16).Select(r => $"Row {r:00}")];
+    private static readonly string[] MatcapSubLabels = ["A and B", "A only", "B only"];
+
+    /// <summary>PROTOTYPE: the row picker, above the pane (English only until it ships).</summary>
+    private void DrawMatcapRowPicker()
+    {
+        ImGui.TextDisabled("Prototype: matcap on one colour row (click a matcap to preview; Apply not built yet)");
+        ImGui.SetNextItemWidth(130 * ImGuiHelpers.GlobalScale);
+        int row = matcapRowOnly;
+        if (ImGui.Combo("##matcapRow", ref row, MatcapRowLabels, MatcapRowLabels.Length)) SetMatcapRow(row, matcapRowSub);
+        if (matcapRowOnly > 0)
+        {
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(110 * ImGuiHelpers.GlobalScale);
+            int sub = matcapRowSub switch { SubRowPick.A => 1, SubRowPick.B => 2, _ => 0 };
+            if (ImGui.Combo("##matcapRowSub", ref sub, MatcapSubLabels, MatcapSubLabels.Length))
+                SetMatcapRow(matcapRowOnly, sub switch { 1 => SubRowPick.A, 2 => SubRowPick.B, _ => SubRowPick.Both });
+        }
+    }
 
     private void RescanMatcaps(bool force)
     {
@@ -133,7 +168,7 @@ public sealed partial class PartsPanel
     {
         if (matcapPreview.Choice is not { } choice || modelIndex < 0 || modelIndex >= models.Count) return null;
         var chosen = parts?.Parts.Where(p => ticked.Contains(p.Label)).ToList() ?? [];
-        var key = MatcapPreviewState.Key(models[modelIndex].File, choice, chosen);
+        var key = MatcapPreviewState.Key(models[modelIndex].File + (matcapRowOnly > 0 ? $"|row{matcapRowOnly}{matcapRowSub}" : ""), choice, chosen);
         var blocked = MatcapPanelModel.PreviewBlocked(penumbra.IsAvailable, chosen, MatcapTargetKind(), vanilla != null, TargetIsContent,
                                                       choice, matcapRoom, matcapRecord ?? MatcapRecord.Read(ModRoot() ?? ""));
         return (key, blocked);
@@ -322,6 +357,7 @@ public sealed partial class PartsPanel
         var rel = model?.File ?? "";
         var adapter = new PenumbraMatcapAdapter(penumbra);
 
+        DrawMatcapRowPicker();
         matcapPanel.Draw(new MatcapPanel.Context
         {
             Penumbra = penumbra.IsAvailable,

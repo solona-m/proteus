@@ -62,7 +62,15 @@ internal static class MatcapWriter
     /// </summary>
     public sealed record MaterialPlan(string Name, byte[] Bytes, IReadOnlyList<string> GamePaths, string Normal,
                                       float? AlphaThreshold, MatcapRecord.SourceRef Source, string? ImageTexTemp,
-                                      IReadOnlyList<(string Rel, int Source, int Drawn)> Meshes);
+                                      IReadOnlyList<(string Rel, int Source, int Drawn)> Meshes)
+    {
+        /// <summary>PROTOTYPE (row matcap): the baked, row-cut normal the material reads, and where. Preview only.</summary>
+        public string? RowNormalTemp { get; init; }
+        public string? RowNormalGamePath { get; init; }
+    }
+
+    /// <summary>PROTOTYPE: a row matcap is shown by the click preview only; Apply refuses it.</summary>
+    public const string CodeRowPrototype = "row-prototype";
 
     /// <summary>
     /// Everything an apply needs, prepared on a worker (<see cref="MatcapStudio"/>): one material per source material
@@ -103,6 +111,8 @@ internal static class MatcapWriter
             if (PenumbraModMeta.IsLegacyFolder(modRoot))
                 return Outcome.Refuse(CodeLegacy, ProteusLoc.Localize("Matcap.Refused.Legacy",
                     "This mod is still in Penumbra's old folder layout. Open it in Penumbra once so it is updated, then try again."));
+            if (req.Materials.Any(p => p.RowNormalTemp != null))
+                return Outcome.Refuse(CodeRowPrototype, "Row matcaps are a prototype: click a matcap to preview one; Apply is not built yet. Set the row back to \"Whole part\" to apply.");
 
             var record = MatcapRecord.Read(modRoot);
             if (record.Unreadable)
