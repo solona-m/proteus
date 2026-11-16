@@ -297,9 +297,9 @@ internal static class SupportedBodies
     // ── a skinless piece placed on the "Made on" body by its option names (KAN-6) ──
 
     // "X-Large", "Extra Large" and the like made one word — only where the "x" or "extra" starts a word, so "Max Large"
-    // stays "max" and "large".
+    // stays "max" and "large". The x's before it come along: "XX-Large" is "xxlarge", which Multiplied refuses.
     private static readonly System.Text.RegularExpressions.Regex SizeFold =
-        new(@"(?<![\p{L}\p{N}])(?:extra|x)[- ](large|small)", System.Text.RegularExpressions.RegexOptions.Compiled);
+        new(@"(?<![\p{L}\p{N}])(x*)(?:extra|x)[- ](large|small)", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private static readonly System.Text.RegularExpressions.Regex Multiplied =
         new(@"^x{2,}(l|s|large|small)$", System.Text.RegularExpressions.RegexOptions.Compiled);
@@ -312,7 +312,7 @@ internal static class SupportedBodies
     internal static string? SizeToken(string? name)
     {
         if (string.IsNullOrWhiteSpace(name) || name.Any(char.IsDigit)) return null;
-        string text = SizeFold.Replace(name.ToLowerInvariant(), "x$1");
+        string text = SizeFold.Replace(name.ToLowerInvariant(), "$1x$2");
         var tokens = new HashSet<string>(StringComparer.Ordinal);
         int i = 0;
         while (i < text.Length)

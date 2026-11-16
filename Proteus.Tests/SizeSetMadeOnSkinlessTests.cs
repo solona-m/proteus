@@ -63,7 +63,8 @@ public class SizeSetMadeOnSkinlessTests
         foreach (string? name in new[]
                  {
                      "S/M", "Small to Medium", "Petite", "Type A", "Default", "Women's", "Men's Fit", "Solona's", "2XL", "3XL",
-                     "Size 2", "XXL", "XXS", "XXXL", "", null, "WC", "SC", "Coconut",
+                     "Size 2", "XXL", "XXS", "XXXL", "XX-Large", "XX Large", "XXX-Large", "XX-Small", "", null, "WC", "SC",
+                     "Coconut",
                  })
             Assert.True(SupportedBodies.SizeToken(name) == null, $"{name ?? "null"} gives no size");
     }
@@ -308,6 +309,7 @@ public class SizeSetMadeOnSkinlessTests
         var medium = SizeSetRefit.TrustOn("Medium", biboLegs, bibo, "_dwn", "0201", false).Trusted!;
         // A placing by name is re-placed for each piece that reads the file (its option, whether it follows a chest);
         // a reading of the skin is kept as read.
+        Assert.True(SizeSetRefit.ByName(new(null, true, Fit.Trusted)));
         Assert.True(SizeSetRefit.ByName(new(null, true, Fit.NoMatch)));
         Assert.True(SizeSetRefit.ByName(new(null, true, Fit.NoTable)));
         Assert.False(SizeSetRefit.ByName(new(null, true, Fit.TooFar)));

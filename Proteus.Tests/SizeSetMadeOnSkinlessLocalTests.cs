@@ -278,9 +278,8 @@ public class SizeSetMadeOnSkinlessLocalTests(ITestOutputHelper output, DanceRun 
     [LocalDataFact(Data.DancePack, Data.Bibo, Data.Rue, Data.TreYas, LocalData.GameData, LocalData.UvMaps)]
     [Trait("Plan", "AC-kan-6-skinless-made-on-8")]
     [Trait("Plan", "EDGE-kan-6-skinless-made-on-15")]
-    [Trait("Plan", "EDGE-kan-6-skinless-made-on-21")]
     [Trait("Speed", "Slow")]
-    public void A_skinless_chest_and_the_legs_following_it_are_placed_by_name() // [AC-kan-6-skinless-made-on-8] [EDGE-kan-6-skinless-made-on-15] [EDGE-kan-6-skinless-made-on-21]
+    public void A_skinless_chest_and_the_legs_following_it_are_placed_by_name() // [AC-kan-6-skinless-made-on-8] [EDGE-kan-6-skinless-made-on-15]
     {
         string copy = Data.UnpackedPack(Data.DancePack);
         try
