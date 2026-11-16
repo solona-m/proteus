@@ -5452,7 +5452,7 @@
     "description": ""
   },
   "SizeSet.MadeOnNoSizeName.Fmt": {
-    "message": "{0}: 사이즈를 구별할 만큼 피부가 충분하지 않고, 옵션 이름 중 어느 것도 {1}의 사이즈(S, M, L…)를 나타내지 않아 사이즈를 만들지 않았습니다.",
+    "message": "{0}: 사이즈를 구별할 만큼 피부가 충분하지 않고, 옵션 이름 중 어느 것도 {1}의 사이즈를 나타내지 않아 사이즈를 만들지 않았습니다.",
     "description": ""
   },
   "SizeSet.MadeOnNoSizeTable.Fmt": {
@@ -5460,7 +5460,7 @@
     "description": ""
   },
   "SizeSet.MadeOnTrusted.Fmt": {
-    "message": "{0}: 사이즈를 구별할 만큼 피부가 충분하지 않아, 각 사이즈를 그 이름이 나타내는 {1} 사이즈로 간주했습니다(Small은 {1} S 등).",
+    "message": "{0}: 사이즈를 구별할 만큼 피부가 충분하지 않아, 각 사이즈를 그 이름이 나타내는 {1} 사이즈로 간주했습니다(Small은 S 등). 이름이 어떤 사이즈도 나타내지 않는 것은 사용하지 않았습니다.",
     "description": ""
   },
   "SizeSet.LeftOut": {

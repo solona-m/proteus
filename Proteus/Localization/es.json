@@ -5452,7 +5452,7 @@
     "description": ""
   },
   "SizeSet.MadeOnNoSizeName.Fmt": {
-    "message": "{0}: no tiene suficiente piel para distinguir sus tallas, y ninguno de los nombres de sus opciones da una talla de {1} (S, M, L…), así que no se hizo ninguna talla.",
+    "message": "{0}: no tiene suficiente piel para distinguir sus tallas, y ninguno de los nombres de sus opciones da una de las tallas de {1}, así que no se hizo ninguna talla.",
     "description": ""
   },
   "SizeSet.MadeOnNoSizeTable.Fmt": {
@@ -5460,7 +5460,7 @@
     "description": ""
   },
   "SizeSet.MadeOnTrusted.Fmt": {
-    "message": "{0}: no tiene suficiente piel para distinguir sus tallas, así que cada una de sus tallas se tomó como la talla de {1} que indica su nombre (Small como {1} S, etc.).",
+    "message": "{0}: no tiene suficiente piel para distinguir sus tallas, así que sus tallas se tomaron como las tallas de {1} que indican sus nombres (Small como S, etc.); las que no indican ninguna no se usaron.",
     "description": ""
   },
   "SizeSet.LeftOut": {

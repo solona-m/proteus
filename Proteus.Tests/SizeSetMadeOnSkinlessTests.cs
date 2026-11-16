@@ -63,8 +63,8 @@ public class SizeSetMadeOnSkinlessTests
         foreach (string? name in new[]
                  {
                      "S/M", "Small to Medium", "Petite", "Type A", "Default", "Women's", "Men's Fit", "Solona's", "2XL", "3XL",
-                     "Size 2", "XXL", "XXS", "XXXL", "XX-Large", "XX Large", "XXX-Large", "XX-Small", "", null, "WC", "SC",
-                     "Coconut",
+                     "Size 2", "XXL", "XXS", "XXXL", "XX-Large", "XX Large", "XXX-Large", "XX-Small", "X-L", "X L", "X-S", "",
+                     null, "WC", "SC", "Coconut",
                  })
             Assert.True(SupportedBodies.SizeToken(name) == null, $"{name ?? "null"} gives no size");
     }
@@ -75,6 +75,7 @@ public class SizeSetMadeOnSkinlessTests
     {
         Assert.Equal("Rue", SupportedBodies.NamesOtherBody("Rue Small", "bibo"));
         Assert.Equal("TBSE", SupportedBodies.NamesOtherBody("TBSE Large", "bibo"));
+        Assert.Equal("TBSE-X", SupportedBodies.NamesOtherBody("TBSE-X Small", "bibo"));
         Assert.Equal("YAB", SupportedBodies.NamesOtherBody("Yet Another Body Small", "bibo"));
         Assert.Equal("Rue", SupportedBodies.NamesOtherBody("Rue WC", "bibo"));
         Assert.Null(SupportedBodies.NamesOtherBody("Rue WC", "rue"));
@@ -383,6 +384,11 @@ public class SizeSetMadeOnSkinlessTests
             Assert.True(en.ContainsKey(key), $"en.json has no {key}");
             Assert.DoesNotContain("no skin", en[key], StringComparison.OrdinalIgnoreCase);
         }
+        // Never "{1} S" (a body named after its mod folder, whose legs may have no S), nor S/M/L as the names to give
+        // a body sized WC and SC; and never "each of its sizes", when some may not have been used.
+        Assert.DoesNotContain("{1} S", en["SizeSet.MadeOnTrusted.Fmt"]);
+        Assert.Contains("weren't used", en["SizeSet.MadeOnTrusted.Fmt"]);
+        Assert.DoesNotContain("S, M, L", en["SizeSet.MadeOnNoSizeName.Fmt"]);
         foreach (string lang in new[] { "de", "es", "fr", "ja", "ko", "ru", "zh" })
         {
             var other = Messages(lang);

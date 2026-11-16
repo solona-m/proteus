@@ -5452,7 +5452,7 @@
     "description": ""
   },
   "SizeSet.MadeOnNoSizeName.Fmt": {
-    "message": "{0}: Es hat nicht genug Haut, um seine Größen daran zu erkennen, und keiner seiner Optionsnamen nennt eine Größe von {1} (S, M, L…), daher wurden keine Größen davon erstellt.",
+    "message": "{0}: Es hat nicht genug Haut, um seine Größen daran zu erkennen, und keiner seiner Optionsnamen nennt eine der Größen von {1}, daher wurden keine Größen davon erstellt.",
     "description": ""
   },
   "SizeSet.MadeOnNoSizeTable.Fmt": {
@@ -5460,7 +5460,7 @@
     "description": ""
   },
   "SizeSet.MadeOnTrusted.Fmt": {
-    "message": "{0}: Es hat nicht genug Haut, um seine Größen daran zu erkennen, daher wurde jede seiner Größen als die Größe von {1} genommen, die ihr Name nennt (Small als {1} S usw.).",
+    "message": "{0}: Es hat nicht genug Haut, um seine Größen daran zu erkennen, daher wurden seine Größen als die Größen von {1} genommen, die ihre Namen nennen (Small als S usw.); solche, deren Name keine nennt, wurden nicht verwendet.",
     "description": ""
   },
   "SizeSet.LeftOut": {

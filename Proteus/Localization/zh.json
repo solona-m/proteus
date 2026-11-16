@@ -5452,7 +5452,7 @@
     "description": ""
   },
   "SizeSet.MadeOnNoSizeName.Fmt": {
-    "message": "{0}：它没有足够的皮肤来分辨尺码，且其选项名称都不对应 {1} 的尺码（S、M、L…），因此未制作任何尺码。",
+    "message": "{0}：它没有足够的皮肤来分辨尺码，且其选项名称都不对应 {1} 的任何尺码，因此未制作任何尺码。",
     "description": ""
   },
   "SizeSet.MadeOnNoSizeTable.Fmt": {
@@ -5460,7 +5460,7 @@
     "description": ""
   },
   "SizeSet.MadeOnTrusted.Fmt": {
-    "message": "{0}：它没有足够的皮肤来分辨尺码，因此每个尺码都按其名称对应的 {1} 尺码处理（Small 即 {1} S，依此类推）。",
+    "message": "{0}：它没有足够的皮肤来分辨尺码，因此其尺码按名称对应的 {1} 尺码处理（Small 即 S，依此类推）；名称不对应任何尺码的未被使用。",
     "description": ""
   },
   "SizeSet.LeftOut": {

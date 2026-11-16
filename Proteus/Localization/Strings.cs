@@ -442,8 +442,8 @@ public sealed class SizeSetStrings
     /// <summary>{0} is the piece, {1} the body chosen under "Made on". Its option names give none of that body's sizes
     /// (KAN-6).</summary>
     public readonly string MadeOnNoSizeNameFmt = ProteusLoc.Localize("SizeSet.MadeOnNoSizeName.Fmt",
-        "{0}: it hasn't enough skin to tell its sizes by, and none of its option names gives a size of {1} (S, M, L…), so "
-      + "no sizes were made of it.");
+        "{0}: it hasn't enough skin to tell its sizes by, and none of its option names gives one of {1}'s sizes, so no "
+      + "sizes were made of it.");
 
     /// <summary>{0} is the piece, {1} the body chosen under "Made on". Proteus knows no named sizes of that body for the
     /// piece's slot (KAN-6).</summary>
@@ -453,8 +453,8 @@ public sealed class SizeSetStrings
 
     /// <summary>{0} is the piece, {1} the body chosen under "Made on". Said under "Check in game" (KAN-6).</summary>
     public readonly string MadeOnTrustedFmt = ProteusLoc.Localize("SizeSet.MadeOnTrusted.Fmt",
-        "{0}: it hasn't enough skin to tell its sizes by, so each of its sizes was taken as the {1} size its name gives "
-      + "(Small as {1} S, and so on).");
+        "{0}: it hasn't enough skin to tell its sizes by, so its sizes were taken as the {1} sizes their names give (Small "
+      + "as S, and so on); any whose name gives none weren't used.");
 
     public readonly string LeftOut = ProteusLoc.Localize("SizeSet.LeftOut", "Left out:");
 

@@ -322,7 +322,8 @@ internal static class SupportedBodies
             while (i < text.Length && char.IsLetter(text[i])) i++;
             string run = text[start..i];
             if (run.Length == 1 && start > 0 && text[start - 1] is '\'' or '’') continue;
-            if (Multiplied.IsMatch(run)) return null;
+            // A multiplier the fold could not join ("X-L", "X L"): which size it means is a guess.
+            if (run == "x" || Multiplied.IsMatch(run)) return null;
             string? token = run switch
             {
                 "xs" or "xsmall" => "XS",
@@ -346,14 +347,12 @@ internal static class SupportedBodies
     {
         if (string.IsNullOrWhiteSpace(name)) return null;
         var own = NameHints.GetValueOrDefault(madeOnKey, []);
-        foreach (var (key, label, _) in Choices)
-        {
-            if (key == madeOnKey) continue;
-            var hints = NameHints.GetValueOrDefault(key, []);
-            if (hints.Intersect(own, StringComparer.OrdinalIgnoreCase).Any()) continue;
-            if (hints.Prepend(label).Any(word => HasWord(name, word))) return label;
-        }
-        return null;
+        // Longest word first: "TBSE-X Small" names TBSE-X, not the TBSE inside it.
+        return Choices.Where(c => c.Key != madeOnKey
+                                  && !NameHints.GetValueOrDefault(c.Key, []).Intersect(own, StringComparer.OrdinalIgnoreCase).Any())
+                      .SelectMany(c => NameHints.GetValueOrDefault(c.Key, []).Prepend(c.Label).Select(word => (c.Label, Word: word)))
+                      .OrderByDescending(w => w.Word.Length)
+                      .FirstOrDefault(w => HasWord(name, w.Word)).Label;
     }
 
     /// <summary>Whether <paramref name="word"/> stands in <paramref name="text"/> with no letter or digit either side.</summary>

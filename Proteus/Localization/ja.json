@@ -5452,7 +5452,7 @@
     "description": ""
   },
   "SizeSet.MadeOnNoSizeName.Fmt": {
-    "message": "{0}：サイズを見分けるだけの肌がなく、オプション名のどれも{1}のサイズ（S、M、L…）を示していないため、サイズは作られませんでした。",
+    "message": "{0}：サイズを見分けるだけの肌がなく、オプション名のどれも{1}のサイズを示していないため、サイズは作られませんでした。",
     "description": ""
   },
   "SizeSet.MadeOnNoSizeTable.Fmt": {
@@ -5460,7 +5460,7 @@
     "description": ""
   },
   "SizeSet.MadeOnTrusted.Fmt": {
-    "message": "{0}：サイズを見分けるだけの肌がないため、各サイズはその名前が示す{1}のサイズとして扱われました（Smallは{1} S、など）。",
+    "message": "{0}：サイズを見分けるだけの肌がないため、各サイズはその名前が示す{1}のサイズとして扱われました（SmallはS、など）。名前がどのサイズも示さないものは使われていません。",
     "description": ""
   },
   "SizeSet.LeftOut": {
