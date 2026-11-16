@@ -241,6 +241,7 @@ public class DesignBindingWiringTests
 
     [Fact]
     [Trait("Plan", "AC-binding-reapply-8")]
+    [Trait("Plan", "EDGE-readme-tos-3")]
     public void Readme_bindings_section_pins_reapply_and_scope_clauses()
     {
         var readme = File.ReadAllText(Path.Combine(RepoDir(), "README.md"));

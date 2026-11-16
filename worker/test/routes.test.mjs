@@ -329,7 +329,7 @@ console.log('fixed-upstream proxies (manifest + icon):');
 console.log('markdown rendering + content negotiation:');
 {
   const HTML = { Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' };
-  const MD = '# Proteus\n\nSee [Troubleshooting](TROUBLESHOOTING.md) and [Creators](For%20Creators.md).\n' +
+  const MD = '# Proteus\n\nSee [Troubleshooting](TROUBLESHOOTING.md) and [Creators](For%20Creators.md) and [Terms](TERMS.md).\n' +
              'Also [elsewhere](docs/other.md) and [ext](https://example.com/x).\n' +
              'And [queried](docs/other.md?plain=1#L3).\n\n' +
              '| Column | What |\n|---|---|\n| On | Enables it. |\n';
@@ -398,6 +398,8 @@ console.log('markdown rendering + content negotiation:');
     const checks = [
       ['mirrored, plain', 'href="/TROUBLESHOOTING.md"'],
       ['mirrored, encoded space', 'href="/For%20Creators.md"'],
+      // [AC-readme-tos-9] [EDGE-readme-tos-5]
+      ['mirrored, terms', 'href="/TERMS.md"'],
       ['unmirrored -> GitHub', 'href="https://github.com/solona-m/proteus/blob/main/docs/other.md"'],
       ['absolute untouched', 'href="https://example.com/x"'],
       // Everything after the path travels with it. Rewriting only the pathname would quietly turn
@@ -415,6 +417,8 @@ console.log('markdown rendering + content negotiation:');
   for (const [path, upstream] of [
     ['/TROUBLESHOOTING.md', 'https://raw.githubusercontent.com/solona-m/proteus/main/TROUBLESHOOTING.md'],
     ['/For%20Creators.md', 'https://raw.githubusercontent.com/solona-m/proteus/main/For%20Creators.md'],
+    // [AC-readme-tos-9] [EDGE-readme-tos-4] The Terms of Service, proxied from main like the other docs.
+    ['/TERMS.md', 'https://raw.githubusercontent.com/solona-m/proteus/main/TERMS.md'],
   ]) {
     store.clear();
     const { res } = await get(path, { Accept: '*/*' });
@@ -467,11 +471,14 @@ console.log('language negotiation:');
     `# Proteus\n\n<!--i18n-->\n${nav}\n<!--/i18n-->\n\nBODY-${code}\n${tail}`;
   const ROOT = doc('en', '**English** · [日本語](docs/README.ja.md) · [Deutsch](docs/README.de.md)');
   const DE = doc('de', '[English](../README.md) · [日本語](README.ja.md) · **Deutsch**',
-    '\nSiehe [Fehlerbehebung](../TROUBLESHOOTING.md) und [Ersteller](../For%20Creators.md).\n');
+    '\nSiehe [Fehlerbehebung](../TROUBLESHOOTING.md) und [Ersteller](../For%20Creators.md)' +
+    ' und [Bedingungen](../TERMS.md).\n');
+  const TERMS = "# Terms of Service — Solona's mods and plugins\n\nSee [LICENSE](LICENSE).\n";
 
   globalThis.fetch = async (url) => {
     fetched.push(url);
     const body = url === `${RAW}README.md` ? ROOT
+      : url === `${RAW}TERMS.md` ? TERMS
       : url === `${RAW}docs/README.de.md` ? DE
         : url.startsWith(`${RAW}docs/README.`) ? doc(url.slice(-5, -3), 'x')
           : 'MISSING';
@@ -602,7 +609,40 @@ console.log('language negotiation:');
     for (const [label, needle] of [
       ['../TROUBLESHOOTING.md -> /TROUBLESHOOTING.md', 'href="/TROUBLESHOOTING.md"'],
       ['../For%20Creators.md -> /For%20Creators.md', 'href="/For%20Creators.md"'],
+      // [AC-readme-tos-9] [EDGE-readme-tos-5]
+      ['../TERMS.md -> /TERMS.md', 'href="/TERMS.md"'],
     ]) t(`link ${label}`, body.includes(needle));
+  }
+
+  // [AC-readme-tos-9] [EDGE-readme-tos-17] [EDGE-readme-tos-18] The Terms page: rendered, English only
+  // (no switcher), and its LICENSE link, which the mirror doesn't serve, goes to GitHub.
+  store.clear();
+  {
+    const { res, body } = await get('/TERMS.md', HTML);
+    t('/TERMS.md renders as a page', res.status === 200
+      && res.headers.get('content-type')?.startsWith('text/html')
+      && /<title>Terms of Service/.test(body), `${res.status} ${res.headers.get('content-type')}`);
+    t('/TERMS.md has no language switcher', !body.includes('<nav class="langs"'));
+    t('/TERMS.md links LICENSE on GitHub',
+      body.includes('href="https://github.com/solona-m/proteus/blob/main/LICENSE"'));
+  }
+
+  // [AC-readme-tos-9] Tools get the source byte for byte.
+  store.clear();
+  {
+    const { res, body } = await get('/TERMS.md', { Accept: '*/*' });
+    t('/TERMS.md raw is the unchanged markdown', body === TERMS
+      && res.headers.get('content-type')?.startsWith('text/markdown'),
+      `identical=${body === TERMS}`);
+  }
+
+  // [EDGE-readme-tos-16] Only the exact path is a route: other spellings 404 without reaching GitHub.
+  for (const path of ['/terms.md', '/TERMS.md/x']) {
+    store.clear();
+    const { res } = await get(path, HTML);
+    t(`${path} 404s without an upstream fetch`,
+      res.status === 404 && !fetched.some((u) => u.includes('raw.githubusercontent')),
+      `${res.status}, fetched ${fetched[0] ?? '(none)'}`);
   }
 
   // A document with no translations gets no switcher: it would promise pages that do not exist.

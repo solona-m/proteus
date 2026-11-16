@@ -141,6 +141,8 @@ public sealed class ReadmeTranslationTests
 
     [Theory]
     [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-readme-tos-7")]
+    [Trait("Plan", "EDGE-readme-tos-1")]
     public void SameSectionsAndTablesAsEnglish(string lang)
     {
         var en = Skeleton(Load("en"));
@@ -244,6 +246,7 @@ public sealed class ReadmeTranslationTests
                 "Penumbra", "Glamourer", "Proteus", "Skindent",
                 "../TROUBLESHOOTING.md",          // resolved by the mirror; must stay relative
                 "../For%20Creators.md",
+                "../TERMS.md",                    // [AC-readme-tos-6] [EDGE-readme-tos-5]
             ];
 
             var d = new TheoryData<string, string>();

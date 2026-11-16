@@ -151,7 +151,7 @@ about.
 | `/milieu/backdrops-v2/moon.atex` | the same, in `solona-m/milieu` |
 | `/` and `/README.md` | the project README, from `raw.githubusercontent.com` |
 | `/ja`, `/ja/`, `/ja/README.md` (and `en de fr zh ko es ru`) | that language's README — English is the repo root, the rest are `docs/README.<lang>.md` |
-| `/TROUBLESHOOTING.md`, `/For%20Creators.md` | the docs the README links to |
+| `/TROUBLESHOOTING.md`, `/For%20Creators.md`, `/TERMS.md` | the docs the README links to (TERMS.md is the Terms of Service) |
 | `/milieu`, `/milieu/`, `/milieu/README.md` | Milieu's user README, from the milieu repo's `test` branch |
 | `/milieu/icon.png` | Milieu's icon, same branch |
 
