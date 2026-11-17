@@ -111,8 +111,8 @@ Git commands: git grep only. No show, log, diff or blame. URLs: none.
 
 ## Plan-critic 3
 
-Opened (each whole):
-- `docs/pbd-clean-room-plan.md`
+Opened:
+- `docs/pbd-clean-room-plan.md` (each file in this list whole)
 - `docs/pbd-clean-room.md`
 - `docs/agent-rules/plan-critic.md`
 - `.gitmodules`

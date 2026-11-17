@@ -15,6 +15,7 @@ public class PbdFileTests
     /// pass 32767. Read signed, they went negative and the whole file failed to load — no racial bend anywhere.
     /// </summary>
     [Fact]
+    [Trait("Plan", "EDGE-pbd-clean-room-1")]
     public void Reads_a_deformer_whose_bone_names_sit_past_32_KB()
     {
         const int boneCount = 700;   // names start at 4 + 700 × 2 + 700 × 48 = 35004 bytes in
@@ -314,6 +315,56 @@ public class PbdFileTests
         patch.CopyTo(b, name + 2);
         var block = Assert.Single(new PbdFile(b).Chain(101, 201));
         Assert.Equal(expected, Assert.Single(block.Keys));
+    }
+
+    [Fact]
+    public void A_block_with_no_bones_is_an_empty_deformer_in_the_chain()
+    {
+        // Spec §2.4: B = 0 is valid, gives an empty dictionary, and still counts as a deformer in a chain.
+        var b = HairPortFixtures.BuildPbd(
+        [
+            (101, ushort.MaxValue, Bones(("j_kao", 1f))),
+            (201, 101, new Dictionary<string, Matrix4x4>()),
+        ]);
+        var block = Assert.Single(new PbdFile(b).Chain(101, 201));
+        Assert.Empty(block);
+    }
+
+    [Fact]
+    public void Names_differing_only_in_case_are_two_bones()
+    {
+        // Spec §2.2: names are compared ordinal, case-sensitive.
+        var b = HairPortFixtures.BuildPbd(
+        [
+            (101, ushort.MaxValue, Bones(("j_kao", 1f))),
+            (201, 101, Bones(("j_kao", 2f), ("J_KAO", 3f))),
+        ]);
+        var block = Assert.Single(new PbdFile(b).Chain(101, 201));
+        Assert.Equal(2, block.Count);
+        Assert.Equal(2f, block["j_kao"].Translation.X);
+        Assert.Equal(3f, block["J_KAO"].Translation.X);
+        Assert.False(block.ContainsKey("J_Kao"));
+    }
+
+    [Fact]
+    public void The_twelve_floats_land_where_the_spec_table_puts_them()
+    {
+        // Spec §2.3: f0..f11 fill M11 M21 M31 M41 / M12 M22 M32 M42 / M13 M23 M33 M43; M14 = M24 = M34 = 0, M44 = 1.
+        var b = HairPortFixtures.BuildPbd(
+        [
+            (101, ushort.MaxValue, Bones(("j_kao", 1f))),
+            (201, 101, Bones(("j_abc", 0f))),
+        ]);
+        int origin = BitConverter.ToInt32(b, EntryBlock(1));
+        int matrices = origin + 4 + 2 * 1 + 2;   // B = 1: one name offset, then (2B) mod 4 = 2 bytes of padding
+        for (int f = 0; f < 12; f++)
+            BitConverter.TryWriteBytes(b.AsSpan(matrices + 4 * f, 4), (float)(f + 1));
+
+        var m = Assert.Single(Assert.Single(new PbdFile(b).Chain(101, 201)).Values);
+        Assert.Equal(new Matrix4x4(1, 5, 9, 0,
+                                   2, 6, 10, 0,
+                                   3, 7, 11, 0,
+                                   4, 8, 12, 1), m);
     }
 
     private static Func<string, string?> Parents(params (string Bone, string Parent)[] links)

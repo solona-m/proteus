@@ -87,7 +87,7 @@ public sealed class PbdCleanRoomRecordTests
     private static Dictionary<string, string> LogSections(string log)
     {
         var sections = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (Match m in Regex.Matches(log, @"^## (.+)\n(.*?)(?=^## |\z)", RegexOptions.Multiline | RegexOptions.Singleline))
+        foreach (Match m in Regex.Matches(log, @"^## ([^\n]+)\n(.*?)(?=^## |\z)", RegexOptions.Multiline | RegexOptions.Singleline))
             sections[m.Groups[1].Value.Trim()] = m.Groups[2].Value;
         return sections;
     }
