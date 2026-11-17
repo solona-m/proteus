@@ -31,7 +31,7 @@ file and so need yet another review.
     anywhere else an unparseable line is a hit. Forbidden: `Glamourer/`, `Penumbra.Api/` and `Luna/` at the repo
     root, any `bin` or `obj` segment, `E:\repos\Proteus`, `E:\repos\DragAndDropTexturing`, other checkouts under
     `E:\orca\workspaces\Proteus\`, the memory topic folders and Agent A's scratch folder.
-  - **Not counted:** read-type results (their paths are checked in `Opened:` and `Shell commands:`), the output of
+  - **What is not counted:** read-type results (their paths are checked in `Opened:` and `Shell commands:`), the output of
     `dotnet build` and `dotnet test` (allowed builds print `Penumbra.Api -> …\bin\Release…`, `Glamourer.Api -> …` and
     `Test run for …\bin\Release…`), and the contents of allowed files (the doc, the plan, this log and the record test
     name the forbidden locations on purpose).
@@ -408,3 +408,47 @@ forbidden locations in listing/search results: 0
 
 B's own test runs: `PbdFileTests` 75 passed, 0 failed, 0 skipped (including the `RealFile` vectors and the NewBehaviour
 test); the second filter 569 passed, 0 failed, 0 skipped.
+
+## Code-critic
+
+The `code-critic` sub-agent (opus) on the clean side, in two rounds in one session: round 1 (FAIL, test side only; no
+defect in the new `PbdFile.cs`) and round 2 (PASS, after the orchestrator's fixes in the Orchestrator section's Step 8).
+Its lists below were extracted mechanically from its transcript (found by its agent ID), not written by it. Both
+times the `git diff test` output was too large for the tool and was saved by the harness to a file outside the
+allowed read root; the critic did not open that file and read the changed files directly instead.
+
+Opened:
+- docs/pbd-format-spec.md
+- docs/pbd-clean-room-log.md
+- docs/pbd-clean-room-plan.md
+- docs/agent-rules/code-critic.md
+- Proteus.Tests/PbdFileTests.cs
+- Proteus.Tests/PbdCleanRoomRecordTests.cs
+- Proteus.Tests/HairPortFixtures.cs
+- Proteus/Services/OtherRaceWearer.cs
+- XivLiveMesh/NOTICE.md
+- THIRD_PARTY_NOTICES.txt
+
+Shell commands:
+- `git -C E:/orca/workspaces/Proteus/meddle diff test -- . ':!XivLiveMesh/PbdFile.cs'`
+- `git -C E:/orca/workspaces/Proteus/meddle show HEAD:XivLiveMesh/PbdFile.cs`
+- `dotnet test E:/orca/workspaces/Proteus/meddle/Proteus.Tests/Proteus.Tests.csproj -c Release --filter "FullyQualifiedName~PbdFileTests|FullyQualifiedName~PbdCleanRoomRecordTests|FullyQualifiedName~OtherRaceWearerTests"`
+- `git -C E:/orca/workspaces/Proteus/meddle diff test -- . ':!XivLiveMesh/PbdFile.cs'`
+- `git -C E:/orca/workspaces/Proteus/meddle show HEAD:XivLiveMesh/PbdFile.cs`
+- `dotnet test E:/orca/workspaces/Proteus/meddle/Proteus.Tests/Proteus.Tests.csproj -c Release --filter "FullyQualifiedName~PbdFileTests|FullyQualifiedName~PbdCleanRoomRecordTests"`
+
+URLs: none.
+
+Sub-agents: none
+
+Grep without line numbers: 0
+
+Shell commands outside the allowlist: 0
+
+forbidden locations in listing/search results: 0
+
+Round 2's two minor open questions, answered here:
+- The guard ran against `FETCH_HEAD` and the merge used `test`: `git rev-parse test FETCH_HEAD` printed the same
+  commit twice (`dbd433bc03049e837d81956fe257b6d07de2505d`), so the guard covered exactly what was merged.
+- The three spec tests added after round 1 carry no `Plan` trace tag: no EDGE ID in the plan matches them exactly,
+  so they are left untagged rather than given a misleading one.
