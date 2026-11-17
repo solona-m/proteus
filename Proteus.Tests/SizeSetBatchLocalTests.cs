@@ -42,6 +42,9 @@ internal static class SizeSetBatchData
     /// <summary>Equinox as it shipped, v3: its legs in "Top Size" (the Yab and Rue sizes) and in "Bottom Size" (every
     /// option, the group the game draws them from); its plain sizes made on Bibo+ before Dawntrail.</summary>
     internal const string EquinoxPack = LocalData.ModPacks + ":Equinox - by Solona.pmp";
+    /// <summary>Tutting (KAN-6): its "Pant Size" Small/Medium/Large are loose sweatpants with no skin at all, made on
+    /// Bibo+; its "Top Size" is read automatically.</summary>
+    internal const string DancePack = LocalData.ModPacks + ":Dance - by Solona.pmp";
 
     /// <summary>A pack unpacked into a work folder of its own.</summary>
     internal static string UnpackedPack(string pack)

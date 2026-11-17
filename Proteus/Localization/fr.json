@@ -5451,6 +5451,18 @@
     "message": "{0} : « {1} » a été reconnu comme fait pour {2}, et non pour {3} choisi sous « Fait pour », et ses tailles ont été faites comme pour {2}.",
     "description": ""
   },
+  "SizeSet.MadeOnNoSizeName.Fmt": {
+    "message": "{0} : il n'a pas assez de peau pour distinguer ses tailles, et aucun nom de ses options ne donne l'une des tailles de {1}, donc aucune taille n'en a été faite.",
+    "description": ""
+  },
+  "SizeSet.MadeOnNoSizeTable.Fmt": {
+    "message": "{0} : il n'a pas assez de peau pour distinguer ses tailles, et Proteus ne connaît aucune taille nommée de {1} pour lui, donc aucune taille n'en a été faite.",
+    "description": ""
+  },
+  "SizeSet.MadeOnTrusted.Fmt": {
+    "message": "{0} : il n'a pas assez de peau pour distinguer ses tailles, donc ses tailles ont été prises comme les tailles de {1} que donnent leurs noms (Small comme S, etc.) ; celles dont le nom n'en donne aucune n'ont pas été utilisées.",
+    "description": ""
+  },
   "SizeSet.LeftOut": {
     "message": "Laissées de côté :",
     "description": ""

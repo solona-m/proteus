@@ -846,7 +846,8 @@ internal static partial class SizeSetRefit
                         NoteOut(string.Format(Strings.SizeSet.NoSuchSizeFmt, piece.Label, option, target.Name), Codes.NoSuchSize);
                         continue;
                     }
-                    if (AuthorHas(authorSizes, targetCat, fixedTo, piece.Slot, race) is { } own)
+                    if ((AuthorHas(authorSizes, targetCat, fixedTo, piece.Slot, race)
+                         ?? TrustedOwn(sources.Choices.Select(c => (c.Option, c.Trusted)), key, fixedTo.Rel)) is { } own)
                     {
                         log.Information("[Proteus] size set: {0}: {1} is the author's own \"{2}\"", piece.Label, option, own);
                         Out(SizeStatus.Skipped, Codes.AuthorsOwn, $"the author's own \"{own}\"");
@@ -908,7 +909,9 @@ internal static partial class SizeSetRefit
                     Note(nearest.Why);
                 }
                 var to = ToOf(chosen)!;
-                if (piece.FollowsChest && AuthorHas(authorSizes, targetCat, to, piece.Slot, race) is { } theirs)
+                if (piece.FollowsChest
+                    && (AuthorHas(authorSizes, targetCat, to, piece.Slot, race)
+                        ?? TrustedOwn(sources.Choices.Select(c => (c.Option, c.Trusted)), key, to.Rel)) is { } theirs)
                 {
                     log.Information("[Proteus] size set: {0}: {1} is the author's own \"{2}\"", piece.Label, option, theirs);
                     Out(SizeStatus.Skipped, Codes.AuthorsOwn, $"the author's own \"{theirs}\"");
@@ -1007,6 +1010,9 @@ internal static partial class SizeSetRefit
                 }
                 Out(SizeStatus.Made, null, null, fromLabel, Measures.Of(plan, folded), sourceOption);
                 WarnOtherBody(chosen);
+                if (chosen.Trusted != null)
+                    AddWarningOnce(runLog, string.Format(Strings.SizeSet.MadeOnTrustedFmt, piece.Label,
+                                                         sources.MadeOnName ?? request.MadeOn));
                 if (lead && sourceOption != null)
                     leadSources[leadKey] = sourceOption;
             }
@@ -1240,6 +1246,12 @@ internal static partial class SizeSetRefit
                && RefitCore.Normal(top.Option.Rel) == RefitCore.Normal(target.Rel)
             ? best.Option
             : null;
+    }
+
+    /// <summary>Adds a "Check in game" line unless it is there already: the women's and men's passes say it once.</summary>
+    internal static void AddWarningOnce(RunLog log, string text)
+    {
+        if (!log.Warnings.Contains(text)) log.Warnings.Add(text);
     }
 
     internal static BodyOption? OptionByFile(IReadOnlyList<BodyOption> options, string rel)

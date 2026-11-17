@@ -73,8 +73,9 @@ internal static class Program
                       --mods-root <Penumbra mod folder> --game <FFXIV game\sqpack> --uvmaps <Proteus plugin dir>
                       [--men] [--no-ends] [--skeleton <men's base .sklb>] [--report <file.json>]
                       [--made-on <body mod folder under --mods-root>]   (the body the chest and legs were made on,
-                       for the sizes it cannot read itself: an older release of a body; and a skinless shoe's or
-                       glove's men's version is read there first)
+                       for the sizes it cannot read itself: an older release of a body; a chest or legs piece
+                       without enough skin to tell its sizes by is placed on that body's size its option names give
+                       (Small as S, and so on); and a skinless shoe's or glove's men's version is read there first)
                       (--men: a women's mod's chest, legs, shoes and gloves get men's versions; --no-ends leaves
                        shoes and gloves out)
                       keys: neolithe, bibo, rue, yab, yab-buff, tre, rosaline, tbse, tbse-x ("all" = every women's body)
