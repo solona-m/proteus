@@ -334,6 +334,37 @@ files opened: `XivLiveMesh/NOTICE.md`, `THIRD_PARTY_NOTICES.txt` (lines 80–99,
 `Proteus.Tests/PbdCleanRoomRecordTests.cs`, `Proteus.Tests/SizeSetGameCopyLocalTests.cs` lines 36–47, the plan, and the
 saved test output in the session scratchpad. It also listed `Sunfairy*` folder names in the owner's mods folder.
 
+### Step 8: the code review, round 1, and the fixes
+
+The first review found no defect in the new `PbdFile.cs` and returned FAIL on the test side. Every fix was the
+orchestrator's; nothing went back to Agent B, and `XivLiveMesh/PbdFile.cs` is unchanged since B's commit.
+- **Fixed (blocking):** `PbdCleanRoomRecordTests` read the whole log as one section (its header pattern ran across
+  lines). The header is now read one line at a time. That exposed one wording slip, fixed in this log: Plan-critic 3's
+  label read "Opened (each whole):" instead of `Opened:`.
+- **Added (minor, additive):** spec tests for a block with no bones (§2.4), names that differ only in case (§2.2) and
+  where the twelve floats land (§2.3); an `EDGE-pbd-clean-room-1` trace tag on the existing 32 KB test (a new line
+  only).
+- **Decided: the branch was behind `test`.** `test` was merged into the branch (a merge, no rebase) after the guard
+  printed 0 (`git rev-list --count solona-m/pbd-clean-room..FETCH_HEAD -- XivLiveMesh/PbdFile.cs`, after
+  `git fetch origin test`). The wide proof was re-run on the merged state: 1369 tests, 1367 passed, 1 failed, 1 skipped.
+  The three extra tests are the new spec tests. The skip list is identical (`EarringBonesLocalTests.Earring_nodes_measured`,
+  static `Skip =`) and the only failure is the same Sunfairy case with the same message. The `test` merge did not
+  change `SizeSetGameCopyLocalTests`.
+- **Decided: the Sunfairy case stays a recorded gap** (AC-5 as written allows only failures already seen on the old
+  code). The test is not edited and the owner's mod is not renamed back; listed in the final report.
+- **Evidence for AC-5 and AC-3:** `git diff test...HEAD --numstat -- Proteus.Tests/PbdFileTests.cs` prints
+  `550	0` (0 deleted lines). `git diff test...HEAD --stat -- . ":!XivLiveMesh/PbdFile.cs"` lists only
+  `Proteus.Tests/PbdCleanRoomRecordTests.cs`, `Proteus.Tests/PbdFileTests.cs`, `THIRD_PARTY_NOTICES.txt`,
+  `XivLiveMesh/NOTICE.md` and the three `docs/pbd-*` files: no caller file changed.
+- **R-4:** every branch commit is authored by Solona and has no Co-Authored-By trailer (`git log --format` with the
+  trailers placeholder over `test..HEAD`).
+
+Further orchestrator git commands: `git fetch origin test`, `git rev-parse test FETCH_HEAD`,
+`git grep -n "BuildNumber =" test origin/test HEAD FETCH_HEAD -- Proteus/Plugin.cs`, the guard above,
+`git merge --no-ff --no-edit test`, the two `test...HEAD` diffs above (`--numstat` and `--stat` only), the `git log`
+above, `git add`, `git commit`. Further files opened: `Proteus.Tests/PbdFileTests.cs`, `Proteus.Tests/HairPortFixtures.cs`
+lines 48–117, a grep of the spec's §2 headings and table rows.
+
 ## Agent B
 
 A fresh `general-purpose` sub-agent (opus) that never saw the old code. Its lists below were extracted mechanically
