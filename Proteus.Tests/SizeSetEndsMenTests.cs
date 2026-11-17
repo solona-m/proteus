@@ -101,6 +101,7 @@ public class SizeSetEndsMenTests
     /// <summary>The README in every language and the CLI's help say a women's mod's shoes and gloves get men's versions.</summary>
     [Fact]
     [Trait("Plan", "AC-mens-ends-crotch-6")]
+    [Trait("Plan", "EDGE-readme-tos-3")]
     public void The_readmes_and_the_cli_help_say_shoes_and_gloves_cross() // [AC-mens-ends-crotch-6]
     {
         var markers = new (string File, string Marker)[]

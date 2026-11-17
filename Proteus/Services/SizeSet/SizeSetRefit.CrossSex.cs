@@ -883,6 +883,9 @@ internal static partial class SizeSetRefit
             if (c.OtherBody)
                 warnings.Add(string.Format(Strings.SizeSet.MadeOnOtherBodyFmt, piece.Label, c.Name, c.Entry.Name,
                                            sources.MadeOnName ?? request.MadeOn));
+            if (c.Trusted != null)
+                AddWarningOnce(runLog, string.Format(Strings.SizeSet.MadeOnTrustedFmt, piece.Label,
+                                                     sources.MadeOnName ?? request.MadeOn));
             // The first piece of an outfit to make an option leads it; legs following the chest never do.
             if (!piece.FollowsChest && c.Option != null) leadSources.TryAdd(leadKey, c.Option);
             if (OtherVariants(piece, c.File, c.Pick, preferred, readings, madeOnReadings, request.MadeOn) is { Count: > 0 })

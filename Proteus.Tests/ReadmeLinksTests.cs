@@ -66,6 +66,7 @@ public sealed class ReadmeLinksTests
 
     [Theory]
     [MemberData(nameof(Links))]
+    [Trait("Plan", "EDGE-readme-tos-2")]
     public void AnchorNamesARealHeading(string lang, string sectionName)
     {
         var section = Enum.Parse<ReadmeSection>(sectionName);
@@ -81,6 +82,112 @@ public sealed class ReadmeLinksTests
             $"The {section} link for {lang} points at #{anchor}, but {ReadmeLinks.DocPathFor(lang)} has no " +
             "heading with that id, so the link opens the page at the top. A heading was probably renamed; " +
             "update ReadmeLinks.Anchors to its new id. Headings in that file: " + string.Join(", ", slugs));
+    }
+
+    public static TheoryData<string> Languages
+    {
+        get
+        {
+            var d = new TheoryData<string>();
+            foreach (var lang in LocSetup.Shipped) d.Add(lang);
+            return d;
+        }
+    }
+
+    private static string[] ReadmeLines(string lang)
+    {
+        Assert.True(Root.Value != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        return File.ReadAllLines(Path.Combine(Root.Value!, ReadmeLinks.DocPathFor(lang)));
+    }
+
+    /// <summary>
+    /// Every heading's id in document order, with github-slugger's de-duplication: the second heading with the
+    /// same id gets "-1", the third "-2". Headings inside code fences are not headings.
+    /// </summary>
+    private static List<(string Text, string Id)> OrderedHeadings(string lang)
+    {
+        var result = new List<(string, string)>();
+        var seen = new Dictionary<string, int>(StringComparer.Ordinal);
+        var inFence = false;
+        foreach (var raw in ReadmeLines(lang))
+        {
+            if (raw.StartsWith("```", StringComparison.Ordinal)) { inFence = !inFence; continue; }
+            if (inFence) continue;
+            var m = Regex.Match(raw, @"^#{1,6}\s+(.+?)\s*#*\s*$");
+            if (!m.Success) continue;
+            var slug = Slug(m.Groups[1].Value);
+            var id = slug;
+            if (seen.TryGetValue(slug, out var n)) id = $"{slug}-{n}";
+            seen[slug] = n + 1;
+            result.Add((m.Groups[1].Value.Trim(), id));
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Every in-page link in every README lands on a heading. A broken one opens the page at the top, which
+    /// looks like it worked, so nobody reports it.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Languages))]
+    [Trait("Plan", "AC-readme-tos-8")]
+    [Trait("Plan", "EDGE-readme-tos-6")]
+    public void InPageAnchorsNameRealHeadings(string lang)
+    {
+        var ids = OrderedHeadings(lang).Select(h => h.Id).ToHashSet(StringComparer.Ordinal);
+        var broken = new List<string>();
+        var inFence = false;
+        foreach (var raw in ReadmeLines(lang))
+        {
+            if (raw.StartsWith("```", StringComparison.Ordinal)) { inFence = !inFence; continue; }
+            if (inFence) continue;
+            foreach (Match m in Regex.Matches(raw, @"\]\(#([^)\s]+)\)"))
+            {
+                var frag = Uri.UnescapeDataString(m.Groups[1].Value);
+                if (!ids.Contains(frag)) broken.Add("#" + frag);
+            }
+        }
+        Assert.True(broken.Count == 0,
+            $"{ReadmeLinks.DocPathFor(lang)} links to headings that don't exist: {string.Join(", ", broken)}. " +
+            "Use the id the heading actually gets: lower-cased, punctuation dropped, spaces as hyphens.");
+    }
+
+    /// <summary>The English sections the capability list at the top of the README links to.</summary>
+    private static readonly string[] IntroSections =
+    [
+        "Matcaps", "Every size for other bodies", "Bindings", "Create", "Import", "Export", "Presets",
+        "Color Editor", "Gear shaders", "Gear variants",
+    ];
+
+    /// <summary>
+    /// The capability list at the top of every README links each of these sections in that language. The
+    /// translations share the English heading structure (ReadmeTranslationTests), so a section's heading sits
+    /// at the same position in every one of them.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Languages))]
+    [Trait("Plan", "AC-readme-tos-1")]
+    public void IntroLinksEveryCapabilitySection(string lang)
+    {
+        var en = OrderedHeadings("en");
+        var mine = OrderedHeadings(lang);
+        Assert.True(en.Count == mine.Count,
+            $"{ReadmeLinks.DocPathFor(lang)} has {mine.Count} headings, README.md has {en.Count}.");
+
+        var lines = ReadmeLines(lang);
+        var rule = Array.FindIndex(lines, l => l.Trim() == "---");
+        Assert.True(rule > 0, $"{ReadmeLinks.DocPathFor(lang)} has no --- line under its introduction.");
+        var intro = string.Join('\n', lines[..rule]);
+
+        foreach (var section in IntroSections)
+        {
+            var at = en.FindIndex(h => h.Text == section);
+            Assert.True(at >= 0, $"README.md has no \"{section}\" heading; update {nameof(IntroSections)}.");
+            var id = mine[at].Id;
+            Assert.True(intro.Contains($"](#{id})", StringComparison.Ordinal),
+                $"The introduction of {ReadmeLinks.DocPathFor(lang)} doesn't link its \"{mine[at].Text}\" " +
+                $"section (#{id}).");
+        }
     }
 
     [Fact]

@@ -11,8 +11,15 @@ Proteus est un plugin Dalamud pour FFXIV qui offre les fonctionnalités suivante
 - **Studio.** Fournit des outils semblables à ceux de Blender pour modifier les maillages directement sur votre personnage : corriger les endroits où la peau passe au travers, ajouter des effets de vent, et adapter d'un coup un équipement à de nombreux corps en quelques secondes.
 - **Portez des mods sans sacrifier un emplacement d'équipement.** Une seconde peau doit forcément être dessinée comme un objet, mais Proteus la dissimule sur quelque chose que vous n'utilisez pas — des lunettes invisibles, une bague que vous ne portez pas, ou en l'ajoutant à vos accessoires équipés — de sorte que votre glamour réel n'est pas touché. Il n'y a rien à configurer : Proteus choisit l'hôte tout seul et ne prend jamais un objet que vous portez.
 - **Ajoutez des interrupteurs à n'importe quelle pièce de n'importe quel mod, pas seulement ceux de Proteus.** Quand un mod soude un nœud, un collier ou une sangle dans une géométrie que son auteur n'a jamais rendue optionnelle, l'onglet **Studio** peut détacher cette pièce et lui donner un vrai interrupteur.
+- **Donnez un matcap à n'importe quelle pièce d'un mod.** Dans le **Studio**, cochez des pièces d'équipement, d'accessoires, de cheveux, de queues, d'oreilles de Viéra ou de cornes d'Ao Ra et donnez-leur un aspect brillant, vitreux ou de pierre précieuse peint à partir de l'image d'une sphère : avec l'ensemble fourni avec Proteus, vos propres images, ou un mod de bibliothèque de matcaps que vous avez installé. Voir [Matcaps](#matcaps).
+- **Toutes les tailles pour d'autres corps, d'un seul coup.** Le **Studio** réajuste un mod entier à toutes les tailles des mods de corps que vous cochez, comme Rue, YAB ou Neolithe, et les enregistre à côté des tailles de l'auteur. Pour un mod féminin, il peut ajouter des versions pour hommes pour TBSE et TBSE-X, dans un groupe à part **Corps d'homme** dont l'option par défaut est Original. Voir [Toutes les tailles pour d'autres corps](#toutes-les-tailles-pour-dautres-corps).
 - **Portez des mods de cheveux faits pour une autre race.** Beaucoup de mods de cheveux ne sont faits que pour une seule race, si bien que sur toute autre, le jeu affiche sa propre coiffure à la place. Proteus plie la coiffure du mod sur la tête de votre race et l'ajoute au même mod, physique comprise : ça fonctionne, tout simplement.
 - **Adaptez les cheveux moddés aux chapeaux.** Proteus plaque contre votre tête les cheveux qu'un chapeau recouvrirait, pour que le chapeau cesse de passer au travers. C'est activé par défaut, et cela n'agit que pendant que vous portez un chapeau.
+- **Liez votre look aux designs Glamourer.** Enregistrez un design et Proteus retient quels mods étaient actifs, leurs options et chaque couleur ; appliquez-le de nouveau et tout revient. Par défaut, seuls les mods Proteus sont restaurés ; cochez **Restaurer tous les mods du personnage** pour ramener le reste. Voir [Liaisons](#liaisons).
+- **Recolorez, faites briller et enregistrez des looks sans toucher à aucun fichier.** L'éditeur de couleurs teinte chaque région d'un calque, la fait briller — même seulement dans l'obscurité — et la transforme en tissu brillant. Gardez une combinaison comme préréglage et partagez-la sous forme de code ou de fichier `.ptp`. Voir [Éditeur de couleurs](#éditeur-de-couleurs) et [Préréglages](#préréglages).
+- **Transformez d'autres mods en mods Proteus.** **Importer** convertit les mods Penumbra classiques, les packs de calques Onion, les tatouages lumineux Atramentum Luminis, les packs de peau émissive et les packs de textures d'yeux, et ajoute les préréglages que quelqu'un vous a partagés. Voir [Importer](#importer).
+- **Créez et partagez des mods de calque sans quitter le jeu.** **Créer** écrit un nouveau mod de calque à partir de vos images, tatouages lumineux compris, et **Exporter** empaquette n'importe quel mod Proteus en `.pmp` à partager. Voir [Créer](#créer) et [Exporter](#exporter).
+- **Mettez l'ancien équipement à jour.** Proteus peut passer l'équipement créé avant Dawntrail aux shaders de Dawntrail, et fait pointer chaque variante d'une pièce portée vers le matériau de son mod, pour qu'elle ne retombe pas sur celui du jeu. Voir [Shaders d'équipement](#shaders-déquipement) et [Variantes d'équipement](#variantes-déquipement).
 
 
 Si vous avez besoin d'aide, consultez d'abord ce [guide de dépannage](../TROUBLESHOOTING.md).
@@ -21,6 +28,8 @@ Rejoignez ensuite https://discord.gg/solona et posez votre question dans le salo
 Si vous êtes créateur et souhaitez faire des mods pour Proteus, lisez le [guide du créateur](../For%20Creators.md).
 
 Comment l'IA a été utilisée, ou non, pour créer Proteus (aucune IA n'est utilisée pendant que vous jouez) : [déclaration sur l'IA](AI-DECLARATION.fr.md)
+
+Les mods, le Discord, l'aide et les téléchargements de Solona sont soumis à des [Conditions d'utilisation](../TERMS.md) : aucun contenu haineux, raciste ou harcelant, et rien de sexuel impliquant des personnages d'apparence enfantine. Ces conditions sont rédigées en anglais, et seul le texte anglais fait foi.
 
 ---
 
@@ -176,7 +185,7 @@ Bon à savoir :
 Sous l'outil pour un seul vêtement, **Toutes les tailles pour d'autres corps** traite un mod entier d'un coup. Cochez les mods de corps voulus, appuyez sur **Ajouter les tailles**, et chaque taille de ces corps est réajustée depuis la taille de l'auteur la plus proche (les autres pièces de la tenue dans cette option depuis la même taille), enregistrée à côté des tailles de l'auteur sous les noms "Rue S", "YAB Buff L" et ainsi de suite.
 
 - **Utiliser la version YAS d'un corps quand il en a une** donne à Rue, YAB et Tre leurs tailles Yet Another Skeleton. Une pièce déjà pondérée pour YAS reçoit toujours des tailles YAS.
-- **Fait pour** sert pour un mod que Proteus ne sait pas reconnaître lui-même, comme un mod fait pour une ancienne version d'un corps (Bibo+ d'avant Dawntrail, par exemple) : choisissez le corps pour lequel il a été fait, et les tailles que Proteus n'a pas pu placer sont lues sur ce corps. Les tailles que Proteus reconnaît lui-même sont lues de la même façon, quoi qu'il indique. Laissez **Détecter** sauf si la liste de ce qui a été laissé de côté dit qu'il n'a pas pu savoir pour quel corps une pièce a été faite.
+- **Fait pour** sert pour un mod que Proteus ne sait pas reconnaître lui-même, comme un mod fait pour une ancienne version d'un corps (Bibo+ d'avant Dawntrail, par exemple) : choisissez le corps pour lequel il a été fait, et les tailles que Proteus n'a pas pu placer sont lues sur ce corps. Les tailles que Proteus reconnaît lui-même sont lues de la même façon, quoi qu'il indique. Laissez **Détecter** sauf si la liste de ce qui a été laissé de côté dit qu'il n'a pas pu savoir pour quel corps une pièce a été faite. Une pièce de buste ou de jambes sans assez de peau pour distinguer ses tailles, comme un pantalon ample, est prise comme la taille de ce corps que donnent les noms de ses options (Small comme S, etc.), et **À vérifier en jeu** le dit.
 - **Inclure les chaussures et les gants**, actif par défaut, fait aussi des tailles des chaussures et des gants du mod en gardant leurs propres pieds et mains : les chaussures reçoivent les tailles des jambes (« Rue WC », « YAB SC »), les gants une option par corps. Une chaussure ou un gant dans le même groupe de tailles que le buste ou les jambes de la tenue rejoint les tailles que cette pièce a faites, et un seul choix habille toute la tenue. Celui qui n'atteint aucune jambe ni aucun bras ne fait que redessiner sa peau, et seulement là où le nouveau corps dessine la peau autrement. Celui dont la taille se choisit dans un groupe avec une pièce qu'il ne peut pas suivre (des gants à côté de jambes, ou une chaussure et des gants sans torse) est laissé tel quel, avec une note. Décochée, ils ne reçoivent ni tailles ni versions pour hommes, et le jeu de tailles les nomme sous la case et dans ses notes.
 - **Ajouter les piercings des nouveaux corps** désactivé par défaut, ajoute les piercings de chaque corps aux tailles qu'il crée. Les ongles sont toujours inclus. Les tailles déjà faites ne changent que si elles sont refaites.
 - **Garder la peau cachée** désactivé par défaut, met la peau de chaque corps entière là où l'auteur a supprimé la sienne, et rend la peau manquante sous ou autour du tissu. La peau gardée peut transparaître à travers un tissu moulant. Les chaussures et les gants sont toujours découpés. Les tailles déjà faites ne changent que si elles sont refaites.
@@ -228,7 +237,7 @@ Une cible de peau de corps couvre aussi le même corps sur toutes les autres rac
 
 #### Importer
 
-Prend un pack de mod et le convertit en mod Proteus. Trois types sont pris en charge :
+Prend un pack de mod et le convertit en mod Proteus. Cinq sortes sont prises en charge — et il accepte aussi un préréglage partagé :
 
 **Mods Penumbra classiques (`.pmp`)** — portez des morceaux d'un mod d'équipement normal sans utiliser d'emplacement, et profitez en plus des fonctions avancées de table de couleurs. Pour convertir un mod déjà installé dans Penumbra, choisissez le `meta.json` de son dossier au lieu d'un fichier de pack. Les packs à l'ancien format de Penumbra sont d'abord mis à niveau par Penumbra, puis convertis.
 
@@ -251,12 +260,31 @@ Les packs Atramentum Luminis cachent leur lueur dans le canal alpha d'une textur
 - La texture de corps du pack est importée elle aussi, sous forme d'option distincte **Peau de l'auteur**, activée par défaut : elle porte les parties du tatouage qui ne brillent pas, et elle conserve votre propre teint plutôt que celui de l'auteur. Décochez-la dans Penumbra si vous ne voulez que la lueur.
 - Proteus reconnaît bibo et gen3 directement. Pour tout autre corps, il peint sur celui que vous portez sans redimensionner, et le signale ; le sélecteur **Corps** permet de forcer autre chose si le pack a été fait pour un autre modèle.
 - Il n'y a ni filtre de race ni filtre de sexe, donc le mod peint n'importe quel personnage sur un corps utilisant le même matériau. Désactivez-le dans Penumbra pour les personnages auxquels il n'était pas destiné.
-- La lueur des yeux n'est pas importée pour l'instant, mais écrivez-moi si cela vous intéresse.
+- La lueur des yeux d'un pack n'est pas importée. Pour des yeux lumineux, importez un pack de textures d'yeux (ci-dessous).
+
+**Packs de peau émissive (`.pmp`)** — un graphisme lumineux fait pour un shader de peau remplacé, porté comme un calque Proteus que vous pouvez recolorer et atténuer, sans aucun mod de shader.
+
+Un `.pmp` qui ne contient que du graphisme lumineux et aucun modèle est lu comme un pack de peau émissive plutôt que comme un mod classique. Proteus extrait la lueur du canal alpha de chaque texture et la peint sur la peau que vous portez déjà ; les matériaux de corps propres au pack sont laissés de côté, car ils ne fonctionnent qu'avec le shader remplacé.
+
+- Proteus reconnaît bibo et gen3 directement. Pour tout autre corps, il peint sur celui que vous portez sans redimensionner, et le signale ; le sélecteur **Corps** permet de forcer autre chose si le pack a été fait pour un autre modèle.
+- Si Proteus ne peut pas déterminer pour quel corps une texture a été peinte et que votre personnage n'est pas encore dessiné, cette texture est ignorée : entrez en jeu et rouvrez le pack.
+- Comme pour les packs Atramentum Luminis, il n'y a ni filtre de race ni filtre de sexe : désactivez le mod dans Penumbra pour les personnages auxquels il n'était pas destiné.
+
+**Packs de textures d'yeux (`.zip`)** — des yeux avec une lueur qui bouge.
+
+Choisissez un `.zip` d'images d'yeux en vrac dont les noms se terminent par base, mask ou norm. Les yeux sont importés comme des textures ordinaires, et la forme que délimite le canal rouge du masque reçoit une lueur animée que vous pouvez recolorer ou atténuer dans Couleurs.
+
+- La lueur est découpée pour le visage que vous portez au moment de l'import, sur l'iris de chaque race pour ce visage, si bien qu'elle vous suit d'une race à l'autre. Si votre personnage n'est pas encore dessiné, elle est découpée pour le premier visage du jeu. Pour la porter avec un autre visage, importez de nouveau le pack en portant ce visage.
+- **Forme de la lueur** choisit quelle part du masque brille : **Motif et son dégradé**, l'option par défaut, garde le fondu doux autour du motif, et **Motif seul** garde la lueur à l'intérieur. C'est intégré à l'import, alors choisissez-le avant d'importer.
+- Un pack sans masque, ou dont le masque ne délimite rien, importe quand même ses yeux, simplement sans la lueur.
 
 
 **Préréglages (`.ptp`)** — un look que quelqu'un a partagé pour un mod que tu as déjà.
 
 Un préréglage n'est pas un mod, donc rien n'est installé : Proteus lit pour quel mod il a été fait, propose de l'ajouter à celui-là, et te le dit si tu ne l'as pas sous ce nom — tu choisis alors le bon mod toi-même. Il est enregistré, pas porté ; porte-le depuis la section Préréglages de ce mod dans Couleurs quand tu le veux.
+
+Les packs Onion, Atramentum Luminis et de peau émissive proposent aussi **Convertir les couches en .tex BC7**, désactivé par défaut. Cela enregistre le graphisme importé compressé par blocs : environ un quart de la taille sur le disque, et plus aucun PNG à décoder à chaque composition de Proteus. La compression par blocs entraîne des pertes, laissez-la donc désactivée pour garder les images du pack exactement telles que leur auteur les a faites. L'option est grisée quand le compresseur de Proteus n'est pas chargé.
+
 #### Exporter
 
 Enregistre un de vos mods Proteus en pack de mod Penumbra (`.pmp`) pour le partager. Choisissez le mod dans la liste, appuyez sur **Exporter**, et choisissez où le mettre — le nom de fichier est prérempli à partir du nom du mod, et la boîte de dialogue s'ouvre sur votre bureau la première fois, puis là où vous avez enregistré la dernière fois.
@@ -283,16 +311,19 @@ Le pack est une copie directe du dossier du mod, donc rien n'est perdu : options
 | Lueur d'arrière-plan | La douce lueur de braise qui dérive derrière la fenêtre. Activée par défaut. |
 | Réduire les animations | Garde la fenêtre immobile : les effets de survol s'appliquent d'un coup, et la lueur d'arrière-plan ainsi que la pulsation des mods actifs cessent de bouger. |
 
-Quatre boutons ici méritent d'être connus :
+Cinq boutons ici méritent d'être connus :
 
 - **Copier les journaux** — lance un rafraîchissement complet et enregistre dans un fichier texte sur votre bureau tout ce que Proteus journalise pendant ce temps, votre nom d'utilisateur Windows retiré. Joignez ce fichier quand vous signalez un problème.
 - **Restaurer l'accessoire modifié** — force un redessin complet si une seconde peau reste coincée sur une bague ou un bracelet après une désactivation ou un échange.
 - **Vider le cache de textures** — à utiliser quand une modification de texture n'apparaît pas, par exemple après avoir réexporté un calque à la même taille.
 - **Textures d'effet lumineux** — ouvre le dossier dans lequel Proteus lit les cartes de défilement de lueur animée. Déposez-y des images et elles apparaîtront dans la liste Effet de chaque calque d'équipement. Survolez le bouton pour voir le chemin complet.
+- **Images de matcap** — ouvre le dossier où se trouvent vos propres images de matcap, `Penumbra/Proteus/Matcaps`. Les images que vous y placez sont listées sous **Vos images** dans l'outil Matcaps du Studio.
+
+Sous **Diagnostics**, deux listes montrent ce qu'a fait la dernière composition. **Peau de base** nomme le mod dont chaque texture de peau est lue ; survolez une ligne pour voir son chemin dans le jeu. Un mod marqué *(non confirmé)* n'est pas encore confirmé comme propriétaire, et si une ligne nomme le mauvais mod, **Vider le cache de textures** le détermine à nouveau. **Portée des calques** indique, pour chaque matériau, combien de calques ont atteint sa diffuse, sa normale et son masque : une ligne en rouge est un matériau qu'un calque devait atteindre sans y parvenir, et *effets seulement* signifie que seuls l'occlusion ambiante ou l'atténuation de la teinte de peau l'ont touché. Une capture d'écran des deux aide quand vous signalez une texture qui n'apparaît pas.
 
 ##### Cheveux
 
-La section **Cheveux** adapte les mods de cheveux à votre personnage de deux façons : les cheveux faits pour une autre race sur la tête de votre race, et les cheveux sous les chapeaux. Comme le Studio, les deux modifient les fichiers du mod de cheveux lui-même, donc ils continuent de fonctionner avec Proteus désactivé et suivent le mod si vous l'exportez.
+La section **Cheveux** adapte les mods de cheveux à votre personnage : les cheveux faits pour une autre race sur la tête de votre race, et les cheveux sous les chapeaux, et elle peut retirer les oreilles de chat des cheveux miqo'te. Comme le Studio, chacune de ces fonctions écrit dans le mod de cheveux lui-même, donc cela continue de fonctionner avec Proteus désactivé et suit le mod si vous l'exportez.
 
 **Cheveux faits pour une autre race.** Beaucoup de mods de cheveux ne sont faits que pour une seule race, si bien que sur toute autre race, le jeu affiche sa propre coiffure à la place. Avec **Adapter les mods de coiffure faits pour une autre race** activé, Proteus plie la coiffure du mod sur la tête de votre race et l'ajoute à la même option du même mod, de sorte qu'elle suit les interrupteurs de ce mod.
 
@@ -305,6 +336,14 @@ La section **Cheveux** adapte les mods de cheveux à votre personnage de deux fa
 - Les têtes diffèrent par la forme, pas seulement par la taille : une coiffure pliée sur une tête plus grande peut donc s'enfoncer en partie à l'arrière du crâne et laisser voir une zone chauve. Proteus ressort ces cheveux là où ils étaient sur la tête d'origine, et pas plus loin. Sur une tête bien plus grande (Hrothgar), les cheveux s'étirent un peu pour la couvrir. S'il en reste qui s'enfoncent, Proteus vous le dit. Les cheveux que Proteus a adaptés avant cette mise à jour sont adaptés à nouveau la prochaine fois que vous les portez, ou depuis le Studio.
 - Pour couvrir toutes les races d'un coup, ouvrez un modèle de cheveux dans le **Studio** et utilisez **Transposer à toutes les races**. Sous **Aussi pour l'autre sexe**, vous pouvez aussi cocher des races de l'autre sexe : elles portent alors cette coiffure à la place du style du jeu de ce numéro. Proteus tient ces transpositions à jour, mais n'en crée jamais une de lui-même. Chaque race de l'autre sexe peut être transposée seule : sa transposition reçoit sa propre copie du matériau, si bien que les autres races gardent la coiffure du jeu.
 - Un portage que vous modifiez dans le Studio (le pinceau, les interrupteurs de parties ou une matcap) reste tel quel : Proteus ne le refait pas et ne l'annule pas, ni ne refait de lui-même les portages des autres races qui partagent son matériau, tant que vous n'avez pas annulé cette modification. Porter l'une de ces races à la main la refait tout de même.
+
+**Oreilles miqo'te.** Beaucoup de mods de cheveux pour Miqo'te modélisent des oreilles de chat dans la coiffure. Avec **Retirer les oreilles des mods de cheveux miqo'te** coché (désactivé par défaut), Proteus fait une copie sans oreilles de la coiffure que vous portez en tant que Miqo'te et fait pointer l'option du mod vers cette copie.
+
+- Les fichiers de l'auteur ne sont jamais modifiés : les copies vont dans un dossier `Proteus Earless` à l'intérieur du mod.
+- Cela modifie le mod lui-même, donc chaque personnage dessiné avec ce mod actif — dans toutes les collections, et chez quiconque avec qui vous le partagez — n'a pas d'oreilles avec. Le chat signale quand cela se produit.
+- Si le mod a déjà sa propre option sans oreilles, la section la nomme, pour que vous puissiez plutôt la choisir dans Penumbra.
+- Le désactiver remet les oreilles dans chaque mod que Proteus a modifié.
+- Cela fonctionne avec ou sans **Adapter les mods de coiffure faits pour une autre race**.
 
 **Chapeaux.** La plupart des cheveux moddés ne gèrent pas les chapeaux, si bien qu'un chapeau porté par-dessus passe au travers. Proteus plaque contre votre tête les cheveux qu'un chapeau recouvrirait.
 

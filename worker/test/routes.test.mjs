@@ -63,6 +63,7 @@ async function check(name, path, expectStatus, expectOrigin) {
 const GH = 'https://github.com/solona-m/proteus/releases/download';
 const CAM = 'https://github.com/solona-m/camera-tools-ffxiv/releases/download';
 const PKL = 'https://github.com/solona-m/Pickles-Playlist-Editor/releases/download';
+const MIL = 'https://github.com/solona-m/milieu/releases/download';
 const stripEpoch = (u) => (u ?? '').replace(/\?e=\d+$/, '');
 
 console.log('accepted paths:');
@@ -95,6 +96,30 @@ await check('camera tools rejects nesting', '/camera-tools/v1.0/sub/latest.zip',
 await check('camera tools prefix alone', '/camera-tools/latest.zip', 404, null);
 // Proteus's asset tags do not leak through the prefixed route into the camera tools repo.
 await check('camera tools rejects uvmaps tag', '/camera-tools/uvmaps-v1/x.tif', 404, null);
+
+// Milieu: its own prefix; plugin zips and the bundled scene textures only.
+console.log('milieu (fourth origin repo):');
+await check('milieu stable zip', '/milieu/v2611.40.0.0/latest.zip', 200, `${MIL}/v2611.40.0.0/latest.zip`);
+await check('milieu testing zip', '/milieu/testing-40/latest.zip', 200, `${MIL}/testing-40/latest.zip`);
+await check('milieu bundled scene', '/milieu/backdrops-v2/moon.atex', 200, `${MIL}/backdrops-v2/moon.atex`);
+await check('milieu rejects other files', '/milieu/v1.0/payload.exe', 404, null);
+await check('milieu rejects jpeg scenes', '/milieu/backdrops-v2/moon.jpeg', 404, null);
+await check('milieu rejects bad tag', '/milieu/random/latest.zip', 404, null);
+await check('milieu rejects nesting', '/milieu/backdrops-v2/sub/moon.atex', 404, null);
+await check('milieu rejects uppercase stem', '/milieu/backdrops-v2/Moon.atex', 404, null);
+await check('milieu prefix alone', '/milieu/latest.zip', 404, null);
+await check('milieu rejects proteus asset tags', '/milieu/uvmaps-v1/x.tif', 404, null);
+await check('bare backdrops tag is not milieu', '/backdrops-v2/moon.atex', 404, null);
+await check('milieu 40-char stem accepted', `/milieu/backdrops-v2/${'a'.repeat(40)}.atex`, 200, `${MIL}/backdrops-v2/${'a'.repeat(40)}.atex`);
+await check('milieu 41-char stem rejected', `/milieu/backdrops-v2/${'a'.repeat(41)}.atex`, 404, null);
+await check('milieu rejects dotted stem', '/milieu/backdrops-v2/moon.night.atex', 404, null);
+await check('milieu rejects hyphenated stem', '/milieu/backdrops-v2/living-room.atex', 404, null);
+await check('milieu rejects atex under a zip tag', '/milieu/v1.0/moon.atex', 404, null);
+await check('milieu rejects zip under a backdrops tag', '/milieu/backdrops-v2/latest.zip', 404, null);
+await check('milieu rejects over-long backdrops tag', '/milieu/backdrops-v1234567/moon.atex', 404, null);
+await check('milieu rejects traversal', '/milieu/backdrops-v2/../../etc/passwd', 404, null);
+await check('milieu rejects encoded traversal', '/milieu/backdrops-v2/%2e%2e/moon.atex', 404, null);
+await check('milieu rejects encoded slash', '/milieu/backdrops-v2%2Fmoon.atex', 404, null);
 
 // A third repo: Pickles Playlist Editor's AI-score assets, under its own prefix.
 // [AC-ai-assets-download-9] [EDGE-ai-assets-download-22] [EDGE-ai-assets-download-24] (Pickles plan ids)
@@ -168,40 +193,47 @@ await check('matcap wrong ext', '/matcaps-v1/payload.jpg', 404, null);
 await check('space in matcap name', '/matcaps-v1/Gold Metal.png', 404, null);
 await check('matcap nested', '/matcaps-v1/sub/Gold.Metal.png', 404, null);
 
-console.log('readme endpoint (the mirror\'s own docs, inlined):');
+console.log('the worker README is not published:');
 {
-  for (const p of ['/mirror.md']) {
+  for (const method of ['GET', 'HEAD']) {
+    fetched = [];
+    const res = await worker.fetch(new Request('https://dl.example.com/mirror.md', { method }), {}, ctx);
+    const body = await res.text();
+    const ok = res.status === 404 && !body.includes('Proteus asset mirror') && fetched.length === 0;
+    if (ok) { pass++; console.log(`  ok   ${method} /mirror.md is a 404`); }
+    else { fail++; console.log(`  FAIL ${method} /mirror.md: status ${res.status}, fetched ${fetched.join(',')}`); }
+  }
+}
+
+console.log('milieu readme (the page for new Milieu users):');
+{
+  const MILIEU_README = 'https://raw.githubusercontent.com/solona-m/milieu/test/README.md';
+  for (const p of ['/milieu', '/milieu/', '/milieu/README.md']) {
+    store.clear();
     fetched = [];
     const res = await worker.fetch(new Request('https://dl.example.com' + p), {}, ctx);
-    const body = await res.text();
-    const ok = res.status === 200
-      && res.headers.get('content-type')?.startsWith('text/markdown')
-      && body.includes('Proteus asset mirror')
-      // Static content must never build an upstream URL — that is what keeps it outside the
-      // open-proxy surface the route patterns above exist to contain.
-      && fetched.length === 0;
-    if (ok) { pass++; console.log(`  ok   ${p} serves the README`); }
-    else {
-      fail++;
-      console.log(`  FAIL ${p}: status ${res.status}, type ${res.headers.get('content-type')}, ` +
-                  `len ${body.length}, origin ${fetched[0] ?? '(none)'}`);
-    }
+    const ok = res.status === 200 && fetched[0] === MILIEU_README
+      && res.headers.get('content-type')?.startsWith('text/markdown');
+    if (ok) { pass++; console.log(`  ok   ${p} proxies Milieu's README`); }
+    else { fail++; console.log(`  FAIL ${p}: status ${res.status}, fetched ${fetched[0]}`); }
   }
+  store.clear();
+  fetched = [];
+  const html = await worker.fetch(new Request('https://dl.example.com/milieu', { headers: { accept: 'text/html' } }), {}, ctx);
+  const page = await html.text();
+  const ok = html.headers.get('content-type')?.startsWith('text/html') && /<title>[^<]*Milieu/.test(page) && !/<title>[^<]*Proteus/.test(page) && page.includes('href="/milieu/icon.png"');
+  if (ok) { pass++; console.log('  ok   /milieu renders for a browser, titled Milieu, with its own icon'); }
+  else { fail++; console.log(`  FAIL /milieu html: ${html.headers.get('content-type')} ${page.slice(0, 200)}`); }
+}
 
-  // HEAD must not carry a body, but must still report the same headers.
-  const head = await worker.fetch(
-    new Request('https://dl.example.com/mirror.md', { method: 'HEAD' }), {}, ctx);
-  const headBody = await head.text();
-  if (head.status === 200 && headBody === '') { pass++; console.log('  ok   HEAD /mirror.md has no body'); }
-  else { fail++; console.log(`  FAIL HEAD /mirror.md: status ${head.status}, body len ${headBody.length}`); }
-
-  // Documentation is MUTABLE, so it must not inherit the assets' immutable one-year TTL — a stale
-  // year-old copy of the docs would be worse than none.
-  const res = await worker.fetch(new Request('https://dl.example.com/mirror.md'), {}, ctx);
-  const cc = res.headers.get('cache-control') ?? '';
-  if (!cc.includes('immutable') && /max-age=(\d+)/.test(cc) && +RegExp.$1 <= 3600) {
-    pass++; console.log(`  ok   short, mutable cache-control (${cc})`);
-  } else { fail++; console.log(`  FAIL cache-control on /mirror.md: ${cc}`); }
+{
+  store.clear();
+  fetched = [];
+  const res = await worker.fetch(new Request('https://dl.example.com/milieu/icon.png'), {}, ctx);
+  const ok = res.status === 200 && fetched[0] === 'https://raw.githubusercontent.com/solona-m/milieu/test/Milieu/images/icon.png'
+    && res.headers.get('content-type') === 'image/png';
+  if (ok) { pass++; console.log('  ok   /milieu/icon.png proxies the Milieu icon'); }
+  else { fail++; console.log(`  FAIL /milieu/icon.png: ${res.status} ${fetched[0]}`); }
 }
 
 console.log('project readme (proxied, and the front door):');
@@ -297,7 +329,7 @@ console.log('fixed-upstream proxies (manifest + icon):');
 console.log('markdown rendering + content negotiation:');
 {
   const HTML = { Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' };
-  const MD = '# Proteus\n\nSee [Troubleshooting](TROUBLESHOOTING.md) and [Creators](For%20Creators.md).\n' +
+  const MD = '# Proteus\n\nSee [Troubleshooting](TROUBLESHOOTING.md) and [Creators](For%20Creators.md) and [Terms](TERMS.md).\n' +
              'Also [elsewhere](docs/other.md) and [ext](https://example.com/x).\n' +
              'And [queried](docs/other.md?plain=1#L3).\n\n' +
              '| Column | What |\n|---|---|\n| On | Enables it. |\n';
@@ -326,7 +358,8 @@ console.log('markdown rendering + content negotiation:');
       && res.headers.get('vary') === 'Accept, Accept-Language'
       && body.includes('<h1')
       && body.includes('<table')          // the README is mostly tables; GFM must be on
-      && body.includes('<title>Proteus</title>');   // title from the first heading
+      && body.includes('<title>Proteus</title>')   // title from the first heading
+      && body.includes('href="/icon.png"');         // Proteus pages keep Proteus's own favicon
     if (ok) { pass++; console.log('  ok   Accept: text/html -> rendered page'); }
     else {
       fail++;
@@ -365,6 +398,8 @@ console.log('markdown rendering + content negotiation:');
     const checks = [
       ['mirrored, plain', 'href="/TROUBLESHOOTING.md"'],
       ['mirrored, encoded space', 'href="/For%20Creators.md"'],
+      // [AC-readme-tos-9] [EDGE-readme-tos-5]
+      ['mirrored, terms', 'href="/TERMS.md"'],
       ['unmirrored -> GitHub', 'href="https://github.com/solona-m/proteus/blob/main/docs/other.md"'],
       ['absolute untouched', 'href="https://example.com/x"'],
       // Everything after the path travels with it. Rewriting only the pathname would quietly turn
@@ -382,6 +417,8 @@ console.log('markdown rendering + content negotiation:');
   for (const [path, upstream] of [
     ['/TROUBLESHOOTING.md', 'https://raw.githubusercontent.com/solona-m/proteus/main/TROUBLESHOOTING.md'],
     ['/For%20Creators.md', 'https://raw.githubusercontent.com/solona-m/proteus/main/For%20Creators.md'],
+    // [AC-readme-tos-9] [EDGE-readme-tos-4] The Terms of Service, proxied from main like the other docs.
+    ['/TERMS.md', 'https://raw.githubusercontent.com/solona-m/proteus/main/TERMS.md'],
   ]) {
     store.clear();
     const { res } = await get(path, { Accept: '*/*' });
@@ -409,14 +446,6 @@ console.log('markdown rendering + content negotiation:');
     } else { fail++; console.log(`  FAIL malformed escape: ${res.status}, upstream ${fetched[0]}`); }
   }
 
-  // The worker's own inlined docs render under the same rule.
-  {
-    const { res, body } = await get('/mirror.md', HTML);
-    const ok = res.headers.get('content-type')?.startsWith('text/html') && body.includes('<h1');
-    if (ok) { pass++; console.log('  ok   /mirror.md renders for a browser'); }
-    else { fail++; console.log(`  FAIL /mirror.md: ${res.headers.get('content-type')}`); }
-  }
-
   // Restore the shared stub for the suites below.
   globalThis.fetch = async (url, opts) => {
     fetched.push(url);
@@ -442,11 +471,14 @@ console.log('language negotiation:');
     `# Proteus\n\n<!--i18n-->\n${nav}\n<!--/i18n-->\n\nBODY-${code}\n${tail}`;
   const ROOT = doc('en', '**English** · [日本語](docs/README.ja.md) · [Deutsch](docs/README.de.md)');
   const DE = doc('de', '[English](../README.md) · [日本語](README.ja.md) · **Deutsch**',
-    '\nSiehe [Fehlerbehebung](../TROUBLESHOOTING.md) und [Ersteller](../For%20Creators.md).\n');
+    '\nSiehe [Fehlerbehebung](../TROUBLESHOOTING.md) und [Ersteller](../For%20Creators.md)' +
+    ' und [Bedingungen](../TERMS.md).\n');
+  const TERMS = "# Terms of Service — Solona's mods and plugins\n\nSee [LICENSE](LICENSE).\n";
 
   globalThis.fetch = async (url) => {
     fetched.push(url);
     const body = url === `${RAW}README.md` ? ROOT
+      : url === `${RAW}TERMS.md` ? TERMS
       : url === `${RAW}docs/README.de.md` ? DE
         : url.startsWith(`${RAW}docs/README.`) ? doc(url.slice(-5, -3), 'x')
           : 'MISSING';
@@ -577,7 +609,40 @@ console.log('language negotiation:');
     for (const [label, needle] of [
       ['../TROUBLESHOOTING.md -> /TROUBLESHOOTING.md', 'href="/TROUBLESHOOTING.md"'],
       ['../For%20Creators.md -> /For%20Creators.md', 'href="/For%20Creators.md"'],
+      // [AC-readme-tos-9] [EDGE-readme-tos-5]
+      ['../TERMS.md -> /TERMS.md', 'href="/TERMS.md"'],
     ]) t(`link ${label}`, body.includes(needle));
+  }
+
+  // [AC-readme-tos-9] [EDGE-readme-tos-17] [EDGE-readme-tos-18] The Terms page: rendered, English only
+  // (no switcher), and its LICENSE link, which the mirror doesn't serve, goes to GitHub.
+  store.clear();
+  {
+    const { res, body } = await get('/TERMS.md', HTML);
+    t('/TERMS.md renders as a page', res.status === 200
+      && res.headers.get('content-type')?.startsWith('text/html')
+      && /<title>Terms of Service/.test(body), `${res.status} ${res.headers.get('content-type')}`);
+    t('/TERMS.md has no language switcher', !body.includes('<nav class="langs"'));
+    t('/TERMS.md links LICENSE on GitHub',
+      body.includes('href="https://github.com/solona-m/proteus/blob/main/LICENSE"'));
+  }
+
+  // [AC-readme-tos-9] Tools get the source byte for byte.
+  store.clear();
+  {
+    const { res, body } = await get('/TERMS.md', { Accept: '*/*' });
+    t('/TERMS.md raw is the unchanged markdown', body === TERMS
+      && res.headers.get('content-type')?.startsWith('text/markdown'),
+      `identical=${body === TERMS}`);
+  }
+
+  // [EDGE-readme-tos-16] Only the exact path is a route: other spellings 404 without reaching GitHub.
+  for (const path of ['/terms.md', '/TERMS.md/x']) {
+    store.clear();
+    const { res } = await get(path, HTML);
+    t(`${path} 404s without an upstream fetch`,
+      res.status === 404 && !fetched.some((u) => u.includes('raw.githubusercontent')),
+      `${res.status}, fetched ${fetched[0] ?? '(none)'}`);
   }
 
   // A document with no translations gets no switcher: it would promise pages that do not exist.

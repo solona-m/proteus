@@ -632,6 +632,8 @@ YourMod.pmp (rename from .zip)
       ...
 ```
 
+Mods that spread hate — racist, hateful or harassing content — or sexualise childlike characters aren't welcome: Solona won't help with, host, share or feature them, and her own mods may not be used for them. See the [Terms of Service](TERMS.md).
+
 ### Sample Mods
 
 The `samples/` directory in this repository contains two ready-to-study examples:

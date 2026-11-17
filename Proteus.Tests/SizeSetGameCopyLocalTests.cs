@@ -180,7 +180,7 @@ public class SizeSetGameCopyLocalTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-old-game-copies-3")]
     [InlineData("Calithea - by Solona", "c0101e0141_glv")]           // 76.3%
     [InlineData("black market - by solona", "c0101e9071_top")]       // 67.6%
-    [InlineData("Sunfairy (Bibo+) - by Solona", "c0101e0141_top")]   // 94.5%: just under the bar
+    [InlineData("Sunfairy - by Solona", "c0101e0141_top")]   // 94.5%: just under the bar
     public void Older_copies_below_the_bar_stay_pieces(string mod, string piece)   // [EDGE-old-game-copies-19] [EDGE-old-game-copies-3]
         => Assert.Contains(piece, Names(SizeSetRefit.PiecesOf(Installed(mod), Data.Game())));
 }
