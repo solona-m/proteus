@@ -286,6 +286,54 @@ touched only `docs/pbd-clean-room-plan.md`). No `show`, `log -p`, `diff` or `bla
   (race count and bone count), from the spec's two "Required change from the old reader:" markers (R-1).
 - **Spec errors found:** none. No test was sent back to Agent A.
 
+### Step 4: the deletion
+
+- `git rm XivLiveMesh/PbdFile.cs`, committed as "Remove the Meddle-derived racial deformer reader ahead of its
+  clean-room replacement" without `-v`. The diff was never viewed.
+- Guard after the deletion: `git rev-list --count solona-m/pbd-clean-room..test -- XivLiveMesh/PbdFile.cs` printed 0.
+- `bin/` and `obj/` in `XivLiveMesh`, `Proteus`, `Proteus.Tests` and `Proteus.Refit` were deleted (by the owner, with
+  `rm -rf`, after the session's own delete was refused by its permission check), and checked gone with `Test-Path`
+  (all eight False) before Agent B started.
+
+### Step 5: Agent B's commit
+
+The orchestrator extracted Agent B's record from its transcript by agent ID (see *Method* and *Agent B*), then committed
+the new `XivLiveMesh/PbdFile.cs` with B's section. It did not edit B's file.
+
+### Step 6: proof on the new code
+
+- **Wide proof.** The step 3c command without `CleanRoom!=NewBehaviour` (still without `PbdCleanRoomRecordTests`):
+  1366 tests, 1364 passed, 1 failed, 1 skipped. The two extra tests are the NewBehaviour cases (race count and bone
+  count), which passed.
+- **Skip list:** identical to step 3's:
+  - `EarringBonesLocalTests.Earring_nodes_measured`: the static `Skip =` attribute ("Step 0 diagnostic").
+- **Never-skip set and named cross-race tests ran and passed:** all `PbdFileTests+RealFile` vectors,
+  `CrossSexRefitLocalTests.Starlit_drawn_with_the_game_s_women_skeleton_still_refits` and
+  `KeepEndsLocalTests.Game_boots_baked_for_a_woman_keep_their_feet_and_read_on_the_game_legs`.
+- **The one failure is environmental, not a baseline failure and not the reader:**
+  `SizeSetGameCopyLocalTests.Older_copies_below_the_bar_stay_pieces(mod: "Sunfairy (Bibo+) - by Solona", piece: "c0101e0141_top")`,
+  message "Sunfairy (Bibo+) - by Solona is not installed", raised by the test's own folder-exists check
+  (`SizeSetGameCopyLocalTests.cs` line 44) before any code under test runs. It passed in step 3. Between the two runs
+  the owner's mod folder was renamed to "Sunfairy - by Solona" (folder time 2026-11-17 09:08), outside this run. The
+  test was not edited and the mod was not renamed back; the other cases of the same theory passed. This case is a gap
+  in the proof, listed in the final report.
+- **Goldens** (`GoldenTests`, `GoldenCrossBodyLocalTests`, `SkinTuckGoldenTests`), run once: 44 tests, 44 passed,
+  0 skipped. No baseline was re-blessed.
+- No failure went back to Agent B. No existing test was edited and no new test weakened.
+
+### Step 7: paperwork
+
+- `XivLiveMesh/NOTICE.md`: the *Third-party sources* table is replaced by a line saying none remain (pointing at the
+  spec and this log). The FFXIVClientStructs paragraph, the research-references paragraph and the AGPL line are kept.
+- `THIRD_PARTY_NOTICES.txt`: the Meddle block and one adjoining `----` separator are removed.
+
+Later orchestrator git commands (all in `E:/orca/workspaces/Proteus/meddle`): `git rm XivLiveMesh/PbdFile.cs`,
+`git rev-list --count solona-m/pbd-clean-room..test -- XivLiveMesh/PbdFile.cs`, `git status --short`, `git add` and
+`git commit` of B's file, this log and the paperwork. No `show`, `log -p`, `diff` or `blame` of the old path. Later
+files opened: `XivLiveMesh/NOTICE.md`, `THIRD_PARTY_NOTICES.txt` (lines 80–99, plus a grep for the Meddle block),
+`Proteus.Tests/PbdCleanRoomRecordTests.cs`, `Proteus.Tests/SizeSetGameCopyLocalTests.cs` lines 36–47, the plan, and the
+saved test output in the session scratchpad. It also listed `Sunfairy*` folder names in the owner's mods folder.
+
 ## Agent B
 
 A fresh `general-purpose` sub-agent (opus) that never saw the old code. Its lists below were extracted mechanically
