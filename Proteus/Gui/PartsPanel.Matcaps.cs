@@ -113,6 +113,19 @@ public sealed partial class PartsPanel
         PumpMatcapPreview();
     }
 
+    /// <summary>
+    /// The parts the click preview covers: the ticked ones; or, PROTOTYPE, with a row chosen and nothing ticked, every
+    /// whole submesh that can take a matcap — the row picks the texels, so ticks are only a way to narrow it.
+    /// </summary>
+    private List<ModelPart> MatcapPreviewParts()
+    {
+        if (parts == null) return [];
+        var chosen = parts.Parts.Where(p => ticked.Contains(p.Label)).ToList();
+        if (chosen.Count == 0 && matcapRowOnly > 0)
+            chosen = parts.Parts.Where(p => p.Island < 0 && CanTick(p) && !Services.Matcap.MatcapPlan.IsOnMatcap(p)).ToList();
+        return chosen;
+    }
+
     private static readonly string[] MatcapRowLabels =
         ["Whole part", .. Enumerable.Range(1, 16).Select(r => $"Row {r:00}")];
     private static readonly string[] MatcapSubLabels = ["A and B", "A only", "B only"];
@@ -167,7 +180,7 @@ public sealed partial class PartsPanel
     private (string Key, string? Blocked)? MatcapPreviewNow()
     {
         if (matcapPreview.Choice is not { } choice || modelIndex < 0 || modelIndex >= models.Count) return null;
-        var chosen = parts?.Parts.Where(p => ticked.Contains(p.Label)).ToList() ?? [];
+        var chosen = MatcapPreviewParts();
         var key = MatcapPreviewState.Key(models[modelIndex].File + (matcapRowOnly > 0 ? $"|row{matcapRowOnly}{matcapRowSub}" : ""), choice, chosen);
         var blocked = MatcapPanelModel.PreviewBlocked(penumbra.IsAvailable, chosen, MatcapTargetKind(), vanilla != null, TargetIsContent,
                                                       choice, matcapRoom, matcapRecord ?? MatcapRecord.Read(ModRoot() ?? ""));
@@ -221,7 +234,7 @@ public sealed partial class PartsPanel
             return;
         }
         var model = models[modelIndex];
-        var chosen = parts.Parts.Where(p => ticked.Contains(p.Label)).ToList();
+        var chosen = MatcapPreviewParts();
         var drawnAt = OpenModelGamePaths();
         var modsRoot = penumbra.GetModDirectory() ?? "";
         var env = MatcapEnv() with { TempDir = Path.Combine(Path.GetTempPath(), "Proteus", "matcap-preview") };
