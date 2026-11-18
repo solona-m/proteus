@@ -32,7 +32,7 @@ internal static class MatcapRowCut
 
     public const string CodeEmpty = "row-empty", CodeShader = "row-shader", CodeNoNormal = "row-no-normal", CodeBake = "row-bake",
                         CodeTextureVaries = "row-texture-varies", CodeFileSwap = "row-file-swap", CodeOwned = "row-owned-by-feature",
-                        CodeAmbiguous = "row-ambiguous-option", CodeUnreadable = "row-unreadable";
+                        CodeAmbiguous = "row-ambiguous-option", CodeUnreadable = "row-unreadable", CodeNoSource = "row-no-source";
 
     public sealed record Inputs(string ModRoot, MatcapPlan.Target Target, string Source, IReadOnlyCollection<int> Folders,
                                 int WornFolder, MatcapStudio.Environment Env, int Row, SubRowPick Sub, string Token, string CutName,
@@ -79,8 +79,8 @@ internal static class MatcapRowCut
         var swaps = PenumbraModMeta.TryReadContainerFileSwaps(i.ModRoot);
         var groups = ReadGroups(i.ModRoot);
         if (redirects == null || swaps == null || groups == null)
-            return Refuse(CodeUnreadable, ProteusLoc.Localize("Matcap.Refused.RecordUnreadable",
-                "Proteus's record of this mod's matcaps (Proteus/matcaps.json) could not be read, so nothing was changed."));
+            return Refuse(CodeUnreadable, ProteusLoc.Localize("Matcap.Refused.RowManifestUnreadable",
+                "The mod's list of files (meta.json) could not be read, so nothing was changed."));
 
         string GamePathAt(int f) => MatcapPlan.MaterialGamePaths(i.Target, i.Source, [], [f]).FirstOrDefault() ?? "";
         string CutPathAt(int f) => MatcapPlan.MaterialGamePaths(i.Target, i.CutName, [], [f]).FirstOrDefault() ?? "";
@@ -131,8 +131,8 @@ internal static class MatcapRowCut
             else cases.Add(new MatcapRecord.RowFolder { Folder = f, Case = MatcapRecord.RowFingerprint.CaseNone });
         }
         if (sources.Count == 0)
-            return Refuse(CodeNoNormal, ProteusLoc.Localize("Matcap.Refused.RowNoNormal",
-                "This part's material has no normal map, which a row matcap cuts by."));
+            return Refuse(CodeNoSource, ProteusLoc.Localize("Matcap.Refused.RowNoSource",
+                "Proteus couldn't find this part's material in the mod or the game, so there is nothing to cut."));
 
         // Two options of one group sharing a name: EditContainers addresses options by name, so the cut would land in the wrong one.
         foreach (var s in sources.Where(s => s.Container is { IsDefault: false, Option: not null }))
@@ -181,8 +181,8 @@ internal static class MatcapRowCut
                     return Refuse(CodeOwned, string.Format(ProteusLoc.Localize("Matcap.Refused.RowOwnedByFeature.Fmt",
                         "{0} was rewritten by Proteus's gear shader upgrade. Undo that first, then add the row matcap."), got.File));
                 if (swaps.FirstOrDefault(sw => PenumbraModMeta.SameFile(sw.GamePath, path)) is { GamePath.Length: > 0 } tsw)
-                    return Refuse(CodeFileSwap, string.Format(ProteusLoc.Localize("Matcap.Refused.RowFileSwap.Fmt",
-                        "{0} swaps this part's material for another file, so a row matcap can't follow it."), Describe(tsw.Container)));
+                    return Refuse(CodeFileSwap, string.Format(ProteusLoc.Localize("Matcap.Refused.RowMapSwap.Fmt",
+                        "{0} swaps this part's normal or index map for another file, so a row matcap can't follow it."), Describe(tsw.Container)));
                 var sha = HairPortPlan.Sha8(got.Bytes!);
                 foreach (var x in redirects.Where(r => PenumbraModMeta.SameFile(r.GamePath, path)))
                 {
@@ -202,7 +202,9 @@ internal static class MatcapRowCut
             bool zero = threshold <= 0f;
             var normalSha = HairPortPlan.Sha8(normal.Bytes!);
             var indexSha = index is { Bytes: { } ib } ? HairPortPlan.Sha8(ib) : "";
-            var key = $"{normalSha}|{indexSha}|{i.Row}|{i.Sub}|{(zero ? 1 : 0)}";
+            // The threshold class keys the off-row blue (255 for threshold 0); an alpha-tested source's own threshold keys
+            // the holes count, so two thresholds never share one bake.
+            var key = $"{normalSha}|{indexSha}|{i.Row}|{i.Sub}|{(zero ? "zero" : threshold.ToString("R", System.Globalization.CultureInfo.InvariantCulture))}";
             if (!bakes.TryGetValue(key, out var bake))
             {
                 int k = bakes.Count + 1;
@@ -248,8 +250,7 @@ internal static class MatcapRowCut
             return Refuse(CodeEmpty, string.Format(ProteusLoc.Localize("Matcap.Refused.RowEmpty.Fmt",
                 "No pixel of this part uses row {0}."), RowLabel(i.Row, i.Sub)));
 
-        var relevant = materialPaths.Concat(sources.SelectMany(_ => Array.Empty<string>())).ToList();
-        var swapText = string.Join("\n", swaps.Where(sw => relevant.Any(p => PenumbraModMeta.SameFile(sw.GamePath, p)))
+        var swapText = string.Join("\n", swaps.Where(sw => materialPaths.Any(p => PenumbraModMeta.SameFile(sw.GamePath, p)))
                                               .Select(sw => $"{sw.Container.Group}|{sw.Container.Option}|{sw.Container.Index}|{sw.GamePath}|{sw.File}")
                                               .Order(StringComparer.OrdinalIgnoreCase));
         var plan = new Plan(files.Values.ToList(), bakes.Values.ToList(), cases,
@@ -258,18 +259,39 @@ internal static class MatcapRowCut
         return (plan, null);
     }
 
+    /// <summary>
+    /// Whether any file the mod serves the material from (by file name, any container) has colours set in Proteus
+    /// (<paramref name="hasColours"/>, keyed by the mod-relative file): the cut copy won't follow them. Reads the
+    /// manifest: never on the framework thread.
+    /// </summary>
+    public static bool FollowWarn(string modRoot, string materialName, Func<string, bool> hasColours)
+    {
+        var stem = Path.GetFileName(materialName.Replace('\\', '/'));
+        return (PenumbraModMeta.TryReadContainerRedirects(modRoot) ?? [])
+            .Where(r => r.GamePath.Replace('\\', '/').EndsWith("/" + stem, StringComparison.OrdinalIgnoreCase))
+            .Any(r => hasColours(r.File.Replace('\\', '/')));
+    }
+
     /// <summary>The author's material a cut copy stands for: <c>/mt_x_mcutabc1231.mtrl</c> → <c>/mt_x.mtrl</c>.</summary>
     public static string SourceNameOf(string cutName) =>
         System.Text.RegularExpressions.Regex.Replace(cutName, @"_mcut[0-9a-f]{6}\d+\.mtrl$", ".mtrl",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     /// <summary>
-    /// Why a recorded row matcap no longer fits the mod, or null when it does. Consistent means: in every recorded folder,
-    /// the cut path resolves, container by container, to the cut of the same source the author's material path resolves
-    /// to — every container redirecting the material also redirects the cut to a cut of its current file (unchanged since
-    /// cut); a container redirecting only the cut is allowed only where the cut followed the worn folder and nothing
-    /// supplies the material path; where the game supplies it, default data's cut is the game's cut (unchanged when a game
-    /// reader is given). Source maps and file swaps must be unchanged too. Hashes only files whose size or time differ.
+    /// Why a recorded row matcap no longer fits the mod, or null when it does. Consistent means: in every folder recorded
+    /// at Apply or now holding the material or the cut, the cut path resolves, container by container, to the cut of the
+    /// same source the author's material path resolves to. Sources are matched by CONTENT (Sha8), so byte-identical files
+    /// at different paths (one cut copy serving both) count as the same source.
+    /// <list type="bullet">
+    /// <item>every container redirecting the material also redirects the cut, to a cut whose source matches that
+    /// container's current file (a redirect to a missing file draws nothing either way and is skipped);</item>
+    /// <item>a container redirecting only the cut is allowed only where nothing serves the material and the recorded case
+    /// is the worn fallback (its cut's source then matches its worn file);</item>
+    /// <item>where the recorded case is the game's file, default data's cut is the game cut (checked when a game reader is
+    /// given);</item>
+    /// <item>source normal and index maps, and the file swaps on the material's paths, are unchanged.</item>
+    /// </list>
+    /// Hashes only files whose size or time differ from the recorded source; never alarms on an unreadable manifest.
     /// </summary>
     public static string? Stale(string modRoot, MatcapRecord.MaterialEntry entry, MatcapPlan.Target target,
                                 Func<string, byte[]?>? readGameFile)
@@ -277,10 +299,27 @@ internal static class MatcapRowCut
         if (entry.Row is not { } row) return null;
         var redirects = PenumbraModMeta.TryReadContainerRedirects(modRoot);
         var swaps = PenumbraModMeta.TryReadContainerFileSwaps(modRoot);
-        if (redirects == null || swaps == null) return null;   // can't tell: never alarm on an unreadable manifest
+        if (redirects == null || swaps == null) return null;
         var source = SourceNameOf(row.Cut);
+        var sourceLeaf = source.Replace('\\', '/')[(source.Replace('\\', '/').LastIndexOf('/') + 1)..];
+        var cutLeaf = row.Cut.Replace('\\', '/')[(row.Cut.Replace('\\', '/').LastIndexOf('/') + 1)..];
         string GamePathAt(int f) => MatcapPlan.MaterialGamePaths(target, source, [], [f]).FirstOrDefault() ?? "";
         string CutPathAt(int f) => MatcapPlan.MaterialGamePaths(target, row.Cut, [], [f]).FirstOrDefault() ?? "";
+
+        // Every folder to check: recorded ones, plus any folder of this item that now holds the material or the cut.
+        var folders = row.Fingerprint.Folders.Select(x => x.Folder).ToList();
+        if (target.Item is { } item)
+            foreach (var r in redirects)
+            {
+                var gp = r.GamePath.Replace('\\', '/');
+                var leaf = gp[(gp.LastIndexOf('/') + 1)..];
+                if (!string.Equals(leaf, sourceLeaf, StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(leaf, cutLeaf, StringComparison.OrdinalIgnoreCase)) continue;
+                var m = System.Text.RegularExpressions.Regex.Match(gp, @"/v(\d{4})/[^/]+$");
+                if (m.Success && int.TryParse(m.Groups[1].Value, out var f) && f > 0
+                    && gp.StartsWith(item.MaterialDir(f), StringComparison.OrdinalIgnoreCase) && !folders.Contains(f))
+                    folders.Add(f);
+            }
 
         // File swaps on the material's paths.
         var materialPaths = row.Fingerprint.Folders.Select(x => GamePathAt(x.Folder)).Where(p => p.Length > 0).ToList();
@@ -290,22 +329,27 @@ internal static class MatcapRowCut
         var swapSha = swapText.Length == 0 ? "" : HairPortPlan.Sha8(System.Text.Encoding.UTF8.GetBytes(swapText));
         if (swapSha != row.Fingerprint.SwapsSha8) return "swap";
 
-        bool Unchanged(MatcapRecord.RowSource s)
+        // A mod file's current Sha8, read only when its size or time differ from the recorded source of that same path.
+        var shaCache = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        string? ShaOf(string rel, MatcapRecord.RowSource? hint = null)
         {
-            if (s.Game)
-            {
-                if (readGameFile == null) return true;
-                return readGameFile(s.GamePath) is { } g && HairPortPlan.Sha8(g) == s.Sha8;
-            }
-            if (s.File == null) return true;
+            if (shaCache.TryGetValue(rel, out var known)) return known;
+            string? sha = null;
             try
             {
-                var fi = new FileInfo(MatcapWriter.Full(modRoot, s.File));
-                if (!fi.Exists) return false;
-                if (fi.Length == s.Size && fi.LastWriteTimeUtc.Ticks == s.MtimeUtc) return true;
-                return HairPortPlan.Sha8(File.ReadAllBytes(fi.FullName)) == s.Sha8;
+                var fi = new FileInfo(MatcapWriter.Full(modRoot, rel));
+                if (fi.Exists)
+                    sha = hint is { File: { } hf } && PenumbraModMeta.SameFile(hf, rel) && fi.Length == hint.Size && fi.LastWriteTimeUtc.Ticks == hint.MtimeUtc
+                        ? hint.Sha8 : HairPortPlan.Sha8(File.ReadAllBytes(fi.FullName));
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { sha = null; }
+            shaCache[rel] = sha;
+            return sha;
+        }
+        bool Unchanged(MatcapRecord.RowSource s)
+        {
+            if (s.Game) return readGameFile == null || (readGameFile(s.GamePath) is { } g && HairPortPlan.Sha8(g) == s.Sha8);
+            return s.File == null || ShaOf(s.File, s) == s.Sha8;
         }
         foreach (var f in row.Files)
             if (!Unchanged(f.Normal) || (f.Index is { } ix && !Unchanged(ix))) return "map";
@@ -315,55 +359,50 @@ internal static class MatcapRowCut
                      .Select(r => row.Files.FirstOrDefault(x => PenumbraModMeta.SameFile(x.File, r.File))).FirstOrDefault(x => x != null);
 
         int worn = row.Fingerprint.Folders.FirstOrDefault()?.Folder ?? 1;
-        foreach (var folder in row.Fingerprint.Folders)
+        foreach (var folder in folders)
         {
-            var gp = GamePathAt(folder.Folder);
-            var cutPath = CutPathAt(folder.Folder);
+            var gp = GamePathAt(folder);
+            var cutPath = CutPathAt(folder);
             if (gp.Length == 0 || cutPath.Length == 0) continue;
-            var holders = redirects.Where(r => PenumbraModMeta.SameFile(r.GamePath, gp)).ToList();
+            var recordedCase = row.Fingerprint.Folders.FirstOrDefault(x => x.Folder == folder)?.Case;
+            // A redirect to a file that isn't there draws nothing, cut or not: not a mismatch.
+            var holders = redirects.Where(r => PenumbraModMeta.SameFile(r.GamePath, gp) && ShaOf(r.File) != null).ToList();
             var cutHolders = redirects.Where(r => PenumbraModMeta.SameFile(r.GamePath, cutPath)).ToList();
 
-            // Every container serving the material serves the cut of that very file, unchanged.
-            foreach (var h in holders)
-            {
-                var cut = CutAt(h.Container, cutPath);
-                if (cut == null || cut.Source.File == null || !PenumbraModMeta.SameFile(cut.Source.File, h.File) || !Unchanged(cut.Source))
-                    return "container";
-            }
             if (holders.Count > 0)
             {
-                // A container serving only the cut, while some container serves the material: it would win where it shouldn't.
-                if (cutHolders.Any(c => !holders.Any(h => h.Container.SameAs(c.Container)) && !c.Container.IsDefault)) return "container";
-                // Default data's cut where default data doesn't serve the material: only the game cut, outranked by every holder.
-                var dcut = cutHolders.FirstOrDefault(c => c.Container.IsDefault);
-                if (dcut.File != null && !holders.Any(h => h.Container.IsDefault))
+                // Every container serving the material serves the cut of that very content.
+                foreach (var h in holders)
                 {
-                    var df = row.Files.FirstOrDefault(x => PenumbraModMeta.SameFile(x.File, dcut.File));
-                    // A game cut under a container that now serves the material from the mod: the cut no longer follows it,
-                    // unless every holder also serves its own cut (checked above) — which outranks default data. Holders
-                    // without their own cut were already caught; so a remaining game cut is shadowed where it matters, except
-                    // when default data itself is the only one asked (no holder is ever off by default for default data).
-                    if (df == null) return "container";
+                    var cut = CutAt(h.Container, cutPath);
+                    if (cut == null || ShaOf(h.File) != cut.Source.Sha8) return "container";
+                }
+                // A container serving only the cut, while some container serves the material: it would win where it shouldn't.
+                if (cutHolders.Any(c => !c.Container.IsDefault && !holders.Any(h => h.Container.SameAs(c.Container)))) return "container";
+                continue;
+            }
+
+            if (recordedCase == MatcapRecord.RowFingerprint.CaseGame)
+            {
+                if (readGameFile == null) continue;   // can't tell without the game's file
+                var dcut = CutAt(new PenumbraModMeta.ContainerRef(""), cutPath);
+                if (readGameFile(gp) is not { } game || dcut == null || HairPortPlan.Sha8(game) != dcut.Source.Sha8) return "game";
+                continue;
+            }
+            if (recordedCase == MatcapRecord.RowFingerprint.CaseWorn)
+            {
+                // The worn fallback: each cut holder is a worn container serving the cut of its worn file.
+                var wornPath = GamePathAt(worn);
+                foreach (var c in cutHolders)
+                {
+                    var cut = CutAt(c.Container, cutPath);
+                    var wornFile = redirects.FirstOrDefault(r => r.Container.SameAs(c.Container) && PenumbraModMeta.SameFile(r.GamePath, wornPath)).File;
+                    if (cut == null || wornFile == null || ShaOf(wornFile) != cut.Source.Sha8) return "worn";
                 }
                 continue;
             }
-
-            // Nothing in the mod serves the material here.
-            if (readGameFile?.Invoke(gp) is { } game)
-            {
-                var dcut = CutAt(new PenumbraModMeta.ContainerRef(""), cutPath);
-                if (dcut == null || !dcut.Source.Game || HairPortPlan.Sha8(game) != dcut.Source.Sha8) return "game";
-                continue;
-            }
-            // The worn fallback: each cut holder is a worn container serving its worn cut.
-            var wornPath = GamePathAt(worn);
-            foreach (var c in cutHolders)
-            {
-                var cut = CutAt(c.Container, cutPath);
-                var wornFile = redirects.FirstOrDefault(r => r.Container.SameAs(c.Container) && PenumbraModMeta.SameFile(r.GamePath, wornPath)).File;
-                if (cut == null || wornFile == null || cut.Source.File == null || !PenumbraModMeta.SameFile(cut.Source.File, wornFile))
-                    return "worn";
-            }
+            // Recorded as served by containers (they're gone now) or never recorded: a cut left alone there is stale.
+            if (recordedCase == MatcapRecord.RowFingerprint.CaseContainer && cutHolders.Count > 0) return "container";
         }
         return null;
     }
@@ -411,7 +450,8 @@ internal static class MatcapRowCut
             Index = container?.Index, Sha8 = HairPortPlan.Sha8(bytes), Size = bytes.LongLength,
         };
         if (file != null)
-            try { s.MtimeUtc = File.GetLastWriteTimeUtc(MatcapWriter.Full(modRoot, file)).Ticks; } catch { }
+            try { s.MtimeUtc = File.GetLastWriteTimeUtc(MatcapWriter.Full(modRoot, file)).Ticks; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* no time: Stale hashes it */ }
         return s;
     }
 

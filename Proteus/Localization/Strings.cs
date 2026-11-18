@@ -256,7 +256,7 @@ public sealed class MatcapStrings
     public readonly string RowMaterial = ProteusLoc.Localize("Parts.Matcap.RowMaterial", "Material");
     public readonly string RowAllFmt = ProteusLoc.Localize("Parts.Matcap.RowAll.Fmt", "Covers every part drawn with {0}.");
     public readonly string RowFollowWarn = ProteusLoc.Localize("Parts.Matcap.RowFollowWarn",
-        "This material has colours set in Proteus (or a design binding). The matcapped row's pixels draw from a copy of the material and won't follow them.");
+        "This material has colours set in Proteus. The matcapped row's pixels draw from a copy of the material and won't follow them.");
     public readonly string RowHolesWarn = ProteusLoc.Localize("Parts.Matcap.RowHolesWarn",
         "Some cut-out holes in this part sit inside the row's triangles, so they will show the matcap.");
     public readonly string RowStale = ProteusLoc.Localize("Parts.Matcap.RowStale",

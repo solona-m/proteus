@@ -6800,7 +6800,7 @@
     "description": ""
   },
   "Parts.Matcap.RowFollowWarn": {
-    "message": "此材质在 Proteus 中设置了颜色（或绑定了设计）。加了 matcap 的行像素由材质副本绘制，不会跟随这些颜色。",
+    "message": "此材质在 Proteus 中设置了颜色。加了 matcap 的行像素由材质副本绘制，不会跟随这些颜色。",
     "description": ""
   },
   "Parts.Matcap.RowHolesWarn": {
@@ -6809,6 +6809,18 @@
   },
   "Parts.Matcap.RowStale": {
     "message": "制作此单行 matcap 后，作者的材质已更改。请撤销后重新应用。",
+    "description": ""
+  },
+  "Matcap.Refused.RowManifestUnreadable": {
+    "message": "无法读取模组的文件列表（meta.json），因此未做任何更改。",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoSource": {
+    "message": "Proteus 在模组和游戏中都找不到此部件的材质，因此没有可裁切的内容。",
+    "description": ""
+  },
+  "Matcap.Refused.RowMapSwap.Fmt": {
+    "message": "{0} 将此部件的法线或索引贴图换成了另一个文件，因此单行 matcap 无法跟随。",
     "description": ""
   }
 }

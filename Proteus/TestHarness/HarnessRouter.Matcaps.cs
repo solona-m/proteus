@@ -53,7 +53,8 @@ internal sealed partial class HarnessRouter
             if (error != null) return error;
             string root = Path.Combine(mods!.ModsRoot, dir!);
             if (Game.IsLegacyFolder(root)) return HarnessResponse.Error(409, "legacy-mod", "the mod is an old (v3) Penumbra mod");
-            modelView = MatcapJob.ReadModel(root, model, port, out var jobError);
+            request.Query.TryGetValue("material", out var rowMaterial);
+            modelView = MatcapJob.ReadModel(root, model, port, out var jobError, rowMaterial is { Length: > 0 } ? rowMaterial : null);
             if (jobError != null)
                 return HarnessResponse.Error(jobError.Code == "model-ambiguous" ? 409 : 404, jobError.Code, jobError.Message);
         }

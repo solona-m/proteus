@@ -6800,7 +6800,7 @@
     "description": ""
   },
   "Parts.Matcap.RowFollowWarn": {
-    "message": "このマテリアルには Proteus で設定した色（またはデザインのバインド）があります。マットキャップを付けた行のピクセルはマテリアルのコピーで描かれるため、それに追従しません。",
+    "message": "このマテリアルには Proteus で設定した色があります。マットキャップを付けた行のピクセルはマテリアルのコピーで描かれるため、その色に追従しません。",
     "description": ""
   },
   "Parts.Matcap.RowHolesWarn": {
@@ -6809,6 +6809,18 @@
   },
   "Parts.Matcap.RowStale": {
     "message": "この行マットキャップを作った後に作者のマテリアルが変わりました。元に戻してから、もう一度適用してください。",
+    "description": ""
+  },
+  "Matcap.Refused.RowManifestUnreadable": {
+    "message": "Modのファイル一覧（meta.json）を読み込めなかったため、何も変更していません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoSource": {
+    "message": "Proteus はこのパーツのマテリアルを Mod でもゲームでも見つけられなかったため、切り抜くものがありません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowMapSwap.Fmt": {
+    "message": "{0} がこのパーツのノーマルマップかインデックスマップを別のファイルに差し替えているため、行マットキャップは追従できません。",
     "description": ""
   }
 }

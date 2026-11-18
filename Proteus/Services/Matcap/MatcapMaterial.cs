@@ -26,15 +26,12 @@ internal static class MatcapMaterial
 
     public const uint SamplerNormal = 0x0C5EC1F1, SamplerMask = 0x8A4E82B6, SamplerMatcap = 0xFEA0F3D2;
 
-    /// <summary><c>g_AlphaThreshold</c>: below it the normal map's alpha cuts the surface away.</summary>
-    public const uint ConstAlphaThreshold = 0x29AC0223;
-
     /// <summary>
-    /// <c>g_ShadowAlphaThreshold</c> (cb0[1].w): what characterreflection's DEPTH passes actually cut by — the normal
-    /// map's BLUE times vertex alpha, below it discarded. <see cref="ConstAlphaThreshold"/> only sets the colour pass's
-    /// whole-material opacity (saturate(1 / it)). Measured from the shader's disassembly (row matcap prototype).
+    /// <c>g_AlphaThreshold</c>. On character.shpk the G-buffer pass discards where normal BLUE × vertex alpha is below it
+    /// (what a row matcap's cut relies on). On characterreflection it only sets the colour pass's whole-material opacity
+    /// (saturate(1 / it)): that shader never discards in its colour passes, so a matcap itself can't be cut per pixel.
     /// </summary>
-    public const uint ConstShadowAlphaThreshold = 0xD925FF32;
+    public const uint ConstAlphaThreshold = 0x29AC0223;
 
     /// <summary>A material's shader, textures (in table order), sampler bindings, constants and colour-table size.</summary>
     public sealed record Header(

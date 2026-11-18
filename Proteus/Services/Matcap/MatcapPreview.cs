@@ -42,21 +42,27 @@ internal static class MatcapPreview
     /// </summary>
     internal static (List<LiveBrushPreview.PreviewFile> Files, bool Resolved) CutFiles(string modRoot, MatcapRowCut.Plan plan, string? resolved)
     {
-        string? resolvedRel = null;
+        // Matched by content: byte-identical files at different paths share one cut copy (and record its first source).
+        string? resolvedSha = null;
         bool resolvedGame = false, usable = false;
         if (resolved != null)
         {
-            var full = Path.GetFullPath(resolved);
-            var rootFull = Path.GetFullPath(modRoot).TrimEnd('\\', '/') + Path.DirectorySeparatorChar;
-            if (full.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase)) { resolvedRel = full[rootFull.Length..]; usable = true; }
-            else if (!Path.IsPathRooted(resolved)) { resolvedGame = true; usable = true; }   // a game path: the game's own file
+            if (!Path.IsPathRooted(resolved)) { resolvedGame = true; usable = true; }   // a game path: the game's own file
+            else
+            {
+                var full = Path.GetFullPath(resolved);
+                var rootFull = Path.GetFullPath(modRoot).TrimEnd('\\', '/') + Path.DirectorySeparatorChar;
+                if (full.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
+                    try { resolvedSha = HairPortPlan.Sha8(File.ReadAllBytes(full)); usable = true; }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* the guess below */ }
+            }
         }
         var files = new List<LiveBrushPreview.PreviewFile>();
         foreach (var path in plan.Files.SelectMany(f => f.Redirects.Select(r => r.GamePath)).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var holders = plan.Files.Where(f => f.Redirects.Any(r => PenumbraModMeta.SameFile(r.GamePath, path))).ToList();
             MatcapRowCut.CutFile? pick = null;
-            if (resolvedRel != null) pick = holders.FirstOrDefault(f => f.Source.File != null && PenumbraModMeta.SameFile(f.Source.File, resolvedRel));
+            if (resolvedSha != null) pick = holders.FirstOrDefault(f => f.Source.Sha8 == resolvedSha);
             else if (resolvedGame) pick = holders.FirstOrDefault(f => f.Source.Game);
             pick ??= holders.FirstOrDefault(f => f.Redirects.Any(r => r.Container.IsDefault && PenumbraModMeta.SameFile(r.GamePath, path)))
                      ?? holders[0];

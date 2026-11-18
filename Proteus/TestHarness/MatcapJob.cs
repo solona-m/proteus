@@ -64,7 +64,8 @@ internal static class MatcapJob
     }
 
     /// <summary>The GET body for one mod's model: what the panel would show for it. Reads files; never the framework thread.</summary>
-    internal static object? ReadModel(string modRoot, string model, MatcapHarnessPort port, out JobError? error)
+    /// <param name="material">The row material <c>rowFollowWarn</c> is asked for (null: the first that can take a row matcap).</param>
+    internal static object? ReadModel(string modRoot, string model, MatcapHarnessPort port, out JobError? error, string? material = null)
     {
         error = null;
         var (rel, gamePath, err) = ResolveModel(modRoot, model);
@@ -122,10 +123,19 @@ internal static class MatcapJob
                     ? (object)new { kind = "library", mod = m.Source.Library?.Mod, group = m.Source.Library?.Group, option = m.Source.Library?.Option }
                     : new { kind = "image", image = m.Source.Image },
                 state = states.TryGetValue(m.Name, out var st) ? st.ToString().ToLowerInvariant() : "ok",
-                row = m.Row is { } r ? RowView(r) : null,
+                row = m.Row is { } r ? RowView(r, target == null ? null : MatcapRowCut.Stale(modRoot, m, target, port.Env.ReadGameFile)) : null,
             }),
             materialRoom = room,
+            rowFollowWarn = RowFollowWarn(modRoot, material ?? MatcapPlan.RowMaterials(parts, kind, attrs).FirstOrDefault(), port),
         };
+    }
+
+    /// <summary>Whether the row material has colours set in Proteus the cut won't follow (the panel's warning).</summary>
+    internal static bool RowFollowWarn(string modRoot, string? material, MatcapHarnessPort port)
+    {
+        if (material == null || port.HasColours is not { } has) return false;
+        var dir = Path.GetFileName(modRoot.TrimEnd('\\', '/'));
+        return MatcapRowCut.FollowWarn(modRoot, material, f => has(dir, f));
     }
 
     internal static async Task Run(HarnessJobs jobs, HarnessJob job, Args args)
@@ -289,6 +299,8 @@ internal static class MatcapJob
             row = entry?.Row is { } er ? RowView(er) : null,
             rowHoles = prepared?.RowHoles ?? false,
             cutAlphaSet = prepared?.CutAlphaSet ?? false,
+            rowFollowWarn = args.Row > 0 && prepared?.Request is { } rq
+                ? RowFollowWarn(args.ModRoot, MatcapRowCut.SourceNameOf(rq.Materials[0].Row?.CutName ?? ""), args.Port) : false,
         });
         if (changed)
         {
@@ -299,9 +311,11 @@ internal static class MatcapJob
     }
 
     /// <summary>A row matcap's record as QA reads it: row, sub-row, cut name, its files with redirects and sources, normals, folders.</summary>
-    internal static object RowView(MatcapRecord.RowRef row) => new
+    /// <param name="staleReason">Why the row matcap is out of date (<see cref="MatcapRowCut.Stale"/>), or null when it isn't.</param>
+    internal static object RowView(MatcapRecord.RowRef row, string? staleReason = null) => new
     {
         row = row.Row, sub = row.Sub, cut = row.Cut, cutAlphaSet = row.CutAlphaSet,
+        stale = staleReason != null, staleReason,
         files = row.Files.Select(f => new
         {
             file = f.File, thresholdZero = f.ThresholdZero,

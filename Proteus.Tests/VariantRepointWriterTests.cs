@@ -52,19 +52,18 @@ public class VariantRepointWriterTests
         var mod = k.Colours("Dress", Top);
         k.Imc(Top, E(2), E(1), E(2), E(3), E(1));
         var plan = k.Plan([k.Worn(Top, 2, mod)]);
-        // Since the plan: Red gains folder 2's key itself, pointing at a file of its own.
-        EditFiles(mod, f => f[MaterialPath(Top, 2)] = "ours/cut.mtrl", "Colour", "Red");
+        // Since the plan: Red gains folder 2's key itself — the very redirect the plan would copy (same key, same file),
+        // as a row matcap's pre-published cut or the author re-adding it would. Undo matches key AND file, so only the
+        // guard (never recording a key it didn't add) keeps Undo from taking it out.
+        EditFiles(mod, f => f[MaterialPath(Top, 2)] = "red/m.mtrl", "Colour", "Red");
 
         foreach (var m in plan.PerMod) VariantRepointWriter.Apply(m.ModRoot, m.Items, () => true);
-        Assert.Equal("ours/cut.mtrl", FilesOf(mod, Red)[MaterialPath(Top, 2)]);         // never replaced
+        Assert.Equal("red/m.mtrl", FilesOf(mod, Red)[MaterialPath(Top, 2)]);
         Assert.Equal("red/m.mtrl", FilesOf(mod, Red)[MaterialPath(Top, 3)]);            // the rest written
-        var record = File.ReadAllText(RecordPath(mod));
-        Assert.DoesNotContain("ours/cut.mtrl", record);
-        Assert.DoesNotContain("ours\\\\cut.mtrl", record);
 
         Assert.Equal(VariantRepointWriter.Undone.Removed, VariantRepointWriter.UndoItem(mod, Top, false, out _, out _, out _));
-        Assert.Equal("ours/cut.mtrl", FilesOf(mod, Red)[MaterialPath(Top, 2)]);         // undo leaves it alone
-        Assert.False(FilesOf(mod, Red).ContainsKey(MaterialPath(Top, 3)));
+        Assert.Equal("red/m.mtrl", FilesOf(mod, Red)[MaterialPath(Top, 2)]);            // the held key survives undo
+        Assert.False(FilesOf(mod, Red).ContainsKey(MaterialPath(Top, 3)));              // what it added is gone
     }
 
     [Fact]

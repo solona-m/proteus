@@ -64,17 +64,17 @@ internal static class ModelMaterialWriter
         return Math.Max(0, SecondSkinWriter.MaxMaterials - src.MatCount);
     }
 
-    /// <summary>
-    /// The model with <paramref name="parts"/>' triangles drawn by a new material named <paramref name="materialName"/>.
-    /// The parts are <see cref="ModelPartReader.Read"/>'s, read from THIS <paramref name="mdl"/>.
-    /// </summary>
-    /// <exception cref="Refused">The model or the parts can't take it; nothing was changed.</exception>
     /// <summary>A triangle by its part-relative address: mesh, submesh, and its ordinal within the submesh.</summary>
     public readonly record struct TriangleKey(int Mesh, int Submesh, int Ordinal);
 
     /// <summary>The cut mesh's vertex alpha can't be written (an element type this writer doesn't encode).</summary>
     public const string CodeVertexAlpha = "row-vertex-alpha";
 
+    /// <summary>
+    /// The model with <paramref name="parts"/>' triangles drawn by a new material named <paramref name="materialName"/>.
+    /// The parts are <see cref="ModelPartReader.Read"/>'s, read from THIS <paramref name="mdl"/>.
+    /// </summary>
+    /// <exception cref="Refused">The model or the parts can't take it; nothing was changed.</exception>
     /// <param name="overlayPush">Row matcaps: not 0, the parts are COPIED rather than moved — the source keeps every
     /// triangle, every touched mesh gets a copy (none is rebound whole), and the copy's vertices are pushed along their
     /// normals by this many metres (negative: inward, under the original) so the two never fight.</param>

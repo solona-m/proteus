@@ -6800,7 +6800,7 @@
     "description": ""
   },
   "Parts.Matcap.RowFollowWarn": {
-    "message": "Ce matériau a des couleurs définies dans Proteus (ou une liaison à un design). Les pixels de la ligne avec matcap viennent d'une copie du matériau et ne les suivront pas.",
+    "message": "Ce matériau a des couleurs définies dans Proteus. Les pixels de la ligne avec matcap viennent d'une copie du matériau et ne les suivront pas.",
     "description": ""
   },
   "Parts.Matcap.RowHolesWarn": {
@@ -6809,6 +6809,18 @@
   },
   "Parts.Matcap.RowStale": {
     "message": "Le matériau de l'auteur a changé depuis la création de ce matcap de ligne. Annulez-le puis appliquez-le à nouveau.",
+    "description": ""
+  },
+  "Matcap.Refused.RowManifestUnreadable": {
+    "message": "La liste des fichiers du mod (meta.json) n'a pas pu être lue ; rien n'a été modifié.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoSource": {
+    "message": "Proteus n'a trouvé le matériau de cette pièce ni dans le mod ni dans le jeu ; il n'y a donc rien à découper.",
+    "description": ""
+  },
+  "Matcap.Refused.RowMapSwap.Fmt": {
+    "message": "{0} remplace la carte normale ou d'index de cette pièce par un autre fichier ; un matcap de ligne ne peut donc pas la suivre.",
     "description": ""
   }
 }

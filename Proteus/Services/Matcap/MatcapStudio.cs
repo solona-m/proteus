@@ -65,7 +65,7 @@ internal static class MatcapStudio
     }
 
     public const string CodeRowNotGear = "row-not-gear", CodeRowOneMaterial = "row-one-material",
-                        CodeRowMixedThreshold = "row-mixed-threshold", CodeRowGameGear = "row-game-gear",
+                        CodeRowMixedThreshold = "row-mixed-threshold",
                         CodeRowNothingLeft = "row-nothing-left";
 
 
@@ -100,9 +100,16 @@ internal static class MatcapStudio
                     "Every part with this material already has a matcap."))
                 : Prepared.Refuse("unknown-part", ProteusLoc.Localize("Parts.Matcap.NeedParts", "Tick the parts that should take the matcap."));
         if (chosen.Any(MatcapPlan.IsSkin)) return Prepared.Refuse("skin-part", ProteusLoc.Localize("Matcap.Refused.Skin", "Skin can't take a matcap."));
-        // A row matcap cuts the part's own Dawntrail gear material: gear only, one material at a time.
+        // A row matcap cuts the part's own Dawntrail gear material: gear only, one material at a time — and, as Apply would,
+        // never an imported piece or an old-layout mod (its cut is planned from the manifest before Apply's own checks).
         if (env.RowOnly > 0)
         {
+            if (string.Equals(Path.GetFileName(modRoot.TrimEnd('\\', '/')), SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
+                return Prepared.Refuse(MatcapWriter.CodeManaged, ProteusLoc.Localize("Matcap.Refused.ImportedPiece",
+                    "This piece belongs to an imported pack, which Proteus rebuilds itself. Put the matcap on the pack's own mod instead."));
+            if (PenumbraModMeta.IsLegacyFolder(modRoot))
+                return Prepared.Refuse(MatcapWriter.CodeLegacy, ProteusLoc.Localize("Matcap.Refused.Legacy",
+                    "This mod is still in Penumbra's old folder layout. Open it in Penumbra once so it is updated, then try again."));
             if (target.Kind != MatcapPlan.Kind.Gear)
                 return Prepared.Refuse(CodeRowNotGear, ProteusLoc.Localize("Matcap.Refused.RowNotGear",
                     "A matcap on one colour row works on gear and accessories only."));
@@ -424,7 +431,7 @@ internal static class MatcapStudio
                                    .OrderBy(r => r.Source.Length == 0 ? 0 : 1))
         {
             try { var full = MatcapWriter.Full(modRoot, r.File); if (File.Exists(full)) { bytes = File.ReadAllBytes(full); break; } }
-            catch { }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* the next redirect, else the game */ }
         }
         bytes ??= env.ReadGameFile(gp);
         if (bytes == null) return null;

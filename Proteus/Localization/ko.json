@@ -6800,7 +6800,7 @@
     "description": ""
   },
   "Parts.Matcap.RowFollowWarn": {
-    "message": "이 머티리얼에는 Proteus에서 설정한 색상(또는 디자인 연결)이 있습니다. 매트캡을 넣은 행의 픽셀은 머티리얼 사본으로 그려지므로 그 색상을 따르지 않습니다.",
+    "message": "이 머티리얼에는 Proteus에서 설정한 색상이 있습니다. 매트캡을 넣은 행의 픽셀은 머티리얼 사본으로 그려지므로 그 색상을 따르지 않습니다.",
     "description": ""
   },
   "Parts.Matcap.RowHolesWarn": {
@@ -6809,6 +6809,18 @@
   },
   "Parts.Matcap.RowStale": {
     "message": "이 행 매트캡을 만든 뒤 제작자의 머티리얼이 바뀌었습니다. 되돌린 뒤 다시 적용하세요.",
+    "description": ""
+  },
+  "Matcap.Refused.RowManifestUnreadable": {
+    "message": "모드의 파일 목록(meta.json)을 읽을 수 없어 아무것도 바꾸지 않았습니다.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoSource": {
+    "message": "Proteus가 이 부위의 머티리얼을 모드에서도 게임에서도 찾지 못해 잘라낼 것이 없습니다.",
+    "description": ""
+  },
+  "Matcap.Refused.RowMapSwap.Fmt": {
+    "message": "{0}이(가) 이 부위의 노멀 맵이나 인덱스 맵을 다른 파일로 바꾸므로 행 매트캡이 따라갈 수 없습니다.",
     "description": ""
   }
 }

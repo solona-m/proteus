@@ -6792,7 +6792,7 @@
     "description": ""
   },
   "Parts.Matcap.RowMaterial": {
-    "message": "Werkstoff",
+    "message": "Materialauswahl",
     "description": ""
   },
   "Parts.Matcap.RowAll.Fmt": {
@@ -6800,7 +6800,7 @@
     "description": ""
   },
   "Parts.Matcap.RowFollowWarn": {
-    "message": "Für dieses Material sind in Proteus Farben gesetzt (oder eine Design-Bindung). Die Pixel der Matcap-Zeile kommen aus einer Kopie des Materials und folgen ihnen nicht.",
+    "message": "Für dieses Material sind in Proteus Farben gesetzt. Die Pixel der Matcap-Zeile kommen aus einer Kopie des Materials und folgen ihnen nicht.",
     "description": ""
   },
   "Parts.Matcap.RowHolesWarn": {
@@ -6809,6 +6809,18 @@
   },
   "Parts.Matcap.RowStale": {
     "message": "Das Material des Autors hat sich geändert, seit diese Zeilen-Matcap erstellt wurde. Mach sie rückgängig und wende sie erneut an.",
+    "description": ""
+  },
+  "Matcap.Refused.RowManifestUnreadable": {
+    "message": "Die Dateiliste des Mods (meta.json) konnte nicht gelesen werden, daher wurde nichts geändert.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoSource": {
+    "message": "Proteus hat das Material dieses Teils weder im Mod noch im Spiel gefunden, daher gibt es nichts auszuschneiden.",
+    "description": ""
+  },
+  "Matcap.Refused.RowMapSwap.Fmt": {
+    "message": "{0} tauscht die Normal- oder Index-Map dieses Teils gegen eine andere Datei, daher kann eine Zeilen-Matcap ihr nicht folgen.",
     "description": ""
   }
 }

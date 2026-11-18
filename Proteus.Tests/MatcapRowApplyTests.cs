@@ -527,13 +527,12 @@ public class MatcapRowApplyTests
 
     [Fact]
     [Trait("Plan", "EDGE-matcap-row-36")]
-    [Trait("Plan", "EDGE-matcap-row-18")]
     public void Orphan_cut_redirects_are_swept_files_kept()
     {
         using var f = new RowFixture();
         Assert.True(f.Apply().Ok);
         var row = MatcapRecord.Read(f.ModRoot).Materials.Single().Row!;
-        // An older Proteus rewrote the record without its row; then a hand edit of the cut normal.
+        // An older Proteus rewrote the record without its row.
         var path = MatcapRecord.PathOf(f.ModRoot);
         var json = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
         json["Materials"]![0]!.AsObject().Remove("Row");
@@ -564,10 +563,10 @@ public class MatcapRowApplyTests
 
     [Fact]
     [Trait("Plan", "EDGE-matcap-row-32")]
-    public void Threshold0_low_vertex_alpha_sets_cut_mesh_alpha_to_one()
+    public void No_colour_element_reads_as_alpha_one_and_sets_nothing()
     {
         // The reader treats a model without a colour element as alpha 1, so this covers "nothing to set": no refusal,
-        // nothing recorded as set. (The writer's alpha path is covered on raw bytes in ModelMaterialWriterTests.)
+        // nothing recorded as set. (Raising alpha on a model that has vertex colour: MatcapRowWriterTests.)
         using var f = new RowFixture();
         var p = f.Prepare();
         Assert.True(p.Ok, p.Message);

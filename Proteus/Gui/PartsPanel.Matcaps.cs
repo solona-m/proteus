@@ -234,19 +234,32 @@ public sealed partial class PartsPanel
     {
         if (matcapRowOnly <= 0 || ModRoot() is not { } root || MatcapRowMaterial() is not { } mat) return false;
         var folder = Path.GetFileName(root.TrimEnd('\\', '/'));
-        var entry = compositor.LastDiscovered.FirstOrDefault(e => string.Equals(e.ModDirectory, folder, StringComparison.OrdinalIgnoreCase));
-        var key = $"{root}|{mat}|{entry?.GetHashCode()}";
+        var meta = compositor.LastDiscovered.FirstOrDefault(e => string.Equals(e.ModDirectory, folder, StringComparison.OrdinalIgnoreCase))?.Metadata;
+        // Keyed by the metadata object itself (a new composite or edit replaces it), never by a value hash.
+        var key = $"{root}|{mat}|{(meta == null ? 0 : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(meta))}";
         if (matcapRowFollow is { } c && c.Key == key) return c.Warn;
-        bool warn = false;
-        if (entry?.Metadata is { } meta)
+        if (matcapRowFollowTask is { IsCompleted: false }) return false;   // being read
+        if (matcapRowFollowTask is { IsCompletedSuccessfully: true } done && done.Result.Key == key)
         {
-            var stem = Path.GetFileName(mat.Replace('\\', '/'));
-            warn = PenumbraModMeta.ReadAllRedirects(root)
-                .Where(r => r.GamePath.Replace('\\', '/').EndsWith(stem, StringComparison.OrdinalIgnoreCase))
-                .Any(r => meta.PeekMaterialSettings(r.File.Replace('\\', '/'))?.ColorTableRows is { Count: > 0 });
+            matcapRowFollow = done.Result;
+            return done.Result.Warn;
         }
-        matcapRowFollow = (key, warn);
-        return warn;
+        // The manifest read goes to a worker: the framework thread never waits on it.
+        matcapRowFollowTask = Task.Run(() =>
+        {
+            bool warn = meta != null && MatcapRowCut.FollowWarn(root, mat, f => meta.PeekMaterialSettings(f)?.ColorTableRows is { Count: > 0 });
+            return (key, warn);
+        });
+        return false;
+    }
+
+    private Task<(string Key, bool Warn)>? matcapRowFollowTask;
+
+    /// <summary>For the harness: whether a mod's material file has colour rows set in Proteus (the last composite's entries).</summary>
+    private bool HasColours(string modDir, string materialRel)
+    {
+        var meta = compositor.LastDiscovered.FirstOrDefault(e => string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase))?.Metadata;
+        return meta?.PeekMaterialSettings(materialRel)?.ColorTableRows is { Count: > 0 };
     }
 
     private void RescanMatcaps(bool force)
@@ -462,10 +475,15 @@ public sealed partial class PartsPanel
             if (root == null) matcapStates = new Dictionary<string, MatcapWriter.State>();
             else StartMatcapDetect(root, force: true);
         }
-        if (matcapStatesTask is { IsCompletedSuccessfully: true } done)
+        if (matcapStatesTask is { IsCompleted: true } done)
         {
-            if (done.Result.States is { } states) matcapStates = states;
-            matcapManifestStamps = done.Result.Stamps;
+            // Cleared on any end, so a failure (a model held open by another program) never stops the checks.
+            if (done.IsCompletedSuccessfully)
+            {
+                if (done.Result.States is { } states) matcapStates = states;
+                matcapManifestStamps = done.Result.Stamps;
+            }
+            else log.Warning("[Proteus] matcap states: {0}", done.Exception?.GetBaseException().Message ?? "cancelled");
             matcapStatesTask = null;
         }
         if (root != null && MatcapStatesSchedule.Due(Environment.TickCount64, matcapStatesCheckedAt, matcapStatesTask == null))

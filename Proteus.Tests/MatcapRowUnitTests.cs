@@ -170,6 +170,7 @@ public class MatcapRowUnitTests
     [InlineData("new-container", true)]
     [InlineData("swap", true)]
     [InlineData("option-copy-with-cut", false)]
+    [InlineData("option-copy-without-cut", true)]
     public void Detect_reports_RowStale_when_cut_and_material_resolve_from_different_sources(string change, bool stale)
     {
         using var f = new RowFixture(materialInOption: true);
@@ -192,10 +193,14 @@ public class MatcapRowUnitTests
                 f.EditDefaults(swaps => swaps[RowFixture.MatPath()] = "chara/x/other.mtrl", "FileSwaps");
                 break;
             case "option-copy-with-cut":
-                // Something (Gear variants) adds the Blue option's material AND its cut at the same paths again: still the same source.
-                var cut = entry.Row!.Files.First(x => x.Source.Option == "Blue");
-                var redirects = PenumbraModMeta.ReadContainerRedirects(f.ModRoot);
-                Assert.Contains(redirects, r => r.Container.Option == "Blue" && PenumbraModMeta.SameFile(r.File, cut.File));
+            case "option-copy-without-cut":
+                // Gear variants copies the Blue option's material to folder 2 — with our cut alongside (consistent: the
+                // same source in a new folder) or without it (the new folder's cut triangles would draw no material).
+                var blueCut = PenumbraModMeta.ReadContainerRedirects(f.ModRoot).First(r => r.Container.Option == "Blue" && r.GamePath.Contains("_mcut"));
+                var add = new Dictionary<string, string> { [RowFixture.MatPath(2)] = "mat\\blue.mtrl" };
+                if (change == "option-copy-with-cut") add[blueCut.GamePath.Replace("/v0001/", "/v0002/")] = blueCut.File;
+                PenumbraModMeta.EditContainers(f.ModRoot, [new PenumbraModMeta.ContainerEdit(
+                    new PenumbraModMeta.ContainerRef("Colour", "Blue"), add, new Dictionary<string, string>())]);
                 break;
         }
         var states = MatcapWriter.Detect(f.ModRoot, p => f.Game.GetValueOrDefault(p));

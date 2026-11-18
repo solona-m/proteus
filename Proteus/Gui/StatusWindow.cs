@@ -731,7 +731,6 @@ public class StatusWindow : Window
         if (!open) _colorWindowMod = null;
     }
 
-    /// <summary>Every colour highlight off: the gear Glow, the skin Glow, and any row hover.</summary>
     /// <summary>With the Colors window closed: a row picker that drew this frame keeps its pin and gets its hover
     /// committed; otherwise every highlight is cleared, as before.</summary>
     private void KeepOrClearColorHighlights(bool pickerDrew)
@@ -742,6 +741,7 @@ public class StatusWindow : Window
         ColorTableEditor.CommitRowHover(now, config.PluginEnabled, compositor.CompositeBusy);
     }
 
+    /// <summary>Every colour highlight off: the gear Glow, the skin Glow, and any row hover.</summary>
     private static void ClearColorHighlights()
     {
         ColorTableEditor.Highlighter?.Clear();

@@ -63,7 +63,8 @@ public sealed partial class PartsPanel : IStudioHarness
                                              || !string.Equals(modDir, dir, StringComparison.OrdinalIgnoreCase)) return;
                                          matcapRecordFor = null;
                                          SelectModel(modelIndex);
-                                     });
+                                     },
+                                     HasColours);
     }
 
     public bool IsOpen(string modDir, string file)

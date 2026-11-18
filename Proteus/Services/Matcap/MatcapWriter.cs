@@ -730,7 +730,10 @@ internal static class MatcapWriter
         }
         foreach (var (k, v) in removeKeys) Of(new PenumbraModMeta.ContainerRef(""))[k] = v;
 
-        var all = PenumbraModMeta.ReadContainerRedirects(modRoot);
+        // Unreadable: only the default-data keys go (and EditContainers refuses an unreadable manifest anyway) — never
+        // "no redirects", which would leave a row's cut redirects behind silently.
+        if (PenumbraModMeta.TryReadContainerRedirects(modRoot) is not { } all)
+            return removals.Select(kv => new PenumbraModMeta.ContainerEdit(kv.Key, new Dictionary<string, string>(), kv.Value)).ToList();
         var claimed = new HashSet<string>(record.Materials.Where(m => m.Row != null)
             .SelectMany(m => m.Row!.Files.Select(f => f.File).Concat(m.Row.Normals.Select(n => n.File)))
             .Select(f => f.Replace('\\', '/')), StringComparer.OrdinalIgnoreCase);
