@@ -29,6 +29,10 @@ internal static class BulgeSwap
     /// <summary>How near the bulge's hole and the body's must be, point for point, to be the same hole (0.1 mm).</summary>
     internal const float SameHole = 1e-4f;
 
+    /// <summary>How far, at most, a body's hole point may lie from the bulge's and the bulge still be fitted to it, warped
+    /// (12 mm): TBSE-X's hole is The Body SE's 1.85 mm off (Flaccid M), 10.6 mm (Flaccid L A).</summary>
+    internal const float HoleFit = 0.012f;
+
     private static Vector3 At(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
 
     /// <summary>The body made featureless, or null with the reason: no genitals, no piece the bulge fits, too few slots,
@@ -42,11 +46,15 @@ internal static class BulgeSwap
         var reading = GenitalParts.Read(parts, skin);
         if (reading is not { Penis: true }) { reason = "no penis"; return null; }
 
-        // The genital piece the bulge plugs: an untagged skin submesh whose open rim is the bulge's hole.
+        // The genital piece the bulge plugs: an untagged skin submesh whose rim on the body's other skin is the bulge's
+        // hole, point for point within HoleFit.
         ModelPart? piece = null;
+        int[]? bodyAt = null;
         foreach (var g in reading.Genitals.Where(g => g.Rule == "c" && g.Part.AttributeMask == 0))
-            if (SameRim(parts, g.Part, bulge.Hole)) { piece = g.Part; break; }
-        if (piece == null) { reason = "no sculpt for this body"; return null; }
+            if (MatchHole(parts, g.Part, bulge.Hole) is { } at) { piece = g.Part; bodyAt = at; break; }
+        if (piece == null || bodyAt == null) { reason = "no sculpt for this body"; return null; }
+        // The bulge warped onto the body's hole: each rim point onto its partner, the inside by inverse-distance weights.
+        var positions = Warp(bulge, bulge.Hole.Select((_, h) => At(parts, bodyAt[h]) - bulge.Hole[h]).ToArray());
 
         var others = parts.Parts.Where(p => p.Island < 0 && p != piece).SelectMany(p => p.Triangles).ToHashSet();
         var owned = piece.Triangles.Distinct().Where(v => !others.Contains(v)).OrderBy(v => v).ToArray();
@@ -98,16 +106,6 @@ internal static class BulgeSwap
             return -1;
         }
 
-        // The body's own vertex at each hole point, off the piece: whose weights and normal the rim takes.
-        var bodyAt = new int[bulge.Hole.Length];
-        var skinOff = parts.Parts.Where(p => p.Island < 0 && p != piece && SecondSkinWriter.IsBodySkinMaterial(p.Material))
-                           .SelectMany(p => p.Triangles).Distinct().ToList();
-        for (int h = 0; h < bulge.Hole.Length; h++)
-        {
-            int best = skinOff.MinBy(v => Vector3.DistanceSquared(At(parts, v), bulge.Hole[h]));
-            if (Vector3.Distance(At(parts, best), bulge.Hole[h]) > SameHole) { reason = "the hole is not the body's"; return null; }
-            bodyAt[h] = best;
-        }
 
         // Normals: area-weighted over the bulge's triangles, welded by position; the rim's from the body.
         var tris = bulge.Data.triangles;
@@ -115,15 +113,15 @@ internal static class BulgeSwap
         var byPlace = new Dictionary<(long, long, long), List<int>>();
         for (int i = 0; i < n; i++)
         {
-            var p = bulge.Positions[i];
+            var p = positions[i];
             var key = ((long)MathF.Round(p.X * 1e5f), (long)MathF.Round(p.Y * 1e5f), (long)MathF.Round(p.Z * 1e5f));
             (byPlace.TryGetValue(key, out var l) ? l : byPlace[key] = []).Add(i);
         }
         var acc = new Vector3[n];
         for (int t = 0; t < tCount; t++)
         {
-            var a = bulge.Positions[tris[t * 3]];
-            var face = Vector3.Cross(bulge.Positions[tris[t * 3 + 1]] - a, bulge.Positions[tris[t * 3 + 2]] - a);
+            var a = positions[tris[t * 3]];
+            var face = Vector3.Cross(positions[tris[t * 3 + 1]] - a, positions[tris[t * 3 + 2]] - a);
             for (int k = 0; k < 3; k++) acc[tris[t * 3 + k]] += face;
         }
         foreach (var group in byPlace.Values)
@@ -148,7 +146,7 @@ internal static class BulgeSwap
             sign = signRead; wRef = wRead; hRef = hRead;
         }
         var bulgeUv = bulge.Data.uv.Select(u => new Vector2(u[0], u[1])).ToArray();
-        var (dPdu, dPdv) = Derivatives(bulge.Positions, bulgeUv, tris);
+        var (dPdu, dPdv) = Derivatives(positions, bulgeUv, tris);
 
         var o = (byte[])body.Clone();
         var slotOf = new int[n];
@@ -156,7 +154,7 @@ internal static class BulgeSwap
         {
             int slot = owned[i], local = slot - span.BaseVertex;
             slotOf[i] = slot;
-            var p = bulge.Positions[i];
+            var p = positions[i];
             SecondSkinWriter.WriteXYZ(o, Addr(pe.Value, local), pe.Value.Type, p.X, p.Y, p.Z);
             if (!SecondSkinWriter.WriteNormal(o, Addr(ne.Value, local), ne.Value.Type, normal[i].X, normal[i].Y, normal[i].Z))
             { reason = "the body's normals are in a format this cannot write"; return null; }
@@ -217,6 +215,28 @@ internal static class BulgeSwap
             }
         }
 
+        // No penis physics anywhere on the body's skin: a skin vertex's genital-bone share goes to j_kosi, so the skin at the
+        // bulge's rim moves as the rim does (TBSE-X weights its crotch skin a little to the penis).
+        foreach (var part in parts.Parts.Where(p => p.Island < 0 && p.Mesh == piece.Mesh && p != piece && SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+            foreach (int v in part.Triangles.Distinct())
+            {
+                if (v < span.BaseVertex || v >= span.BaseVertex + span.Count) continue;
+                var w = new Dictionary<string, float>(StringComparer.Ordinal);
+                bool onPenis = false;
+                for (int k = 0; k < XivLiveMesh.SkinnedMesh.MaxInfluences; k++)
+                {
+                    float x = skin.BoneWeights[v * 8 + k];
+                    if (x <= 0f) continue;
+                    string b = skin.BoneNames[skin.BoneIndices[v * 8 + k]];
+                    if (GenitalParts.IsPenisBone(b)) { onPenis = true; b = "j_kosi"; }
+                    w[b] = w.GetValueOrDefault(b) + x;
+                }
+                if (!onPenis) continue;
+                int local = v - span.BaseVertex;
+                if (!WriteWeights(o, Addr(we.Value, local), we.Value.Type, Addr(ie.Value, local), ie.Value.Type, w, LocalBone, out string why))
+                { reason = why; return null; }
+            }
+
         // Every other genital part goes: TBSE-X's _dwn_c meshes, a merged penis's triangles.
         var hide = new HashSet<PolygonSelection.Key>();
         foreach (var g in reading.Genitals.Where(g => g.Part != piece))
@@ -226,24 +246,84 @@ internal static class BulgeSwap
         return new Result(o, slotOf, collapsed);
     }
 
-    /// <summary>Whether <paramref name="piece"/>'s open rim, welded by position, is <paramref name="hole"/> point for point.</summary>
-    internal static bool SameRim(ModelParts parts, ModelPart piece, IReadOnlyList<Vector3> hole)
+    /// <summary>
+    /// The body's vertex partnering each of the bulge's hole points, or null: <paramref name="piece"/>'s open rim, welded by
+    /// position, where it lies on the body's OTHER skin (openings of the piece's own, which touch no skin, aside), must be
+    /// as many points as the hole, each the nearest of a distinct hole point and within <see cref="HoleFit"/> of it.
+    /// </summary>
+    internal static int[]? MatchHole(ModelParts parts, ModelPart piece, IReadOnlyList<Vector3> hole)
     {
         (long, long, long) K(Vector3 p) => ((long)MathF.Round(p.X * 1e5f), (long)MathF.Round(p.Y * 1e5f), (long)MathF.Round(p.Z * 1e5f));
-        var at = new Dictionary<(long, long, long), Vector3>();
+        var otherSkin = new Dictionary<(long, long, long), int>();
+        foreach (var part in parts.Parts.Where(p => p.Island < 0 && p != piece && SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+            foreach (int v in part.Triangles) otherSkin.TryAdd(K(At(parts, v)), v);
         var use = new Dictionary<((long, long, long), (long, long, long)), int>();
         for (int t = 0; t + 2 < piece.Triangles.Length; t += 3)
             for (int k = 0; k < 3; k++)
             {
-                var a = At(parts, piece.Triangles[t + k]);
-                var b = At(parts, piece.Triangles[t + (k + 1) % 3]);
-                at[K(a)] = a;
-                at[K(b)] = b;
-                var e = K(a).CompareTo(K(b)) < 0 ? (K(a), K(b)) : (K(b), K(a));
+                var a = K(At(parts, piece.Triangles[t + k]));
+                var b = K(At(parts, piece.Triangles[t + (k + 1) % 3]));
+                var e = a.CompareTo(b) < 0 ? (a, b) : (b, a);
                 use[e] = use.GetValueOrDefault(e) + 1;
             }
-        var rim = use.Where(kv => kv.Value == 1).SelectMany(kv => new[] { kv.Key.Item1, kv.Key.Item2 }).Distinct().Select(k => at[k]).ToList();
-        return rim.Count == hole.Count && hole.All(h => rim.Any(r => Vector3.Distance(r, h) < SameHole));
+        // The rim on the other skin, walked as a loop.
+        var adj = new Dictionary<(long, long, long), List<(long, long, long)>>();
+        foreach (var (e, _) in use.Where(kv => kv.Value == 1 && otherSkin.ContainsKey(kv.Key.Item1) && otherSkin.ContainsKey(kv.Key.Item2)))
+        {
+            (adj.TryGetValue(e.Item1, out var l1) ? l1 : adj[e.Item1] = []).Add(e.Item2);
+            (adj.TryGetValue(e.Item2, out var l2) ? l2 : adj[e.Item2] = []).Add(e.Item1);
+        }
+        if (adj.Count != hole.Count || adj.Values.Any(l => l.Count != 2)) return null;
+        var start = adj.Keys.Min();
+        var loop = new List<int> { otherSkin[start] };
+        var prev = start;
+        var cur = adj[start][0];
+        while (cur != start && loop.Count <= hole.Count)
+        {
+            loop.Add(otherSkin[cur]);
+            var next = adj[cur][0] == prev ? adj[cur][1] : adj[cur][0];
+            prev = cur;
+            cur = next;
+        }
+        if (loop.Count != hole.Count) return null;
+        // The rotation and direction that put the two loops nearest, judged by their worst pair.
+        int n = hole.Count;
+        (float Worst, int Shift, int Dir) best = (float.MaxValue, 0, 1);
+        foreach (int dir in new[] { 1, -1 })
+            for (int shift = 0; shift < n; shift++)
+            {
+                float worst = 0f;
+                for (int h = 0; h < n && worst < best.Worst; h++)
+                    worst = MathF.Max(worst, Vector3.Distance(At(parts, loop[((shift + dir * h) % n + n) % n]), hole[h]));
+                if (worst < best.Worst) best = (worst, shift, dir);
+            }
+        if (best.Worst > HoleFit) return null;
+        var at = new int[n];
+        for (int h = 0; h < n; h++) at[h] = loop[((best.Shift + best.Dir * h) % n + n) % n];
+        return at;
+    }
+
+    /// <summary>The bulge's points moved by its hole's offsets: a rim point onto its partner exactly, every other by the
+    /// offsets weighted by inverse squared distance to the hole points.</summary>
+    internal static Vector3[] Warp(TbseBulge bulge, Vector3[] offset)
+    {
+        var o = new Vector3[bulge.Positions.Length];
+        for (int i = 0; i < o.Length; i++)
+        {
+            var p = bulge.Positions[i];
+            // A rim point onto its hole point's partner EXACTLY (the sculpt's rim sits within 0.1 mm of the hole).
+            if (bulge.Data.rim[i] >= 0) { o[i] = bulge.Hole[bulge.Data.rim[i]] + offset[bulge.Data.rim[i]]; continue; }
+            float wsum = 0f;
+            var d = Vector3.Zero;
+            for (int h = 0; h < bulge.Hole.Length; h++)
+            {
+                float w = 1f / MathF.Max(Vector3.DistanceSquared(p, bulge.Hole[h]), 1e-10f);
+                wsum += w;
+                d += offset[h] * w;
+            }
+            o[i] = p + d / wsum;
+        }
+        return o;
     }
 
     /// <summary>Per vertex, the area-weighted dP/du and dP/dv over its triangles.</summary>

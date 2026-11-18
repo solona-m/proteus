@@ -40,7 +40,11 @@ public class BulgeTransplantTests
         Assert.Equal(bulge!.Data.triangles.Length / 3, drawn);
         Assert.Equal(before.Parts.Single(p => p.Island < 0 && p.Label == "1.2").Triangles.Length / 3 - drawn, swapped.Collapsed);
         for (int i = 0; i < bulge.Positions.Length; i++)
-            Assert.True(Vector3.Distance(bulge.Positions[i], At(after, swapped.SlotOf[i])) < 1e-5f, $"bulge vertex {i} not written");
+        {
+            // A rim vertex lands exactly on its hole point (the sculpt's rim sits within 0.1 mm of it); the rest as shipped.
+            var expected = bulge.Data.rim[i] >= 0 ? bulge.Hole[bulge.Data.rim[i]] : bulge.Positions[i];
+            Assert.True(Vector3.Distance(expected, At(after, swapped.SlotOf[i])) < 1e-5f, $"bulge vertex {i} not written");
+        }
         // The main skin is untouched, byte for byte in its vertices.
         var skin = before.Parts.Single(p => p.Island < 0 && p.Label == "1.1").Triangles.Distinct();
         Assert.All(skin, v => Assert.Equal(At(before, v), At(after, v)));
@@ -79,7 +83,8 @@ public class BulgeTransplantTests
     public void Topology_mismatch_left_as_today()
     {
         var bulge = TbseBulge.Shared!;
-        var other = bulge.Hole.Select(p => p * 1.02f).ToArray();   // a hole the bulge does not fit
+        // A hole the bulge does not fit: every point 2 cm forward, past what the bulge may be warped by.
+        var other = bulge.Hole.Select(p => p + new Vector3(0f, 0f, 0.02f)).ToArray();
         var body = SyntheticBulge.Body(hole: other);
         Assert.Null(BulgeSwap.Featureless(body, bulge, out var why));
         Assert.Equal("no sculpt for this body", why);
@@ -103,5 +108,23 @@ public class BulgeTransplantTests
         var body = SyntheticBulge.Body(rings: 2);   // 85 slots, 140 triangles: less than the bulge needs
         Assert.Null(BulgeSwap.Featureless(body, bulge, out var why));
         Assert.Contains("fewer than the bulge's", why);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-featureless-bulge-21")]
+    public void A_hole_a_few_millimetres_off_takes_the_bulge_warped_onto_it()
+    {
+        var bulge = TbseBulge.Shared!;
+        // TBSE-X's hole is The Body SE's 1.85 mm off: here every point 3 mm forward.
+        var shifted = bulge.Hole.Select(p => p + new Vector3(0f, 0f, 0.003f)).ToArray();
+        var body = SyntheticBulge.Body(hole: shifted);
+        var swapped = BulgeSwap.Featureless(body, bulge, out var why);
+        Assert.True(swapped != null, why);
+        var after = ModelPartReader.Read(swapped!.Model)!;
+        for (int i = 0; i < bulge.Positions.Length; i++)
+            if (bulge.Data.rim[i] >= 0)
+                Assert.True(Vector3.Distance(shifted[bulge.Data.rim[i]], At(after, swapped.SlotOf[i])) < 1e-5f, $"rim vertex {i} is not on the body's hole");
+        Assert.False(GenitalParts.Read(after, ModelSkinReader.Read(swapped.Model, null, null)!)?.Penis ?? false,
+                     "the featureless body still reads as having a penis");
     }
 }

@@ -25,7 +25,7 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
 {
     private const string LumberjackPin = "1FE367DFEFEB9D1277223A57D2AD7AB637FF1EB515EAC99B7B0BD8271578C214";
     private const string SheerTopPin = "066EE8258755CEF2E21223A47AF1B9D90160978CF2464DC2C6DA14659DBE8351";
-    private const string StormblessedLegsPin = "8A6A35647C02DEB21BDDCBF045D6E50A4B695C19F3788829A9F33CBF2BA656B4";
+    private const string StormblessedLegsPin = "C6127850AE23D53BD9B4EA8B839B13293028630D578BBD19CA0E8B655E065A17";
     /// <summary>featureless-bulge: the pin before the bulge, which Stormblessed's legs still make with it switched off.</summary>
     private const string StormblessedLegsNoBulgePin = "3B2B3ADD084CBB2295D78499DCE8769656B8FCF49260C2C4190BC359ED846DA0";
     private const string HeelsSizeSetPin = "E53697A7A3235D1FB3EF57DF52FCA160BF6C3BAF193C8E49507F252B6A42F955";

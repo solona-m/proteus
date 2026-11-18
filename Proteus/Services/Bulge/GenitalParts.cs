@@ -136,6 +136,8 @@ internal static class GenitalParts
             float onPenis = vs.Average(v => OnPenis(skin, v));
             var all = Enumerable.Range(0, part.Triangles.Length / 3).ToList();
             bool skinPart = SecondSkinWriter.IsBodySkinMaterial(part.Material);
+            // The shipped bulge, drawn in place of a body's genitals, is not genitals: a body made featureless reads so.
+            if (skinPart && IsShippedBulge(body, part)) continue;
             if (!skinPart)
             {
                 // (a) a material of its own at the crotch: not nails, piercings or pubic hair (unless rigged to the penis),
@@ -165,6 +167,28 @@ internal static class GenitalParts
         foreach (var part in body.Parts.Where(p => p.Island < 0 && genitalMaterials.Contains(p.Material) && found.All(g => g.Part != p)))
             found.Add(new Genital(part, "a", Enumerable.Range(0, part.Triangles.Length / 3).ToList(), 0f));
         return found;
+    }
+
+    /// <summary>Whether a skin part is the shipped TBSE bulge as <see cref="BulgeSwap"/> draws it: as many drawn vertices and
+    /// triangles as the bulge (the collapsed spares aside), every drawn vertex within <see cref="BulgeSwap.HoleFit"/> of one
+    /// of its points (it may be warped onto a body's hole by that much).</summary>
+    internal static bool IsShippedBulge(ModelParts body, ModelPart part)
+    {
+        if (TbseBulge.Shared is not { } bulge) return false;
+        var drawn = new HashSet<int>();
+        for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+        {
+            int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
+            if (a == b || b == c || a == c) continue;
+            drawn.Add(a); drawn.Add(b); drawn.Add(c);
+        }
+        int drawnTris = 0;
+        for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            if (part.Triangles[t] != part.Triangles[t + 1] && part.Triangles[t + 1] != part.Triangles[t + 2] && part.Triangles[t] != part.Triangles[t + 2])
+                drawnTris++;
+        if (drawn.Count != bulge.Positions.Length || drawnTris != bulge.Data.triangles.Length / 3) return false;
+        var grid = new PointGrid(bulge.Positions, 0.01f);
+        return drawn.All(v => grid.Nearest(At(body, v), BulgeSwap.HoleFit * 2) <= BulgeSwap.HoleFit);
     }
 
     private static ModelParts WithoutParts(ModelParts model, IReadOnlySet<ModelPart> drop)
