@@ -187,17 +187,61 @@ internal sealed class MatcapRecord
     {
         var path = PathOf(modRoot);
         if (!File.Exists(path)) return new MatcapRecord();
+        MatcapRecord? record;
         try
         {
-            var r = JsonSerializer.Deserialize<MatcapRecord>(File.ReadAllText(path)) ?? new MatcapRecord { Unreadable = true };
-            // A later format (written by a newer Proteus) is never read as this one, so never written over.
-            if (r.Version > CurrentVersion) r.Unreadable = true;
-            return r;
+            record = JsonSerializer.Deserialize<MatcapRecord>(File.ReadAllText(path));
         }
         catch
         {
             return new MatcapRecord { Unreadable = true };
         }
+        if (record == null) return new MatcapRecord { Unreadable = true };
+        // A later format (written by a newer Proteus) is never read as this one, so never written over.
+        if (record.Version > CurrentVersion) return new MatcapRecord { Unreadable = true };
+        Contain(modRoot, record);
+        return record;
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex TokenShape =
+        new("^[0-9a-f]{6}$", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// The record ships inside the mod, so its author controls it: every FILE path it holds is kept inside the mod
+    /// (<see cref="ModPath"/>), and what is not is dropped — a model, a material (its file, its baked texture's, or a mesh's
+    /// model), a shared file. Game paths and labels (<c>Name</c>, which carries a leading '/', <c>Normal</c>,
+    /// <c>GamePaths</c>, <c>FileRef.GamePath</c>, <c>Library</c>, <c>Image</c>) are never joined onto the mod, so they are
+    /// not checked. The token goes into file names: one not of <see cref="MatcapPlan.TokenFor"/>'s shape reads as "none
+    /// yet", which Apply fills from the folder.
+    /// </summary>
+    private static void Contain(string modRoot, MatcapRecord record)
+    {
+        int dropped = 0;
+        bool Inside(string? rel) => rel != null && ModPath.TryResolve(modRoot, rel, out _);
+
+        record.Models ??= [];
+        record.Materials ??= [];
+        record.Shared ??= new SharedFiles();
+        dropped += record.Models.RemoveAll(m => m == null || !Inside(m.File));
+        // A row matcap's cut files, normals, cut meshes' models and mod-file sources must be inside the mod too: Undo
+        // deletes the cut files and Detect reads the sources.
+        static bool RowOutside(RowRef? row, Func<string?, bool> inside) =>
+            row != null
+            && ((row.Files ?? []).Any(f => f == null || !inside(f.File)
+                                           || f.Source is { Game: false, File: { } sf } && !inside(sf)
+                                           || f.Normal is { Game: false, File: { } nf } && !inside(nf)
+                                           || f.Index is { Game: false, File: { } xf } && !inside(xf))
+                || (row.Normals ?? []).Any(n => n == null || !inside(n.File))
+                || (row.CutMeshes ?? []).Any(x => x == null || !inside(x.Model)));
+        dropped += record.Materials.RemoveAll(m => m == null || !Inside(m.File)
+                                                   || m.Source?.Tex is { } tex && !Inside(tex.File)
+                                                   || (m.Meshes ?? []).Any(x => x == null || !Inside(x.Model))
+                                                   || RowOutside(m.Row, Inside));
+        if (record.Shared.Mask is { } mask && !Inside(mask.File)) { record.Shared.Mask = null; dropped++; }
+        if (record.Shared.FlatNormal is { } flat && !Inside(flat.File)) { record.Shared.FlatNormal = null; dropped++; }
+        if (!string.IsNullOrEmpty(record.Token) && !TokenShape.IsMatch(record.Token)) { record.Token = ""; dropped++; }
+        record.Token ??= "";
+        ModPath.NoteDropped("matcaps", modRoot, dropped);
     }
 
     public static void Write(string modRoot, MatcapRecord record)

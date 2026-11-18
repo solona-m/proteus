@@ -71,9 +71,12 @@ internal static class ShaderUpgradeWriter
 
     private static string ProteusDir(string modRoot) => Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir);
     private static string RecordPath(string modRoot) => Path.Combine(ProteusDir(modRoot), RecordFile);
-    private static string BackupPath(string modRoot, string rel) => Path.Combine(ProteusDir(modRoot), BackupSubdir, Native(rel));
+    /// <summary>The backup of <paramref name="rel"/>, never outside <see cref="BackupSubdir"/>: throws
+    /// <see cref="UnsafeModPathException"/> (an IOException) otherwise (<see cref="ModPath"/>).</summary>
+    private static string BackupPath(string modRoot, string rel) => ModPath.Backup(modRoot, BackupSubdir, rel.Replace('\\', '/'));
     private static string Native(string rel) => rel.Replace('/', Path.DirectorySeparatorChar);
-    private static string FileOf(string modRoot, string rel) => Path.Combine(modRoot, Native(rel));
+    /// <summary><paramref name="rel"/> inside the mod; throws <see cref="UnsafeModPathException"/> otherwise.</summary>
+    private static string FileOf(string modRoot, string rel) => ModPath.Resolve(modRoot, rel.Replace('\\', '/'));
 
     internal static Record? ReadRecord(string modRoot)
     {
@@ -83,8 +86,18 @@ internal static class ShaderUpgradeWriter
             if (!File.Exists(at)) return null;
             var r = JsonSerializer.Deserialize<Record>(File.ReadAllText(at));
             if (r == null) return null;
-            foreach (var f in r.Files) f.Rel = MeshVolumeService.Rel(f.Rel);
+            foreach (var f in r.Files)
+            {
+                f.Rel = MeshVolumeService.Rel(f.Rel);
+                if (f.Mask != null) f.Mask.Rel = MeshVolumeService.Rel(f.Mask.Rel ?? "");
+            }
             r.Declined = r.Declined.Select(MeshVolumeService.Rel).ToList();
+            // The record ships inside the mod, so its author controls it: an entry whose material is outside the mod, or
+            // whose mask is outside Shader Upgrade/ (an author's own texture is never ours to delete), is dropped whole.
+            int dropped = r.Files.RemoveAll(f => !ModPath.TryResolve(modRoot, f.Rel, out _)
+                                                 || f.Mask != null && !ModPath.TryResolve(modRoot, f.Mask.Rel, out _, within: MaskFolder));
+            dropped += r.Declined.RemoveAll(d => !ModPath.TryResolve(modRoot, d, out _));
+            ModPath.NoteDropped("shader upgrade", modRoot, dropped);
             return r;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { return null; }
@@ -230,7 +243,8 @@ internal static class ShaderUpgradeWriter
         var record = ReadRecord(modRoot) ?? new Record();
         if (record.Declined.Contains(w.Rel, StringComparer.OrdinalIgnoreCase)) { left.Add((w.Rel, LeftReason.Declined)); return; }
 
-        var path = FileOf(modRoot, w.Rel);
+        // A material outside the mod is a failed write — not a reason to walk again, which would only meet it again.
+        if (!ModPath.TryResolve(modRoot, w.Rel.Replace('\\', '/'), out var path)) { left.Add((w.Rel, LeftReason.WriteFailed)); return; }
         byte[] current;
         try { current = File.ReadAllBytes(path); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -448,7 +462,8 @@ internal static class ShaderUpgradeWriter
                 return Undone.Refused;
             }
 
-            var path = FileOf(modRoot, rel);
+            // Outside the mod is nothing of ours to undo (ModPath; the reader already drops such entries).
+            if (!ModPath.TryResolve(modRoot, rel, out var path)) return Undone.Nothing;
             var current = SafeRead(path);
             if (current is null or { Length: 0 } && File.Exists(path))
             {
@@ -514,11 +529,14 @@ internal static class ShaderUpgradeWriter
     internal static string? Forget(string modRoot, Record record, FileEntry entry, ISet<string>? keep = null,
                                    bool strictBackup = false, bool retire = false)
     {
-        var backup = BackupPath(modRoot, entry.Rel);
+        // A backup outside the backup folder is no backup of ours: nothing to delete or archive (ModPath).
         string? archived = null;
-        if (retire) archived = RetireBackup(modRoot, entry.Rel);
-        else if (strictBackup) { if (File.Exists(backup)) File.Delete(backup); }
-        else TryDelete(backup);
+        if (ModPath.TryBackup(modRoot, BackupSubdir, entry.Rel, out var backup))
+        {
+            if (retire) archived = RetireBackup(modRoot, entry.Rel);
+            else if (strictBackup) { if (File.Exists(backup)) File.Delete(backup); }
+            else TryDelete(backup);
+        }
         record.Files.Remove(entry);
         if (entry.Mask is { } m)
         {
@@ -537,19 +555,20 @@ internal static class ShaderUpgradeWriter
     /// </summary>
     internal static string? RetireBackup(string modRoot, string rel)
     {
-        var backup = BackupPath(modRoot, rel);
+        // Outside the backup folders is nothing of ours to archive, and never an archive target (ModPath).
+        if (!ModPath.TryBackup(modRoot, BackupSubdir, MeshVolumeService.Rel(rel), out var backup)) return null;
         if (!File.Exists(backup)) return null;
         var native = Native(MeshVolumeService.Rel(rel));
         var root = Path.Combine(ProteusDir(modRoot), SupersededSubdir);
-        var target = Path.Combine(root, native);
+        if (!ModPath.TryResolve(root, MeshVolumeService.Rel(rel), out var target)) return null;
         if (File.Exists(target) || Directory.Exists(target))
         {
             var stamped = Path.Combine(Path.GetDirectoryName(native) ?? "",
                 Path.GetFileNameWithoutExtension(native) + "." + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss",
                     System.Globalization.CultureInfo.InvariantCulture) + Path.GetExtension(native));
-            target = Path.Combine(root, stamped);
+            target = ModPath.Resolve(root, stamped.Replace('\\', '/'));
             for (int n = 2; File.Exists(target) || Directory.Exists(target); n++)
-                target = Path.Combine(root, Path.ChangeExtension(stamped, null) + "-" + n + Path.GetExtension(native));
+                target = ModPath.Resolve(root, (Path.ChangeExtension(stamped, null) + "-" + n + Path.GetExtension(native)).Replace('\\', '/'));
         }
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         File.Move(backup, target, overwrite: false);
@@ -583,7 +602,9 @@ internal static class ShaderUpgradeWriter
                                    .Any(r => string.Equals(MeshVolumeService.Rel(r.File), MeshVolumeService.Rel(maskRel),
                                                            StringComparison.OrdinalIgnoreCase));
         if (named) return;
-        TryDelete(FileOf(modRoot, maskRel));
+        // Only a mask of ours: under Shader Upgrade/ of the mod, never anywhere else (ModPath).
+        if (!ModPath.TryResolve(modRoot, MeshVolumeService.Rel(maskRel), out var mask, within: MaskFolder)) return;
+        TryDelete(mask);
         var dir = Path.Combine(modRoot, MaskFolder);
         try { if (Directory.Exists(dir) && !Directory.EnumerateFileSystemEntries(dir).Any()) Directory.Delete(dir); }
         catch (IOException) { /* harmless */ }

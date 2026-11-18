@@ -139,7 +139,15 @@ internal static class HairPortWriter
                                                                    && !PublishedByDefaults(owners, owner, m.GamePath))
                     is { } unpublishable)
                     return new Outcome(false, Covered(unpublishable.GamePath), 0);
-                plan.Add((w, owner, was?.File ?? HairPortPlan.PortFile(owner, w.TargetGamePath), was));
+                // Every file this save would write, checked before anything is: the port and each material copy of its own
+                // must land inside the mod (ModPath) — a remade port is overwritten in place, which no rollback restores.
+                var file = was?.File ?? HairPortPlan.PortFile(owner, w.TargetGamePath);
+                if (!ModPath.TryResolve(modRoot, file, out _))
+                    return new Outcome(false, new UnsafeModPathException(file).Message, 0);
+                foreach (var m in w.Materials.Where(m => m.AuthorFile == null))
+                    if (HairPortPlan.PortFile(owner, m.GamePath) is var copy && !ModPath.TryResolve(modRoot, copy, out _))
+                        return new Outcome(false, new UnsafeModPathException(copy).Message, 0);
+                plan.Add((w, owner, file, was));
             }
 
             var created = new List<string>();
@@ -241,7 +249,8 @@ internal static class HairPortWriter
                 // taken back out above it is unpublished, and the record drops it on the next read, so the automatic path
                 // ports it again; where its option was never written, the manifest still names it.
                 foreach (var file in created.Where(f => !kept.Contains(f)))
-                    try { File.Delete(Native(modRoot, file)); } catch { /* left for the next sweep */ }
+                    if (ModPath.TryResolve(modRoot, HairPortRecord.Rel(file), out var full))
+                        try { File.Delete(full); } catch { /* left for the next sweep */ }
                 return new Outcome(false, ex.Message, 0);
             }
 
@@ -556,9 +565,11 @@ internal static class HairPortWriter
                      (MeshToggleService.BackupSubdir, ProteusLoc.Localize("MeshVolume.Feature.Toggles", "part switches")),
                      (MeshVolumeService.BackupSubdir, ProteusLoc.Localize("MeshVolume.Feature.Brush", "the brush")),
                  })
-            if (File.Exists(Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, subdir, NativeRel(rel))))
+            if (ModPath.TryBackup(modRoot, subdir, HairPortRecord.Rel(rel), out var backup) && File.Exists(backup))
                 return name;
-        if (File.Exists(Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, Matcap.MatcapWriter.BackupSubdir, NativeRel(rel)))
+        // Outside a backup folder is no backup of any feature's (ModPath).
+        if (ModPath.TryBackup(modRoot, Matcap.MatcapWriter.BackupSubdir, HairPortRecord.Rel(rel), out var matcapBackup)
+            && File.Exists(matcapBackup)
             && Matcap.MatcapWriter.NamesOwnMatcap(modRoot, rel.Replace('\\', '/')))
             return ProteusLoc.Localize("MeshVolume.Feature.Matcaps", "matcaps");
         return null;
@@ -594,9 +605,9 @@ internal static class HairPortWriter
         PenumbraModMeta.AtomicWrite(path, bytes);
     }
 
-    private static string Native(string modRoot, string rel) => Path.Combine(modRoot, NativeRel(rel));
-
-    private static string NativeRel(string rel) => rel.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+    /// <summary><paramref name="rel"/> inside the mod; throws <see cref="UnsafeModPathException"/> (an IOException) for one
+    /// outside it — a backstop: Save checks every file before writing (<see cref="ModPath"/>).</summary>
+    private static string Native(string modRoot, string rel) => ModPath.Resolve(modRoot, HairPortRecord.Rel(rel));
 
     internal static string Describe(HairPortPlan.Owner owner)
         => owner.IsDefault ? ProteusLoc.Localize("HairPort.DefaultData", "the mod's default files") : $"{owner.Group} / {owner.Option}";
