@@ -25,43 +25,88 @@ Solona's emails: `solonamods@gmail.com`, `50025762+solona-m@users.noreply.github
 | Merge-inherited | New against every parent of a merge and caught by the hunk rule there |
 | Whole-file | Every line of `Proteus/Interop/IpcProvider.cs`, `proteus.slnx` and `samples/ExampleMultiGroupOverlayMod/**` |
 | Restored | A Solona line that a contributor commit replaced, put back word for word from that commit's parent (stage 2; candidates counted here) |
+| Trivial coincidental class | A direct line outside the mixed set that is blank, a using directive, a namespace declaration, a lone brace, or a listed game-fact line, in a file with no non-trivial set line. Excluded from the removal set and left in place (rev 10, step 1b) |
 
-### Totals (test tip)
+### The trivial coincidental class (plan rev 10, D2): excluded, not removed
+
+A direct line is in the class when it matches the fixed trivial regex after trimming (categories blank, using, namespace, brace) or is one of the game-fact lines below, and its file holds no non-trivial set line. Class lines stay in place and are logged; they are not part of the removal set. Trivial lines inside mixed-set files are not in the class: they are removed, and B re-adds them.
+
+Confirmation by count (test tip and branch alike): 212 direct lines lie outside the whole files and outside the mixed set, in 179 files. All 212 match the regex or the game-fact rule; 0 match neither. No set line of any other kind (derived or carried over) lies in those files, so condition (c) holds for all 179. No file joins the mixed set through the failure path.
+
+| Class category | Lines |
+|---|---|
+| using | 200 |
+| blank | 6 |
+| namespace | 3 |
+| brace | 0 |
+| game-fact | 3 |
+| Total | 212 lines in 179 files (3 in `-w -M -C`, all in the ColorTableEditor files; 209 in `-w -M -C -C` only) |
+
+The `ColorTableEditor*.cs` lines, all in the class:
+
+| File:line | Category | Blame modes |
+|---|---|---|
+| `Proteus/Gui/ColorTableEditor.cs:7` | using | both |
+| `Proteus/Gui/ColorTableEditor.GlowFooter.cs:6` | using | both |
+| `Proteus/Gui/ColorTableEditor.SubRowPanel.cs:3` | using | `-w -M -C -C` only |
+| `Proteus/Gui/ColorTableEditor.SubRowPanel.cs:5` | using | both |
+
+The game-fact lines (the record at `<R>`; each holds the §9.5 literal and nothing else but a trailing comma):
+
+| File:line | Shape |
+|---|---|
+| `Proteus.Tests/ModCreationTests.cs:208` | element (an item of a list literal) |
+| `Proteus.Tests/ModCreationTests.cs:282` | assert (the expected-value argument of an equality assert) |
+| `Proteus.Tests/OnionImportTests.cs:559` | element (an item of the list an equality assert compares) |
+
+Per-file game-fact counts: `Proteus.Tests/ModCreationTests.cs` 2, `Proteus.Tests/OnionImportTests.cs` 1; total 3.
+
+### The mixed set
+
+`Proteus/Interop/IpcProvider.cs`, `Proteus/Interop/PenumbraBridge.cs`, `Proteus/Interop/GlamourerBridge.cs`, `Proteus/Plugin.cs`, `Proteus/Services/SidecarDiscoveryService.cs`, `Proteus/Gui/StatusWindow.cs`, `Proteus/Gui/ModsTab.cs`, `Proteus/Services/CompositorService.Carriers.cs`, `Proteus/Services/CompositorService.cs`, `proteus.slnx` and `samples/ExampleMultiGroupOverlayMod/**`. Every set line in these files is removed, trivial or not. No other file is in the mixed set, and no file outside it changes.
+
+### Totals of the removal set (test tip)
 
 | Category | Lines | Files |
 |---|---|---|
 | Whole-file | 268 (IpcProvider.cs 150, proteus.slnx 10, the sample folder 108 counted as blame lines in 6 files, 2 of them PNG) | 8 |
-| Direct, outside whole files, both modes | 40 | 8 |
-| Direct, outside whole files, `-w -M -C -C` only | 212 | 179 |
+| Direct, outside whole files (all in mixed-set files) | 40, of which 29 non-trivial and 11 trivial-shaped (4 using, 5 brace, 2 blank), all removed | 7 |
 | Derived, outside whole files | 51 | 6 |
 | Derived inside IpcProvider.cs (already whole-file) | 9 | 1 |
 | Carried over | 19 | 2 |
 | Merge-inherited | 0 | 0 |
 | Restored (candidates, final count fixed at stage 2) | 13 | 4 |
-| Direct, all files, `-w -M -C` | 294 (Caraxi 282, AzureRavie 12) | |
-| Direct, all files, `-w -M -C -C` | 504 (Caraxi 492, AzureRavie 12) | |
-| Direct, all files, union of both modes | 506 | |
+| Excluded: trivial coincidental class | 212 (not removed) | 179 |
+| Direct, all files, `-w -M -C` | 294 (Caraxi 282, AzureRavie 12); 3 of them in the class | |
+| Direct, all files, `-w -M -C -C` | 504 (Caraxi 492, AzureRavie 12); 212 of them in the class | |
+| Direct, all files, union of both modes | 506; 212 of them in the class | |
 
 Inside the whole files: IpcProvider.cs has 137 direct lines (`-w -M -C`; 135 in `-C -C`), 9 derived and 4 other Solona lines. proteus.slnx has 9 direct lines and 1 Solona line. All 108 sample-folder blame lines are direct.
 
-### Per file: the known six, the whole files and the extra files with code lines
+### Tripwire (plan rev 10, D3)
+
+| Condition | Numbers | Result |
+|---|---|---|
+| 1: derived + carried over + restored > 2 × direct, direct = whole-file lines + non-trivial direct lines outside whole files | 51 + 19 + 13 = 83 (92 counting IpcProvider.cs's 9 derived lines), against 2 × (268 + 29) = 594. Counting all 40 removed direct lines outside whole files instead of the 29 non-trivial ones gives 2 × 308 = 616 | not fired |
+| 2: the set, excluding the trivial class, includes a Sensitive-Area file beyond the known Interop files | 0 such files. The 21 Sensitive-Area files found at stage 1 hold only class lines | not fired |
+
+At stage 1 (before the class existed) condition 2 counted 21 files and fired; condition 1 did not fire under either reading.
+
+### Per file: the mixed set
 
 | File | Direct (both modes) | Direct (`-C -C` only) | Derived | Carried over | Merge-inherited | Restored candidates | Sensitive Area |
 |---|---|---|---|---|---|---|---|
-| `Proteus/Interop/IpcProvider.cs` | whole file, 150 | | | | | 0 | yes (Interop) |
+| `Proteus/Interop/IpcProvider.cs` | whole file, 150 | | | | | 0 | yes (Interop, known) |
 | `proteus.slnx` | whole file, 10 | | | | | 0 | no |
 | `samples/ExampleMultiGroupOverlayMod/**` (6 files) | whole files, 108 | | | | | 0 | no |
-| `Proteus/Interop/PenumbraBridge.cs` | 9 | 0 | 0 | 0 | 0 | 0 | yes (Interop) |
-| `Proteus/Interop/GlamourerBridge.cs` | 12 | 0 | 8 | 0 | 0 | 0 | yes (Interop) |
-| `Proteus/Plugin.cs` | 6 | 0 | 1 | 0 | 0 | 1 | no |
-| `Proteus/Services/SidecarDiscoveryService.cs` | 6 | 0 | 8 | 0 | 0 | 4 | no |
-| `Proteus/Gui/StatusWindow.cs` | 4 | 0 | 28 | 0 | 0 | 0 | no |
-| `Proteus/Gui/ModsTab.cs` (extra) | 0 | 1 | 0 | 11 | 0 | 4 | no |
-| `Proteus/Services/CompositorService.Carriers.cs` (extra) | 0 | 2 | 2 | 8 | 0 | 4 | no |
-| `Proteus/Services/CompositorService.cs` (extra) | 0 | 0 | 4 | 0 | 0 | 0 | no |
-| `Proteus/Gui/ColorTableEditor.cs` (extra) | 1 | 0 | 0 | 0 | 0 | 0 | no |
-| `Proteus/Gui/ColorTableEditor.GlowFooter.cs` (extra) | 1 | 0 | 0 | 0 | 0 | 0 | no |
-| `Proteus/Gui/ColorTableEditor.SubRowPanel.cs` (extra) | 1 | 1 | 0 | 0 | 0 | 0 | no |
+| `Proteus/Interop/PenumbraBridge.cs` | 9 (6 non-trivial, 2 brace, 1 blank) | 0 | 0 | 0 | 0 | 0 | yes (Interop, known) |
+| `Proteus/Interop/GlamourerBridge.cs` | 12 (11 non-trivial, 1 blank) | 0 | 8 | 0 | 0 | 0 | yes (Interop, known) |
+| `Proteus/Plugin.cs` | 6 (all non-trivial) | 0 | 1 | 0 | 0 | 1 | no |
+| `Proteus/Services/SidecarDiscoveryService.cs` | 6 (all non-trivial) | 0 | 8 | 0 | 0 | 4 | no |
+| `Proteus/Gui/StatusWindow.cs` | 4 (1 using, 3 brace) | 0 | 28 | 0 | 0 | 0 | no |
+| `Proteus/Gui/ModsTab.cs` | 0 | 1 (using) | 0 | 11 | 0 | 4 | no |
+| `Proteus/Services/CompositorService.Carriers.cs` | 0 | 2 (using) | 2 | 8 | 0 | 4 | no |
+| `Proteus/Services/CompositorService.cs` | 0 | 0 | 4 | 0 | 0 | 0 | no |
 
 What each group of lines is, in brief (full behaviour in §3 to §8):
 
@@ -76,194 +121,195 @@ What each group of lines is, in brief (full behaviour in §3 to §8):
 | ModsTab.cs | 11 carried over, 1 direct | the clickable mod name and the priority drag (§6.1, §6.2); one import line |
 | CompositorService.Carriers.cs | 8 carried over, 2 derived, 2 direct | the glasses and ring equip cooldown charged at the attempt (§8.1); two import lines |
 | CompositorService.cs | 4 derived | the body-shape signature's body (§6.4). In the set only because the same file split put it in a hunk that removed the carried-over cooldown lines |
-| ColorTableEditor.*.cs | 4 direct | import lines |
 
-### The `-w -M -C -C`-only lines (176 further files)
+### Per file: the trivial coincidental class (not removed)
 
-These 208 lines, plus the 4 in ModsTab.cs, CompositorService.Carriers.cs and ColorTableEditor.SubRowPanel.cs above, are attributed to Caraxi only because `-C -C` searches every file of the commit that created each file. They are namespace import directives, three blank-and-namespace preambles, and three game-path string literals in tests. They carry no behaviour of their own. Each is rebuilt by re-adding the same import, namespace declaration, blank line or literal (§9.5).
+Line and kind, at the test tip: L = import of `System.Linq`, G = `System.Collections.Generic`, R = `Dalamud.Interface.Utility.Raii`, J = `System.Text.Json`, S = `Proteus.Services` (all category using); N = the file-scoped namespace declaration `Proteus.Interop` (namespace); B = blank; P = the §9.5 game-path literal (game-fact). These lines exist only because `-C -C` searches every file of the commit that created each file (and, for the ColorTableEditor files, because `-w -M -C` matches an identical import). They carry no behaviour and are left as they are.
 
-Kinds: L = import of `System.Linq` (170 lines in all), G = `System.Collections.Generic` (19), R = `Dalamud.Interface.Utility.Raii` (5 here plus the 4 counted above), J = `System.Text.Json` (3), S = `Proteus.Services` (3), N = the file-scoped namespace declaration `Proteus.Interop` (3), B = blank line (6), P = the test material game-path literal of §9.5 (3). Line numbers are at the test tip.
+| File | using | blank | namespace | brace | game-fact | Line and kind | Sensitive Area |
+|---|---|---|---|---|---|---|---|
+| `Proteus.Tests/AutoRefitDecisionsTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/AutoRefitPartsTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/BodyRetargetTests.RelaxSink.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/BodyRetargetTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/ClientStructsProbe.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/ContentImportTests.RingImcGroups.cs` | 2 | 0 | 0 | 0 | 0 | 1G 2L | no |
+| `Proteus.Tests/CrotchWeightsTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/CutOpenSkinTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/DeepClearTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/DesignRestoreSweepTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/FaceUvRewriteTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/Gen2LayoutRefitTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/GeometryTogglesTests.cs` | 2 | 0 | 0 | 0 | 0 | 3L 4J | no |
+| `Proteus.Tests/HairPortBakerTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/HairPortScalpLocalTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/HairScalpPushTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/KeepEndsReshapeTests.cs` | 2 | 0 | 0 | 0 | 0 | 1G 2L | no |
+| `Proteus.Tests/KeepShapeFlatCardTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/KeepShapeReleaseTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/LayerOrderTests.cs` | 2 | 0 | 0 | 0 | 0 | 1G 2L | no |
+| `Proteus.Tests/LocalizationTests.cs` | 2 | 0 | 0 | 0 | 0 | 3L 4J | no |
+| `Proteus.Tests/MeshVolumeSolveTests.Mirror.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/MeshVolumeSolveTests.MirrorSkin.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/MeshVolumeSolveTests.RigidGuard.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/MeshVolumeSolveTests.SkinMoves.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/MeshVolumeSolveTests.Stretch.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/MeshVolumeSolveTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/ModCreationTests.cs` | 0 | 0 | 0 | 0 | 2 | 208P 282P | no |
+| `Proteus.Tests/ModMoveServiceTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/ModelAttributeWriterTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/ModelShapeWriterTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/MoveAllSelectionTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/NailGrade.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/NavelBridgeTests.cs` | 2 | 0 | 0 | 0 | 0 | 3L 4J | no |
+| `Proteus.Tests/NecklineFloatTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/OnionImportTests.cs` | 0 | 0 | 0 | 0 | 1 | 559P | no |
+| `Proteus.Tests/OpenPatchAuthoredTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/OpenSkinTests.cs` | 2 | 0 | 0 | 0 | 0 | 1G 2L | no |
+| `Proteus.Tests/OutfitOrderTests.cs` | 2 | 0 | 0 | 0 | 0 | 2G 3L | no |
+| `Proteus.Tests/PbdFileTests.cs` | 2 | 0 | 0 | 0 | 0 | 2G 3L | no |
+| `Proteus.Tests/PolygonSelectionTests.cs` | 2 | 0 | 0 | 0 | 0 | 1G 2L | no |
+| `Proteus.Tests/RacialModelBakeTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/RacialRouteTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/RefitNippleSmoothTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/RimTurnGuardTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/SeamWeightsTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/SkinFollowTests.cs` | 2 | 0 | 0 | 0 | 0 | 1G 2L | no |
+| `Proteus.Tests/SkinIntersections.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/SkinPoke.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/SkinThroughClothTests.cs` | 2 | 0 | 0 | 0 | 0 | 1G 2L | no |
+| `Proteus.Tests/SkinTuckSheet.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/SkinTuckTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/SkinlessTargetTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/SnapPushTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/SourceSmallclothesHoleTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/StackDepthTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/SyntheticChest.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/SyntheticCrotch.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/SyntheticFinger.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/SyntheticSkeleton.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/TestHarness/FakeGame.Bindings.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/TestHarness/HarnessChangesHttpTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/TestHarness/HarnessChangesTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/TestHarness/ModelJoinTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/ToeCapFootlessHostTests.cs` | 2 | 0 | 0 | 0 | 0 | 1G 2L | no |
+| `Proteus.Tests/ToeLineTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/TurnFitTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/UvBakeStep0LocalTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus.Tests/WallPairTests.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Gui/AutoRefitPanel.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Gui/BindingsTab.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Gui/BodyRetargetPanel.CrossSex.cs` | 1 | 0 | 0 | 0 | 0 | 7R | no |
+| `Proteus/Gui/BodyRetargetPanel.PartBodies.cs` | 2 | 0 | 0 | 0 | 0 | 3L 5R | no |
+| `Proteus/Gui/BodyRetargetPanel.Race.cs` | 1 | 0 | 0 | 0 | 0 | 8R | no |
+| `Proteus/Gui/ColorTableEditor.GlowFooter.cs` | 1 | 0 | 0 | 0 | 0 | 6R | no |
+| `Proteus/Gui/ColorTableEditor.SubRowPanel.cs` | 2 | 0 | 0 | 0 | 0 | 3L 5R | no |
+| `Proteus/Gui/ColorTableEditor.cs` | 1 | 0 | 0 | 0 | 0 | 7R | no |
+| `Proteus/Gui/HatCompatPanel.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Gui/MatcapPanel.cs` | 1 | 0 | 0 | 0 | 0 | 7R | no |
+| `Proteus/Gui/MatcapPanelModel.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Gui/PartViewport.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Gui/PartsPanel.SkinMoves.cs` | 1 | 0 | 0 | 0 | 0 | 4R | no |
+| `Proteus/Gui/RowPickerView.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Gui/SizeSetMadeOn.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Gui/SizeSetPanel.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Gui/ToeCapToggle.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Interop/ShellCoverageFade.cs` | 1 | 2 | 1 | 0 | 0 | 11S 12B 13N 14B | yes |
+| `Proteus/Interop/ShellNormalGhost.cs` | 1 | 2 | 1 | 0 | 0 | 11S 12B 13N 14B | yes |
+| `Proteus/Interop/SkinDiffuseGlow.cs` | 1 | 2 | 1 | 0 | 0 | 11S 12B 13N 14B | yes |
+| `Proteus/ModelRace.cs` | 2 | 0 | 0 | 0 | 0 | 2G 3L | no |
+| `Proteus/Models/ContentPack.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/RenderModeInference.cs` | 2 | 0 | 0 | 0 | 0 | 1G 2L | no |
+| `Proteus/Services/AutoRefit/AutoRefitDecisions.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/AutoRefit/AutoRefitTargets.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/AutoRefit/KeepEnds.Studio.cs` | 2 | 0 | 0 | 0 | 0 | 2G 3L | no |
+| `Proteus/Services/AutoRefit/KeepEnds.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BodyBridge.BridgeSolution.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BodyBridge.CrotchFlattening.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BodyBridge.EnvelopeSolution.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BodyBridge.NippleSmoothing.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BodyBridge.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BodyCorrespondence.Identity.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BodyMaterialCatalog.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BodyRetarget.Adornments.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BodyRetarget.Crotch.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BodyRetarget.CutOpenSkin.cs` | 2 | 0 | 0 | 0 | 0 | 1G 2L | no |
+| `Proteus/Services/BodyRetarget.Ends.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BodyRetarget.Nipples.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BodyRetarget.SeamWeights.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BodyRetarget.SkinSwap.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BodyRetarget.SourceWorn.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BodyRetarget.Standoff.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BodyRetarget.Tuck.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BodyRetarget.Variants.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BodyRetarget.Weights.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/BrushTransfer.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/CompositorService.BlendStats.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/CompositorService.Trigger.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/ContentGlowRow.cs` | 2 | 0 | 0 | 0 | 0 | 2G 3L | no |
+| `Proteus/Services/CrossSexRefit.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/CrossSexRefitReport.cs` | 2 | 0 | 0 | 0 | 0 | 1G 2L | no |
+| `Proteus/Services/DrawnModelPaths.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/EffectHostPlanner.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/HairPort/HairPortScanSchedule.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/HairPort/HairPortSkeleton.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/HairPort/HairScalpPush.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/HairPort/HairSkeletonTable.cs` | 2 | 0 | 0 | 0 | 0 | 3G 4L | no |
+| `Proteus/Services/HatCompatSolve.HatFit.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/HatCompatSolve.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/HatCompatWatcher.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/InertModDiagnosis.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/LuminisImportService.LuminisPreview.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/MeshMath.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/MeshVolumeSolve.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/ModelAttributeWriter.cs` | 1 | 0 | 0 | 0 | 0 | 3L | yes |
+| `Proteus/Services/ModelPartReader.PartRead.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/ModelPartReader.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/NavelBridge.Filling.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/NavelBridge.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/OtherRaceRefit.Below.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/OtherRaceRefit.Est.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/OtherRaceRefit.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/OtherRaceWearer.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/OverlayBlend.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/OverlayOverrideBag.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/PolygonSelection.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/RacialModelBake.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/RedrawHold.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/RetargetInputs.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/SecondSkinService.HostChooser.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/SecondSkinWriter.CapMissFill.cs` | 1 | 0 | 0 | 0 | 0 | 3L | yes |
+| `Proteus/Services/SecondSkinWriter.CapStreamCopy.cs` | 1 | 0 | 0 | 0 | 0 | 3L | yes |
+| `Proteus/Services/SecondSkinWriter.CapWeld.cs` | 1 | 0 | 0 | 0 | 0 | 3L | yes |
+| `Proteus/Services/SecondSkinWriter.Connectors.cs` | 1 | 0 | 0 | 0 | 0 | 3L | yes |
+| `Proteus/Services/SecondSkinWriter.CoverageMask.cs` | 1 | 0 | 0 | 0 | 0 | 3L | yes |
+| `Proteus/Services/SecondSkinWriter.MeshEmitter.Reskin.cs` | 1 | 0 | 0 | 0 | 0 | 3L | yes |
+| `Proteus/Services/SecondSkinWriter.NailBeds.cs` | 1 | 0 | 0 | 0 | 0 | 3L | yes |
+| `Proteus/Services/SecondSkinWriter.NailSockets.cs` | 1 | 0 | 0 | 0 | 0 | 3L | yes |
+| `Proteus/Services/SecondSkinWriter.Skinning.cs` | 1 | 0 | 0 | 0 | 0 | 3L | yes |
+| `Proteus/Services/SecondSkinWriter.ToeRegion.cs` | 1 | 0 | 0 | 0 | 0 | 3L | yes |
+| `Proteus/Services/SecondSkinWriter.Welding.cs` | 1 | 0 | 0 | 0 | 0 | 3L | yes |
+| `Proteus/Services/SizeSet/SizeSetRefit.Outcomes.cs` | 2 | 0 | 0 | 0 | 0 | 1G 2L | no |
+| `Proteus/Services/SizeSet/SizeSetRefit.Source.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/SkeletonRemap.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/SkinTagTransfer.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/SkinThroughCloth.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/StaleEffectImport.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/UVRemapService.Layouts.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/UvBakeChestWarp.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/UvTransferQuality.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/VertexColorWriter.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/Services/WomensArtOnMen.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/ShellSurface.cs` | 1 | 0 | 0 | 0 | 0 | 3L | no |
+| `Proteus/TestHarness/GameHarnessAdapter.cs` | 1 | 0 | 0 | 0 | 0 | 3L | yes |
+| `Proteus/TestHarness/HairPortJob.cs` | 1 | 0 | 0 | 0 | 0 | 3L | yes |
+| `Proteus/TestHarness/HarnessChanges.cs` | 1 | 0 | 0 | 0 | 0 | 3L | yes |
+| `Proteus/TestHarness/HarnessStudio.cs` | 1 | 0 | 0 | 0 | 0 | 3L | yes |
+| `Proteus/TestHarness/ModelJoin.cs` | 1 | 0 | 0 | 0 | 0 | 3L | yes |
+| `Proteus/TestHarness/RestoreJob.cs` | 1 | 0 | 0 | 0 | 0 | 3L | yes |
+| **Total (179 files)** | 200 | 6 | 3 | 0 | 3 | | |
 
-| File | Lines | Line and kind | Sensitive Area |
-|---|---|---|---|
-| `Proteus.Tests/AutoRefitDecisionsTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/AutoRefitPartsTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/BodyRetargetTests.RelaxSink.cs` | 1 | 3L | no |
-| `Proteus.Tests/BodyRetargetTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/ClientStructsProbe.cs` | 1 | 3L | no |
-| `Proteus.Tests/ContentImportTests.RingImcGroups.cs` | 2 | 1G 2L | no |
-| `Proteus.Tests/CrotchWeightsTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/CutOpenSkinTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/DeepClearTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/DesignRestoreSweepTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/FaceUvRewriteTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/Gen2LayoutRefitTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/GeometryTogglesTests.cs` | 2 | 3L 4J | no |
-| `Proteus.Tests/HairPortBakerTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/HairPortScalpLocalTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/HairScalpPushTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/KeepEndsReshapeTests.cs` | 2 | 1G 2L | no |
-| `Proteus.Tests/KeepShapeFlatCardTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/KeepShapeReleaseTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/LayerOrderTests.cs` | 2 | 1G 2L | no |
-| `Proteus.Tests/LocalizationTests.cs` | 2 | 3L 4J | no |
-| `Proteus.Tests/MeshVolumeSolveTests.Mirror.cs` | 1 | 3L | no |
-| `Proteus.Tests/MeshVolumeSolveTests.MirrorSkin.cs` | 1 | 3L | no |
-| `Proteus.Tests/MeshVolumeSolveTests.RigidGuard.cs` | 1 | 3L | no |
-| `Proteus.Tests/MeshVolumeSolveTests.SkinMoves.cs` | 1 | 3L | no |
-| `Proteus.Tests/MeshVolumeSolveTests.Stretch.cs` | 1 | 3L | no |
-| `Proteus.Tests/MeshVolumeSolveTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/ModCreationTests.cs` | 2 | 208P 282P | no |
-| `Proteus.Tests/ModMoveServiceTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/ModelAttributeWriterTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/ModelShapeWriterTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/MoveAllSelectionTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/NailGrade.cs` | 1 | 3L | no |
-| `Proteus.Tests/NavelBridgeTests.cs` | 2 | 3L 4J | no |
-| `Proteus.Tests/NecklineFloatTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/OnionImportTests.cs` | 1 | 559P | no |
-| `Proteus.Tests/OpenPatchAuthoredTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/OpenSkinTests.cs` | 2 | 1G 2L | no |
-| `Proteus.Tests/OutfitOrderTests.cs` | 2 | 2G 3L | no |
-| `Proteus.Tests/PbdFileTests.cs` | 2 | 2G 3L | no |
-| `Proteus.Tests/PolygonSelectionTests.cs` | 2 | 1G 2L | no |
-| `Proteus.Tests/RacialModelBakeTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/RacialRouteTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/RefitNippleSmoothTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/RimTurnGuardTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/SeamWeightsTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/SkinFollowTests.cs` | 2 | 1G 2L | no |
-| `Proteus.Tests/SkinIntersections.cs` | 1 | 3L | no |
-| `Proteus.Tests/SkinPoke.cs` | 1 | 3L | no |
-| `Proteus.Tests/SkinThroughClothTests.cs` | 2 | 1G 2L | no |
-| `Proteus.Tests/SkinTuckSheet.cs` | 1 | 3L | no |
-| `Proteus.Tests/SkinTuckTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/SkinlessTargetTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/SnapPushTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/SourceSmallclothesHoleTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/StackDepthTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/SyntheticChest.cs` | 1 | 3L | no |
-| `Proteus.Tests/SyntheticCrotch.cs` | 1 | 3L | no |
-| `Proteus.Tests/SyntheticFinger.cs` | 1 | 3L | no |
-| `Proteus.Tests/SyntheticSkeleton.cs` | 1 | 3L | no |
-| `Proteus.Tests/TestHarness/FakeGame.Bindings.cs` | 1 | 3L | no |
-| `Proteus.Tests/TestHarness/HarnessChangesHttpTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/TestHarness/HarnessChangesTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/TestHarness/ModelJoinTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/ToeCapFootlessHostTests.cs` | 2 | 1G 2L | no |
-| `Proteus.Tests/ToeLineTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/TurnFitTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/UvBakeStep0LocalTests.cs` | 1 | 3L | no |
-| `Proteus.Tests/WallPairTests.cs` | 1 | 3L | no |
-| `Proteus/Gui/AutoRefitPanel.cs` | 1 | 3L | no |
-| `Proteus/Gui/BindingsTab.cs` | 1 | 3L | no |
-| `Proteus/Gui/BodyRetargetPanel.CrossSex.cs` | 1 | 7R | no |
-| `Proteus/Gui/BodyRetargetPanel.PartBodies.cs` | 2 | 3L 5R | no |
-| `Proteus/Gui/BodyRetargetPanel.Race.cs` | 1 | 8R | no |
-| `Proteus/Gui/HatCompatPanel.cs` | 1 | 3L | no |
-| `Proteus/Gui/MatcapPanel.cs` | 1 | 7R | no |
-| `Proteus/Gui/MatcapPanelModel.cs` | 1 | 3L | no |
-| `Proteus/Gui/PartViewport.cs` | 1 | 3L | no |
-| `Proteus/Gui/PartsPanel.SkinMoves.cs` | 1 | 4R | no |
-| `Proteus/Gui/RowPickerView.cs` | 1 | 3L | no |
-| `Proteus/Gui/SizeSetMadeOn.cs` | 1 | 3L | no |
-| `Proteus/Gui/SizeSetPanel.cs` | 1 | 3L | no |
-| `Proteus/Gui/ToeCapToggle.cs` | 1 | 3L | no |
-| `Proteus/Interop/ShellCoverageFade.cs` | 4 | 11S 12B 13N 14B | yes |
-| `Proteus/Interop/ShellNormalGhost.cs` | 4 | 11S 12B 13N 14B | yes |
-| `Proteus/Interop/SkinDiffuseGlow.cs` | 4 | 11S 12B 13N 14B | yes |
-| `Proteus/ModelRace.cs` | 2 | 2G 3L | no |
-| `Proteus/Models/ContentPack.cs` | 1 | 3L | no |
-| `Proteus/RenderModeInference.cs` | 2 | 1G 2L | no |
-| `Proteus/Services/AutoRefit/AutoRefitDecisions.cs` | 1 | 3L | no |
-| `Proteus/Services/AutoRefit/AutoRefitTargets.cs` | 1 | 3L | no |
-| `Proteus/Services/AutoRefit/KeepEnds.Studio.cs` | 2 | 2G 3L | no |
-| `Proteus/Services/AutoRefit/KeepEnds.cs` | 1 | 3L | no |
-| `Proteus/Services/BodyBridge.BridgeSolution.cs` | 1 | 3L | no |
-| `Proteus/Services/BodyBridge.CrotchFlattening.cs` | 1 | 3L | no |
-| `Proteus/Services/BodyBridge.EnvelopeSolution.cs` | 1 | 3L | no |
-| `Proteus/Services/BodyBridge.NippleSmoothing.cs` | 1 | 3L | no |
-| `Proteus/Services/BodyBridge.cs` | 1 | 3L | no |
-| `Proteus/Services/BodyCorrespondence.Identity.cs` | 1 | 3L | no |
-| `Proteus/Services/BodyMaterialCatalog.cs` | 1 | 3L | no |
-| `Proteus/Services/BodyRetarget.Adornments.cs` | 1 | 3L | no |
-| `Proteus/Services/BodyRetarget.Crotch.cs` | 1 | 3L | no |
-| `Proteus/Services/BodyRetarget.CutOpenSkin.cs` | 2 | 1G 2L | no |
-| `Proteus/Services/BodyRetarget.Ends.cs` | 1 | 3L | no |
-| `Proteus/Services/BodyRetarget.Nipples.cs` | 1 | 3L | no |
-| `Proteus/Services/BodyRetarget.SeamWeights.cs` | 1 | 3L | no |
-| `Proteus/Services/BodyRetarget.SkinSwap.cs` | 1 | 3L | no |
-| `Proteus/Services/BodyRetarget.SourceWorn.cs` | 1 | 3L | no |
-| `Proteus/Services/BodyRetarget.Standoff.cs` | 1 | 3L | no |
-| `Proteus/Services/BodyRetarget.Tuck.cs` | 1 | 3L | no |
-| `Proteus/Services/BodyRetarget.Variants.cs` | 1 | 3L | no |
-| `Proteus/Services/BodyRetarget.Weights.cs` | 1 | 3L | no |
-| `Proteus/Services/BrushTransfer.cs` | 1 | 3L | no |
-| `Proteus/Services/CompositorService.BlendStats.cs` | 1 | 3L | no |
-| `Proteus/Services/CompositorService.Trigger.cs` | 1 | 3L | no |
-| `Proteus/Services/ContentGlowRow.cs` | 2 | 2G 3L | no |
-| `Proteus/Services/CrossSexRefit.cs` | 1 | 3L | no |
-| `Proteus/Services/CrossSexRefitReport.cs` | 2 | 1G 2L | no |
-| `Proteus/Services/DrawnModelPaths.cs` | 1 | 3L | no |
-| `Proteus/Services/EffectHostPlanner.cs` | 1 | 3L | no |
-| `Proteus/Services/HairPort/HairPortScanSchedule.cs` | 1 | 3L | no |
-| `Proteus/Services/HairPort/HairPortSkeleton.cs` | 1 | 3L | no |
-| `Proteus/Services/HairPort/HairScalpPush.cs` | 1 | 3L | no |
-| `Proteus/Services/HairPort/HairSkeletonTable.cs` | 2 | 3G 4L | no |
-| `Proteus/Services/HatCompatSolve.HatFit.cs` | 1 | 3L | no |
-| `Proteus/Services/HatCompatSolve.cs` | 1 | 3L | no |
-| `Proteus/Services/HatCompatWatcher.cs` | 1 | 3L | no |
-| `Proteus/Services/InertModDiagnosis.cs` | 1 | 3L | no |
-| `Proteus/Services/LuminisImportService.LuminisPreview.cs` | 1 | 3L | no |
-| `Proteus/Services/MeshMath.cs` | 1 | 3L | no |
-| `Proteus/Services/MeshVolumeSolve.cs` | 1 | 3L | no |
-| `Proteus/Services/ModelAttributeWriter.cs` | 1 | 3L | yes |
-| `Proteus/Services/ModelPartReader.PartRead.cs` | 1 | 3L | no |
-| `Proteus/Services/ModelPartReader.cs` | 1 | 3L | no |
-| `Proteus/Services/NavelBridge.Filling.cs` | 1 | 3L | no |
-| `Proteus/Services/NavelBridge.cs` | 1 | 3L | no |
-| `Proteus/Services/OtherRaceRefit.Below.cs` | 1 | 3L | no |
-| `Proteus/Services/OtherRaceRefit.Est.cs` | 1 | 3L | no |
-| `Proteus/Services/OtherRaceRefit.cs` | 1 | 3L | no |
-| `Proteus/Services/OtherRaceWearer.cs` | 1 | 3L | no |
-| `Proteus/Services/OverlayBlend.cs` | 1 | 3L | no |
-| `Proteus/Services/OverlayOverrideBag.cs` | 1 | 3L | no |
-| `Proteus/Services/PolygonSelection.cs` | 1 | 3L | no |
-| `Proteus/Services/RacialModelBake.cs` | 1 | 3L | no |
-| `Proteus/Services/RedrawHold.cs` | 1 | 3L | no |
-| `Proteus/Services/RetargetInputs.cs` | 1 | 3L | no |
-| `Proteus/Services/SecondSkinService.HostChooser.cs` | 1 | 3L | no |
-| `Proteus/Services/SecondSkinWriter.CapMissFill.cs` | 1 | 3L | yes |
-| `Proteus/Services/SecondSkinWriter.CapStreamCopy.cs` | 1 | 3L | yes |
-| `Proteus/Services/SecondSkinWriter.CapWeld.cs` | 1 | 3L | yes |
-| `Proteus/Services/SecondSkinWriter.Connectors.cs` | 1 | 3L | yes |
-| `Proteus/Services/SecondSkinWriter.CoverageMask.cs` | 1 | 3L | yes |
-| `Proteus/Services/SecondSkinWriter.MeshEmitter.Reskin.cs` | 1 | 3L | yes |
-| `Proteus/Services/SecondSkinWriter.NailBeds.cs` | 1 | 3L | yes |
-| `Proteus/Services/SecondSkinWriter.NailSockets.cs` | 1 | 3L | yes |
-| `Proteus/Services/SecondSkinWriter.Skinning.cs` | 1 | 3L | yes |
-| `Proteus/Services/SecondSkinWriter.ToeRegion.cs` | 1 | 3L | yes |
-| `Proteus/Services/SecondSkinWriter.Welding.cs` | 1 | 3L | yes |
-| `Proteus/Services/SizeSet/SizeSetRefit.Outcomes.cs` | 2 | 1G 2L | no |
-| `Proteus/Services/SizeSet/SizeSetRefit.Source.cs` | 1 | 3L | no |
-| `Proteus/Services/SkeletonRemap.cs` | 1 | 3L | no |
-| `Proteus/Services/SkinTagTransfer.cs` | 1 | 3L | no |
-| `Proteus/Services/SkinThroughCloth.cs` | 1 | 3L | no |
-| `Proteus/Services/StaleEffectImport.cs` | 1 | 3L | no |
-| `Proteus/Services/UVRemapService.Layouts.cs` | 1 | 3L | no |
-| `Proteus/Services/UvBakeChestWarp.cs` | 1 | 3L | no |
-| `Proteus/Services/UvTransferQuality.cs` | 1 | 3L | no |
-| `Proteus/Services/VertexColorWriter.cs` | 1 | 3L | no |
-| `Proteus/Services/WomensArtOnMen.cs` | 1 | 3L | no |
-| `Proteus/ShellSurface.cs` | 1 | 3L | no |
-| `Proteus/TestHarness/GameHarnessAdapter.cs` | 1 | 3L | yes |
-| `Proteus/TestHarness/HairPortJob.cs` | 1 | 3L | yes |
-| `Proteus/TestHarness/HarnessChanges.cs` | 1 | 3L | yes |
-| `Proteus/TestHarness/HarnessStudio.cs` | 1 | 3L | yes |
-| `Proteus/TestHarness/ModelJoin.cs` | 1 | 3L | yes |
-| `Proteus/TestHarness/RestoreJob.cs` | 1 | 3L | yes |
-
-69 of these files are test files under `Proteus.Tests/`, outside Agent B's allowlist. Their lines are rebuilt by whoever the plan lets fix tests (D20).
+69 of these files are under `Proteus.Tests/`. None of the 179 files changes in this feature.
 
 ### The closure
 
@@ -513,9 +559,10 @@ In the Glamourer state-changed handler, for the local player only, when the chan
 
 | Item | Fact |
 |---|---|
-| Namespaces named by removed import lines | `System`, `System.Collections.Generic`, `System.Linq`, `System.Text.Json`, `Dalamud.Plugin`, `Dalamud.Plugin.Ipc`, `Dalamud.Plugin.Services`, `Dalamud.Interface.Utility.Raii`, `Proteus.Services` |
-| Removed namespace declarations | file-scoped `Proteus.Interop` |
-| Test literal (3 lines) | the game path of the Midlander female (`c0201`) body `b0001` bibo material: `chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl` |
+| Namespaces named by removed import lines (mixed-set files only) | in IpcProvider.cs: `System`, `System.Collections.Generic`, `System.Linq`, `System.Text.Json`, `Dalamud.Plugin`, `Dalamud.Plugin.Ipc`, `Dalamud.Plugin.Services`, `Proteus.Services`; in StatusWindow.cs: `Dalamud.Interface.Utility.Raii`; in ModsTab.cs: `System.Linq`; in CompositorService.Carriers.cs: `System.Collections.Generic`, `System.Linq` |
+| Namespace declarations | file-scoped `Proteus.Interop` in IpcProvider.cs (removed with the file). The three such declarations in other Interop files are in the trivial class and stay |
+| Test literal (3 lines, game-fact) | the game path of the Midlander female (`c0201`) body `b0001` bibo material: `chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl`. Its three lines are in the trivial class and stay |
+| Files outside the mixed set | do not change. Every import, blank, namespace and game-fact line listed in §1's class table stays as it is |
 
 ## 10. Existing tests that exercise these lines
 
@@ -527,9 +574,10 @@ In the Glamourer state-changed handler, for the local player only, when the chan
 | `StutterFixesWiringTests` | `CarrierWritesBracketTheInvokeWithAThreadStaticCounter`, `ReconcileOneCarrierRewalksBeforeARetry`, `ConfirmationIsStampedAndComparedWithRedrawAndAsk`, `OnlyReconcileAndVerifySelfSchedulesTheRetry` (each reads a method body that contains removed lines) |
 | `StutterFixesPureTests` | the classes `GlamourerSignalsTests` and `CarrierCooldownsTests` (the helpers the derived lines call) |
 | `HarnessBindingsWiringTests` | `Apply_goes_through_Glamourers_own_ApplyDesign_ipc` (reads all of GlamourerBridge.cs; its two assertions are negative) |
-| Compile-only | the 69 test files of §1 that lose an import line or the game-path literal, among them `LocalizationTests`, `PbdFileTests`, `ModCreationTests` and `OnionImportTests` |
 
-EDGE-5 (an asserted text that sits in a removed line): one hit. `StutterFixesWiringTests.CarrierWritesBracketTheInvokeWithAThreadStaticCounter` asserts that the state-changed handler's body contains the call text of the signal helper, `GlamourerSignals.RaisesEquipmentChange(`, after the unfiltered-event raise. That call text sits in derived line 446 of GlamourerBridge.cs. The other text assertions over these files name only lines that stay (checked: every string literal in every source-reading test against every removed line).
+Files outside the mixed set do not change, so the 69 test files that hold trivial-class lines (among them `LocalizationTests`, `PbdFileTests`, `ModCreationTests` and `OnionImportTests`) are untouched and need no edit.
+
+EDGE-5 (an asserted text that sits in a removed line): one hit, kept unchanged. The test is not edited; the rebuilt line must again satisfy it. `StutterFixesWiringTests.CarrierWritesBracketTheInvokeWithAThreadStaticCounter` asserts that the state-changed handler's body contains the call text of the signal helper, `GlamourerSignals.RaisesEquipmentChange(`, after the unfiltered-event raise. That call text sits in derived line 446 of GlamourerBridge.cs. The other text assertions over these files name only lines that stay (checked: every string literal in every source-reading test against every removed line).
 
 ## 11. Dropped or changed behaviour
 

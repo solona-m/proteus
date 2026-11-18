@@ -152,3 +152,66 @@ Identifier-grep hits: 0 (script `idcheck.py`: whole-word, case-sensitive search 
 Removal set: (test `a25a3b56`; identical at the branch `71d450fb` apart from Plugin.cs line numbers) whole-file 268 lines in 8 files (IpcProvider.cs 150, proteus.slnx 10, sample folder 108 in 6 files); direct outside whole files 252 (both modes 40 in 8 files, `-w -M -C -C` only 212 in 179 files, 69 of them test files); derived 51 outside whole files (plus 9 inside IpcProvider.cs); carried over 19 (ModsTab.cs 11, CompositorService.Carriers.cs 8); merge-inherited 0; restored candidates 13 (Plugin.cs 1, SidecarDiscoveryService.cs 4, ModsTab.cs 4, CompositorService.Carriers.cs 4). Direct across all files: 294 in `-w -M -C`, 504 in `-w -M -C -C`, 506 in the union. Closure rounds: 1 added 58 derived, 2 added 21 (19 carried over and 2 derived), 3 added 0.
 Tripwire: fired. Condition 2: the set includes 21 Sensitive-Area files beyond the six known ones, all through `-w -M -C -C`-only import, blank or namespace lines: `Proteus/Interop/ShellCoverageFade.cs`, `Proteus/Interop/ShellNormalGhost.cs`, `Proteus/Interop/SkinDiffuseGlow.cs`; `Proteus/TestHarness/GameHarnessAdapter.cs`, `HairPortJob.cs`, `HarnessChanges.cs`, `HarnessStudio.cs`, `ModelJoin.cs`, `RestoreJob.cs`; the binary writers `Proteus/Services/SecondSkinWriter.{CapMissFill,CapStreamCopy,CapWeld,Connectors,CoverageMask,MeshEmitter.Reskin,NailBeds,NailSockets,Skinning,ToeRegion,Welding}.cs` and `Proteus/Services/ModelAttributeWriter.cs`. Condition 1 does not fire under D2's definition: derived + carried over + restored = 51 + 19 + 13 = 83 (92 counting IpcProvider.cs's 9 derived lines), against twice the direct lines = 1012 (union, all files) or 504 (union, outside whole files). It would fire only if "direct" meant the 40 `-w -M -C` lines outside whole files (83 > 80).
 
+### Stage 1b (plan rev 10, commit 14b9118b)
+
+Folder: same as above.
+Opened:
+- W/docs/contrib-clean-room-plan.md (lines 11–30, 185–228, 533–552)
+- W/docs/contrib-clean-room-spec.md (lines 14–29, 555–579)
+- W/docs/contrib-clean-room-log.md (lines 150–154)
+- Grep tool, content mode: `69 |lose|176|179|Compile-only|removed import|Removed namespace|9\.5|Test literal|EDGE-5` in W/docs/contrib-clean-room-spec.md
+Shell commands:
+- `grep -n -E "^## |^[0-9]+\. \*\*|trivial|1b" E:/orca/workspaces/Proteus/licence-clean-room/docs/contrib-clean-room-plan.md`
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -h -B2 -A1 "mt_c0201b0001_bibo.mtrl\"," test -- Proteus.Tests/ModCreationTests.cs Proteus.Tests/OnionImportTests.cs`
+- `python C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/classify1b.py test`
+- `python C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/classify1b.py HEAD`
+- `grep -a -E "^Proteus/Gui/ColorTableEditor" C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/blame_CC.tsv C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/blame_C.tsv`
+- `python C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/class_table.py`
+- `python C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/splice.py`
+- `python C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/idcheck.py`
+- `grep -n -E "^## |^### |^\`\`\`|CLEAN-ROOM|outside B|lose an import" E:/orca/workspaces/Proteus/licence-clean-room/docs/contrib-clean-room-spec.md`
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room status --short`
+- `grep -n -E "^## |^### |^Tripwire:" E:/orca/workspaces/Proteus/licence-clean-room/docs/contrib-clean-room-log.md`
+- `wc -l E:/orca/workspaces/Proteus/licence-clean-room/docs/contrib-clean-room-log.md`
+- Files written with Write and Edit: the scripts `classify1b.py`, `class_table.py`, `splice.py` and the text `s1_block.md` in the folder; in W only `docs/contrib-clean-room-spec.md` (§1, §9.5 and §10 amended) and this sub-part of the log.
+- Forbidden locations: none opened. No `dotnet` command, no commit.
+Sub-agents: none
+Confirmation counts (test `a25a3b56` and branch `71d450fb` give the same result): 212 direct lines outside the whole files and the mixed set, in 179 files; 212 match the trivial regex or the game-fact rule (using 200, blank 6, namespace 3, brace 0, game-fact 3), 0 match neither; no derived or carried-over line lies in those files, so (c) holds for all 179; no file added to the mixed set. Game-fact lines: `Proteus.Tests/ModCreationTests.cs:208` (element), `:282` (assert), `Proteus.Tests/OnionImportTests.cs:559` (element); per file 2 and 1. The 40 direct lines inside the mixed set (29 non-trivial, 11 trivial-shaped) stay in the removal set.
+Tripwire (rev 10 definition): not fired. Condition 1: 51 + 19 + 13 = 83 (92 with IpcProvider.cs's derived lines) against 2 × (268 whole-file + 29 non-trivial direct) = 594. Condition 2: 0 Sensitive-Area files beyond the known Interop files once the class is excluded (21 before).
+Identifier-grep hits: 0
+
+
+## Orchestrator
+
+### Step 0: hand-off
+
+- **Plan:** revision 7 committed at `71d450fb`; revision 10 at `14b9118b`, after the step-1 tripwire.
+- **Window start:** 2026-11-17T23:38:46.968Z. This is the timestamp of the `git -C E:/orca/workspaces/Proteus/meddle worktree add -b solona-m/licence-clean-room E:/orca/workspaces/Proteus/licence-clean-room test` tool call. Self-check 2 counts from here.
+- **BuildNumber line form:** `public const int BuildNumber = <n>;`. `test` read `BuildNumber = 1467` at step 0. The branch base `d4734c54` has 1466.
+- **Blame on `test`, before the trivial classifier** (`-w -M -C`, count-only script, 1127 text files):
+  - Caraxi has 274 lines:
+    - `Proteus/Interop/IpcProvider.cs`: 137;
+    - the sample folder: 100;
+    - `proteus.slnx`: 9;
+    - `Proteus/Interop/PenumbraBridge.cs`: 9;
+    - `Proteus/Plugin.cs`: 6;
+    - `Proteus/Services/SidecarDiscoveryService.cs`: 6;
+    - `Proteus/Gui/StatusWindow.cs`: 4;
+    - one each in `Proteus/Gui/ColorTableEditor.cs`, `ColorTableEditor.GlowFooter.cs` and `ColorTableEditor.SubRowPanel.cs`.
+  - AzureRavie has 12 lines, all in `Proteus/Interop/GlamourerBridge.cs`.
+  - dependabot[bot] has 1 line, in `Proteus.Tests/Proteus.Tests.csproj`.
+
+### Step 1 and 1b: spec and tripwire
+
+- **Step 1:** the spec and A's self-report, `1a2cd3ef`.
+- **The D3 tripwire fired at step 1**, on condition 2. 21 Sensitive-Area files beyond the known ones were attributed only through `-w -M -C -C` import, blank or namespace lines.
+- **Condition 1 under both readings:**
+  - 83 lines (derived + carried over + restored) against 2 × 252 or 2 × 506 direct lines: not fired;
+  - fired only if "direct" meant the 40 `-w -M -C` lines outside whole files (83 > 80).
+- **Re-plan:** through the planner and plan-critics 8–10 (revision 10). The trivial coincidental class is counted, not removed. `87ae2e3d`'s carried-over scope is accepted.
+- **Step 1b re-check by A, under the revision-10 definitions:**
+  - The trivial class is 212 lines in 179 files: using 200, blank 6, namespace 3, brace 0, game fact 3. Every class line matched the regex or the game-fact rule.
+  - Condition 1: 83 (92 with `IpcProvider.cs`'s derived lines) against 2 × (268 + 29) = 594. Not fired.
+  - Condition 2: 0 Sensitive-Area files beyond the known ones (21 before the class was excluded). Not fired.
+  - **Tripwire: fired at step 1, re-planned (rev 10); not fired at 1b.**
+- **Mixed set after 1b:** the six original files, `Proteus/Gui/ModsTab.cs`, `Proteus/Services/CompositorService.Carriers.cs`, `Proteus/Services/CompositorService.cs`, `proteus.slnx` and the sample folder.
