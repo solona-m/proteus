@@ -75,6 +75,11 @@
     <!-- The headless CLI, driven through Program.Dispatch by the size set's command tests. Aliased: its namespace,
          Proteus.Refit, would otherwise hide the Refit the tests already name. -->
     <ProjectReference Include="..\Proteus.Refit\Proteus.Refit.csproj" Aliases="RefitCli" />
+    <!-- IpcContractTests only: the IPC API assemblies, read with Mono.Cecil to check Proteus's own call gates and
+         enum copies against them. Aliased so their types never clash with Proteus's same-named enums. They are a
+         test-build input only; the plugin itself no longer references or ships them. -->
+    <ProjectReference Include="..\Penumbra.Api\Penumbra.Api.csproj" Aliases="PenumbraApiContract" />
+    <ProjectReference Include="..\Glamourer\Glamourer.Api\Glamourer.Api.csproj" Aliases="GlamourerApiContract" />
   </ItemGroup>
 
   <!-- The QA test harness's tests follow the plugin's switch (Directory.Build.props): compiled only where the
