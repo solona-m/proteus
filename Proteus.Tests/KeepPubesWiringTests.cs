@@ -85,6 +85,8 @@ public class KeepPubesWiringTests
         Assert.Contains("carryPubes: request.Pubes", Code("Proteus/Services/SizeSet/SizeSetRefit.Ends.cs"));
         Assert.Contains("CarryPubes: request.Pubes", Code("Proteus/Services/SizeSet/SizeSetRefit.CrossSex.cs"));
         Assert.Contains("CarryPubes: request.Pubes", Code("Proteus/Services/SizeSet/SizeSetRefit.CrossSexEnds.cs"));
+        // Said once a run, so a log export shows the choice the sizes were made with.
+        Assert.Contains("if (request.Pubes) log.Information(", Code("Proteus/Services/SizeSet/SizeSetRefit.cs"));
     }
 
     [Fact]

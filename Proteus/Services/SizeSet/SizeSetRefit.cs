@@ -557,6 +557,7 @@ internal static partial class SizeSetRefit
         int made = 0;
         // Said once, so a log export shows the choice the sizes were made with.
         if (request.KeepHiddenSkin) log.Information("[Proteus] size set: hidden skin kept whole");
+        if (request.Pubes) log.Information("[Proteus] size set: the new bodies' pubes kept where their skin shows");
         var (pieces, endsLeftOut, all) = ReadPieces(request.ModRoot, request.ReadGameFile, request.Ends,
             path => log.Debug("[Proteus] size set: {0} is the game's own model or a copy of it, not a piece", path),
             (path, was, now, rivals) => log.Information(
