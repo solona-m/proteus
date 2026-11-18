@@ -170,6 +170,7 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
     [InlineData("tbse-x")]
     [Trait("Plan", "EDGE-cross-sex-wrist-band-16")]
     [Trait("Plan", "AC-cross-sex-wrist-band-10")]
+    [Trait("Suite", "Diagnostic")]
     public void Halones_glove_made_mens_is_unchanged(string key) // [EDGE-cross-sex-wrist-band-16] [AC-cross-sex-wrist-band-10]
     {
         const string gamePath = "chara/equipment/e0613/model/c0201e0613_glv.mdl";

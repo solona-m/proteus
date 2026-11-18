@@ -107,6 +107,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     [Trait("Plan", "AC-refit-nipple-smooth-3")]
     [Trait("Plan", "EDGE-refit-nipple-smooth-20")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Equal_or_prouder_source_changes_nothing(string fixture)
     {
         Assert.Equal(PinnedHash(fixture), Hash(On(fixture).Model));

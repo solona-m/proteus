@@ -119,10 +119,10 @@ class) — unless it is one of the Sensitive Areas writers' own tests or a
 build-enforced rule test (`LocalizationTests`, `SupplyChainTests`), which stay
 in the quick suite. Golden baselines (`GoldenTests`, `GoldenCrossBodyLocalTests`,
 `SkinTuckGoldenTests`) run with the release. The full suite's budget is
-10 minutes wall, build included. A test whose slowest row takes 20 s or more in
+10 minutes wall, build included. A test whose slowest row takes 15 s or more in
 a full run also gets `[Trait("Suite", "Diagnostic")]` (it keeps Slow;
 `SuiteBudgetTests` checks); a class fixture's setup counts against every test of
-its class, and 10 s or more measured idle moves the whole class (tags on the
+its class, and 7.5 s or more measured idle moves the whole class (tags on the
 class) unless it holds exempt tests. Exempt (listed in `SuiteBudgetTests`): the
 Sensitive Areas writers' own tests and tests that call those writers directly,
 write-behaviour tests in a fixture class, the build-enforced rule tests, the

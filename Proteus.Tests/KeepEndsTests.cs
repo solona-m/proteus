@@ -1154,6 +1154,7 @@ public class KeepEndsTests
     [Fact]
     [Trait("Plan", "AC-keep-ends-studio-3")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Studio_limb_prefills_the_best_guess_from_one_ranking()   // [AC-keep-ends-studio-3]
     {
         InBodies(dir =>

@@ -801,6 +801,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [Trait("Plan", "AC-keep-ends-studio-7")]
     [Trait("Plan", "EDGE-keep-ends-studio-5")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Gloves_in_their_own_group_get_one_option_per_body()   // [AC-keep-ends-studio-7] [EDGE-keep-ends-studio-5]
     {
         var gloves = File.ReadAllBytes(LocalData.Path(SeenGloves));
@@ -852,6 +853,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.ShiftPack, Yab, Rue, Bibo)]
     [Trait("Plan", "EDGE-keep-ends-studio-17")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void A_shoe_in_its_own_group_skips_a_size_the_author_already_made()   // [EDGE-keep-ends-studio-17]
     {
         // Shift's shoe in its own group, with a second option of the author's whose legs ARE Bibo+ S's — the body's legs,
@@ -1262,6 +1264,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, Lace, Rue, Yab)]
     [Trait("Plan", "AC-sizeset-game-body-source-2")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Lace_gloves_made_on_the_game_body_get_one_option_per_body()   // [AC-sizeset-game-body-source-2]
     {
         var game = GameBodies();
@@ -1505,6 +1508,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, Lace, TheBodySe, Rue)]
     [Trait("Plan", "EDGE-sizeset-game-body-source-2")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Mens_lace_gloves_read_the_mens_game_body()   // [EDGE-sizeset-game-body-source-2]
     {
         var game = GameBodies();

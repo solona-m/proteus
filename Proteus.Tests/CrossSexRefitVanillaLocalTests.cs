@@ -140,6 +140,8 @@ public class CrossSexRefitVanillaLocalTests(ITestOutputHelper o)
     /// band that meets his thigh meets the refit too.
     /// </summary>
     [LocalDataFact(LocalData.GameData, Tbse, LocalData.TbseUvMaps)]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void The_tights_straps_leave_no_hole_in_the_thigh_between_them()
     {
         var (bytes, gamePath) = LegsOf(GameData.Value, "Antiquated Aoidos");

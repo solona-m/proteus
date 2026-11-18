@@ -169,6 +169,7 @@ public sealed class HairPortModsLocalTests(ITestOutputHelper o)
     /// of the other sex a skeleton entry of its own for the same hairstyle. Printed only.</summary>
     [LocalDataFact(LocalData.Mods)]
     [Trait("Plan", "AC-cross-sex-hair-port-9")]
+    [Trait("Suite", "Diagnostic")]
     public void Installed_physics_hair_giving_the_other_sex_a_skeleton_diagnostic()
     {
         int mods = 0, physicsMods = 0;

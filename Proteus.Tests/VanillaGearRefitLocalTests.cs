@@ -95,6 +95,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-neckline-large-bust-4")]
     [Trait("Plan", "EDGE-neckline-large-bust-20")]
     [Trait("Plan", "EDGE-neckline-skin-tuck-14")]
+    [Trait("Suite", "Diagnostic")]
     public void A_game_top_on_Rue_shows_no_skin_through_and_no_holes(string garment) => Check(garment, Rue, null);
 
     [LocalDataTheory(LocalData.GameData, LavaBod)]
@@ -110,6 +111,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-neckline-skin-tuck-14")]
     [Trait("Plan", "AC-neckline-large-bust-5")]
     [Trait("Plan", "EDGE-neckline-large-bust-21")]
+    [Trait("Suite", "Diagnostic")]
     public void A_game_top_on_LavaBod_shows_no_skin_through_and_no_holes(string garment) => Check(garment, LavaBod, Teardrop);
 
     /// <summary>
@@ -770,6 +772,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-neckline-float-4")]
     [Trait("Plan", "EDGE-neckline-float-5")]
     [Trait("Plan", "EDGE-neckline-float-20")]
+    [Trait("Suite", "Diagnostic")]
     public void A_game_tops_neckline_sits_on_the_chest_as_authored(string garmentName, string modNeed, string? rel)
     {
         var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -1055,6 +1058,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [InlineData(Dirndl, LavaBod, Teardrop)]
     [InlineData(Dirndl, Neolithe, AlmondXs)]
     [InlineData(Scion, LavaBod, Teardrop)]
+    [Trait("Suite", "Diagnostic")]
     public void Deep_clear_signals_are_measured(string garmentName, string modNeed, string rel)
     {
         var r = Plan(garmentName, modNeed, rel);

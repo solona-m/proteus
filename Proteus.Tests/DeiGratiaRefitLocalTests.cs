@@ -215,6 +215,7 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-open-patch-authored-12")]
     [Trait("Plan", "EDGE-open-patch-authored-16")]
     [Trait("Plan", "EDGE-open-patch-authored-19")]
+    [Trait("Suite", "Diagnostic")]
     public void Dei_Gratia_onto_Bibo_Nude_M_keeps_the_bust_inside_the_blouse(string path)
     {
         var i = Read(Bibo, NudeM);
@@ -384,6 +385,7 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, Bibo, LocalData.DeiGratiaPack)]
     [Trait("Plan", "AC-open-patch-authored-5")]
     [Trait("Plan", "EDGE-open-patch-authored-9")]
+    [Trait("Suite", "Diagnostic")]
     public void Dei_Gratia_game_gear_and_clear_body_refits_are_unchanged()
     {
         var i = Read(Bibo, NudeM);

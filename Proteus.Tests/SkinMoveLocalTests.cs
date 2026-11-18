@@ -153,6 +153,7 @@ public class SkinMoveLocalTests(ITestOutputHelper output)
     [LocalDataFact(ThisOldThing)]
     [Trait("Plan", "AC-studio-move-skin-8")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void RueMToRueLTransferKeepsTheWaist()
     {
         var source = ReadFile(RueM);

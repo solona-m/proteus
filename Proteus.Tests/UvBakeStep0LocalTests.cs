@@ -76,6 +76,7 @@ public class UvBakeStep0LocalTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, Bibo, Tbse)]
     [Trait("Plan", "EDGE-tbse-uvmap-22")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Bone_report_has_no_unresolved_vertices() // [EDGE-tbse-uvmap-22]
     {
         var (_, _, bones) = Game();

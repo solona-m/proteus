@@ -57,6 +57,7 @@ public class SuiteBudgetTests
         // Direct ModelMaterialWriter / ModelAttributeWriter calls on real models (kept although ≥ 20 s in the full run).
         "MatcapTailLocalTests.Real_tail_models_take_matcap_published_beside_the_games_material",
         "MatcapDownstreamLocalTests.Refit_sizeset_hatcompat_lod0geometry_brush_no_nan_boundary_coincident",
+        "MatcapVieraEarLocalTests.Real_viera_ear_model_takes_matcap",
     };
 
     /// <summary>Failing tests stay in the release run so the failure stays visible. Drop an entry once it is fixed.</summary>
@@ -70,7 +71,7 @@ public class SuiteBudgetTests
         @"^(Golden|SkinTuckGolden|SecondSkinWriter|Model\w*Writer|ModelLodTrimmer|GearMaterialWriter|VertexColorWriter|RefitModService|MeshToggleService|PenumbraModMeta|ModelBackupOrder|HairPortWriter|EarlessHairWriter|ShaderUpgradeWriter|ShaderUpgradeOrdering|VariantRepointWriter|Matcap\w*Writer|MatcapReadback|Configuration|LogAnonymizer|LogExportService|Harness|PrGate|ContributorGate|SupplyChain|Localization|IpcContract)",
         RegexOptions.CultureInvariant);
 
-    /// <summary>Test classes that moved whole because their class fixture's setup measured 10 s or more idle
+    /// <summary>Test classes that moved whole because their class fixture's setup measured 7.5 s or more idle
     /// (AGENTS.md: a fixture's setup counts against every test of its class). Each carries the class-level tags.</summary>
     // Kept paid because their classes hold exempt write-behaviour tests (measured idle 2026-11-18): ThisOldThingRun ~127 s,
     // ObliqueRun ~156 s, KeepSkinRuns ~264 s, DanceRun ~82 s.
@@ -243,7 +244,7 @@ public class SuiteBudgetTests
     {
         string agents = File.ReadAllText(Path.Combine(RepoRoot, "AGENTS.md"));
         string testing = Section(agents, "## Testing");
-        foreach (var required in new[] { "10 minutes", "20 s", "10 s", "[Trait(\"Suite\", \"Diagnostic\")]", "fixture", "golden", "failing", "report the overrun" })
+        foreach (var required in new[] { "10 minutes", "15 s", "7.5 s", "[Trait(\"Suite\", \"Diagnostic\")]", "fixture", "golden", "failing", "report the overrun" })
             Assert.True(testing.Contains(required, StringComparison.Ordinal), $"AGENTS.md Testing must say '{required}'");
         string commands = Section(agents, "## Commands");
         Assert.Contains("never before a release", LineWith(commands, "the diagnostic tests"));

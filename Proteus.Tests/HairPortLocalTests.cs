@@ -152,6 +152,7 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     /// </summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-hair-race-port-2")]
+    [Trait("Suite", "Diagnostic")]
     public void Every_race_s_deformer_moves_the_head()
     {
         var game = Load();
@@ -296,6 +297,7 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     /// <summary>The Miqo'te ear fur and its skin are taken out of a port to a race without ears, on the game's own hair.</summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "EDGE-hair-race-port-4")]
+    [Trait("Suite", "Diagnostic")]
     public void Miqote_fur_is_hidden_on_real_hair()
     {
         var game = Load();
@@ -364,6 +366,7 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     /// </summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "EDGE-hair-race-port-5")]
+    [Trait("Suite", "Diagnostic")]
     public void Skeleton_files_name_their_extra_bones()
     {
         var game = Load();
@@ -442,6 +445,7 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-hair-skeleton-infer-7")]
     [Trait("Plan", "EDGE-hair-skeleton-infer-20")]
     [Trait("Plan", "EDGE-hair-skeleton-infer-25")]
+    [Trait("Suite", "Diagnostic")]
     public void The_reported_hairstyle_8_ports_with_the_skeleton_each_race_loads()
     {
         var game = Load();
