@@ -103,12 +103,13 @@ internal static partial class BodyRetarget
     /// <param name="tuckSlot">See <see cref="Rebuild"/>.</param>
     /// <param name="carryPiercings">See <see cref="Rebuild"/>.</param>
     /// <param name="seeInside">See <see cref="Rebuild"/>.</param>
+    /// <param name="carryPubes">See <see cref="Rebuild"/>.</param>
     /// <returns>The rebuilt model, or null when no skin mesh of the garment belongs to a slot being resized.</returns>
     internal static byte[]? SwapSkin(byte[] garment, IReadOnlyList<SlotPair> pairs, out SwapReport report,
                                      bool cutHidden = true, string? tuckSlot = null, bool carryPiercings = false,
-                                     bool seeInside = false)
+                                     bool seeInside = false, bool carryPubes = false)
         => Rebuild(garment, pairs, swapSkin: true, weights: null, out report, cutHidden, tuckSlot: tuckSlot,
-                   carryPiercings: carryPiercings, seeInside: seeInside);
+                   carryPiercings: carryPiercings, seeInside: seeInside, carryPubes: carryPubes);
 
     /// <summary>
     /// Rebuild the refitted garment for its new body: swap the resized slots' skin meshes for the body's (see
@@ -137,6 +138,9 @@ internal static partial class BodyRetarget
     /// men's forearm put in its place must not either). Null keeps the body's tags as always.</param>
     /// <param name="addedBySlot">Filled, when given, with the skin triangles each slot's new body put in, by slot (kept
     /// apart from the report, which stays a plain value).</param>
+    /// <param name="carryPubes">Bring the new body's pubes in with its skin (see <see cref="IsBodyPubeMaterial"/>), on
+    /// skin it draws and no cloth covers; the garment's own body-family pubes of a material that came in give way to them.
+    /// Off, the default, carries none and leaves the garment's own as they were.</param>
     /// <returns>The rebuilt model, or null when there was nothing to change.</returns>
     internal static byte[]? Rebuild(byte[] garment, IReadOnlyList<SlotPair> pairs, bool swapSkin, WeightPlan? weights,
                                     out SwapReport report, bool cutHidden = true, bool acrossBodies = false,
@@ -144,7 +148,7 @@ internal static partial class BodyRetarget
                                     bool carryPiercings = false, IReadOnlySet<int>? parted = null,
                                     bool seeInside = false, bool openSkin = false,
                                     IReadOnlySet<string>? swappedSkinTags = null,
-                                    Dictionary<string, int>? addedBySlot = null)
+                                    Dictionary<string, int>? addedBySlot = null, bool carryPubes = false)
     {
         report = default;
         var swappable = swapSkin ? pairs.Where(p => p.Swaps).ToList() : [];
@@ -244,6 +248,22 @@ internal static partial class BodyRetarget
                 foreach (int v in verts) authored.Add(At(model, v));
                 oldAdornments.Add((mesh.Key, mesh.Sum(p => p.Triangles.Length / 3)));
             }
+        // The old body's pubes on a slot whose skin is swapped, when the new body's are asked for: they give way to the
+        // new body's of the same material, and only those (below). Never a guide to where the new ones go — a body's
+        // pubes left under an author's underwear say nothing about where pubes show — and only the body's own family:
+        // a garment's own material named so is the garment's.
+        var oldPubes = new List<(int Mesh, string Material, int Triangles)>();
+        if (carryPubes && claimedBy.Count > 0)
+            foreach (var mesh in model.Parts.Where(p => p.Island < 0 && !dropped.Contains(p.Mesh)
+                                                        && IsBodyExtraMaterial(p.Material) && IsBodyPubeMaterial(p.Material)
+                                                        && oldAdornments.All(o => o.Mesh != p.Mesh))
+                                            .GroupBy(p => p.Mesh))
+            {
+                var verts = mesh.SelectMany(p => p.Triangles).Distinct().ToList();
+                int on = verts.Count(v => claimedBy.Any(s => surfaces[s].Nearest(At(model, v), AdornReach, out _)));
+                if (on * 2 < verts.Count) continue;
+                oldPubes.Add((mesh.Key, mesh.First().Material, mesh.Sum(p => p.Triangles.Length / 3)));
+            }
 
         if (dropped.Count == 0 && weights == null)
         {
@@ -311,7 +331,7 @@ internal static partial class BodyRetarget
         var adornments = claimedBy.OrderBy(s => s)
                                   .Select(s => (Slot: s, Adorn: AdornmentsOf(bodyOf[s], swappable[s].TargetHidden,
                                                                              authorCuts[s], cloth, authored,
-                                                                             carryPiercings)))
+                                                                             carryPiercings, carryPubes)))
                                   .Where(a => a.Adorn.Materials.Count > 0)
                                   .ToList();
         // The smallclothes a slot brings in come before them: without its boxers, Muse+'s hips would be a hole.
@@ -333,6 +353,10 @@ internal static partial class BodyRetarget
             }
             foreach (var (mesh, tris) in oldAdornments)
                 if (dropped.Add(mesh)) extras += tris;
+            var carriedPubes = adornMaterials.Values.SelectMany(m => m).Where(IsBodyPubeMaterial)
+                                             .Select(PubeFileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var (mesh, material, tris) in oldPubes)
+                if (carriedPubes.Contains(PubeFileName(material)) && dropped.Add(mesh)) extras += tris;
         }
 
         // One layer per slot whose skin came out: its body's skin meshes, under the right skin material.
@@ -399,6 +423,21 @@ internal static partial class BodyRetarget
                 addedBySlot[swappable[s].Slot] = addedBySlot.GetValueOrDefault(swappable[s].Slot) + addedBy.GetValueOrDefault(s);
         return rebuilt;
     }
+
+    /// <summary>
+    /// What two pube materials are compared by: the file name past the body's own <c>mt_c####b####_</c>, so another race's
+    /// or body's copy of the same pubes (<c>mt_c1401b0101_bibopube</c>) still counts as the same.
+    /// </summary>
+    private static string PubeFileName(string material)
+    {
+        string name = material[(material.LastIndexOf('/') + 1)..];
+        var family = BodyFamilyPrefix.Match(name);
+        return family.Success ? name[family.Length..] : name;
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex BodyFamilyPrefix =
+        new(@"^mt_c\d{4}b\d{4}_", System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                                  | System.Text.RegularExpressions.RegexOptions.Compiled);
 
     /// <summary>
     /// The tags a swapped-in skin layer has taken off: the body mod's switched ones as always, and — when the garment's
