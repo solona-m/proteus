@@ -41,6 +41,13 @@ internal sealed record PutBackReport(IReadOnlyList<UndoEntry> Gear, IReadOnlyLis
 
     /// <summary>The output locks, move fault, shell fault and auto-redraw override (issue sweep D).</summary>
     public OutputPutBack? Output { get; init; }
+
+    /// <summary>The auto refit preference the worn-refit trigger recorded: restored, changed, skipped-busy,
+    /// recorded-before-finish, dropped, failed or none (see <see cref="HarnessAutoRefitPreference.PutBack"/>).</summary>
+    public string AutoRefitPreference { get; init; } = "none";
+
+    /// <summary>Mods the worn-refit trigger refitted, each with the job to restore it by (put-back leaves their files).</summary>
+    public IReadOnlyList<UndoEntry> JobBackedMods { get; init; } = [];
 }
 
 /// <summary>What put-back did about the shell output routes: each held file, the move fault, the shell fault (cleared and
@@ -86,6 +93,17 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
 
     /// <summary>Library mods a matcap job wrote a setting of this session.</summary>
     private readonly HashSet<string> matcapMods = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Mods the worn-refit trigger backed up and refitted, by the job that did (restored by job, not by put-back).</summary>
+    private readonly Dictionary<string, string> jobBackedMods = new(StringComparer.OrdinalIgnoreCase);
+
+    private HarnessAutoRefitPreference? autoRefitPreference;
+
+    /// <summary>The auto refit preference the worn-refit trigger recorded (see <see cref="HarnessAutoRefitPreference"/>).</summary>
+    public HarnessAutoRefitPreference AutoRefitPreference => autoRefitPreference ??= new(game, log, recordRoot, session);
+
+    /// <summary>A mod the worn-refit trigger refitted under a job's backup: put-back's notes name the job to restore by.</summary>
+    public void NoteJobBackedMod(string modDir, string jobId) => jobBackedMods[modDir] = jobId;
 
     /// <summary>Record a test image the seed route wrote, to delete at put-back.</summary>
     public void NoteSeededImage(string path, byte[] bytes) => seededImages[path] = HairPortPlan.Sha8(bytes);
@@ -227,7 +245,9 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
                 autoRefitOverride = null;
                 if (refit.Item2.Count > 0)
                     log?.Information("[Proteus] test harness: auto refit wrote into {0} while its override stood (not undone by put-back)",
-                                     string.Join(", ", refit.Item2));
+                                     string.Join(", ", refit.Item2.Select(m => jobBackedMods.TryGetValue(m, out var job)
+                                                                                ? $"{m} (written by job {job}: restore by job)"
+                                                                                : m)));
             }
         }
         catch (Exception ex) { log?.Warning(ex, "[Proteus] test harness: clearing the auto-refit override failed"); }
@@ -459,6 +479,11 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         try { binding = bindings?.PutBack(skipHalfRecordedBinding); }
         catch (Exception ex) { log?.Warning(ex, "[Proteus] test harness: putting back the binding session failed"); }
 
+        // The auto refit preference the worn-refit trigger recorded: back while still what its job left.
+        string preference;
+        try { preference = autoRefitPreference?.PutBack(game.AutoRefit().Busy) ?? "none"; }
+        catch (Exception ex) { log?.Warning(ex, "[Proteus] test harness: putting back the auto refit preference failed"); preference = "failed"; }
+
         // The matcap seed route's images: files of the harness's own, deleted while still what it wrote.
         List<UndoEntry> images;
         try { images = PutBackSeededImages(); }
@@ -467,7 +492,8 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         matcapMods.Clear();
         return new PutBackReport(gearResults, holdResults, sweep, redraw || binding?.Restored == true, binding)
                { Studio = studioResults, MatcapImages = images, MatcapMods = mods, Sidecar = sidecars, AutoRefit = autoRefit,
-                 Output = output };
+                 Output = output, AutoRefitPreference = preference,
+                 JobBackedMods = jobBackedMods.Select(kv => new UndoEntry(kv.Key, "restore-by-job", kv.Value)).ToList() };
     }
 
     // ── the Studio ──────────────────────────────────────────────────────────

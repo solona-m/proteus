@@ -834,54 +834,100 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
         long tick = Environment.TickCount64;
         foreach (string slot in changed)
+            WalkSlot(slot, now, resolvedOf, pref, collection.Id, all, tick);
+    }
+
+    /// <summary>
+    /// One worn piece through the walk's checks — the just-refitted window, <see cref="AutoRefitDecisions.ShouldRefit"/>,
+    /// a refit the player undid — and enqueued when it passes. Shared by <see cref="Walk"/> and <see cref="RunNowFor"/>,
+    /// so a forced refit of one mod is exactly the walk's. Framework thread.
+    /// </summary>
+    /// <returns>"enqueued", or why not: "just-refitted", "declined", "skipped:&lt;reason&gt;".</returns>
+    private string WalkSlot(string slot, Dictionary<string, Worn> now,
+                            Dictionary<string, (string? Resolved, string? Root, bool Outside)> resolvedOf,
+                            AutoRefitPreference pref, Guid collectionId, bool all, long tick)
+    {
+        var worn = now[slot];
+        var (resolved, root, outside) = resolvedOf[slot];
+        if (ours.TryGetValue(slot + "|" + worn.GamePath, out long until) && tick < until) return "just-refitted";
+
+        var skip = AutoRefitDecisions.ShouldRefit(slot, worn, config.AutoRefitVanilla, outside);
+        if (skip != AutoRefitDecisions.Skip.None)
         {
-            var worn = now[slot];
-            var (resolved, root, outside) = resolvedOf[slot];
-            if (ours.TryGetValue(slot + "|" + worn.GamePath, out long until) && tick < until) continue;
-
-            var skip = AutoRefitDecisions.ShouldRefit(slot, worn, config.AutoRefitVanilla, outside);
-            if (skip != AutoRefitDecisions.Skip.None)
-            {
-                // A garment the second skin is appended into is drawn from Proteus's managed mod, rebuilt from its own
-                // file by every shell build: a refit saved into its mod would never reach what is drawn. Named, so a
-                // report of one left unrefitted can be told apart from jewellery.
-                if (skip == AutoRefitDecisions.Skip.Managed && AutoRefitDecisions.IsAccessory(slot)
-                    && compositor.GetAppendHostSource(worn.GamePath) is { } host)
-                    log.Information("[Proteus] auto refit: {0} {1} hosts the second skin (from {2}), left as it is", slot,
-                                    worn.GamePath, host);
-                else
-                    log.Debug("[Proteus] auto refit: {0} {1} left alone ({2})", slot, worn.GamePath, skip);
-                continue;
-            }
-
-            // A piece whose refit the player undid stays as it is — unless they ask for what they are wearing now.
-            if (pref.Declined.Contains(worn.Key))
-            {
-                if (!all)
-                {
-                    log.Information("[Proteus] auto refit: {0} {1} had its refit undone, left as it is", slot, worn.GamePath);
-                    continue;
-                }
-                pref.Declined.Remove(worn.Key);
-                config.Save();
-            }
-            // An accessory is sized off the chest or legs piece worn with it, and a shoe or glove is kept outside it
-            // (OutfitPartners): what those draw now, before their own refits switch them to another file.
-            bool accessory = AutoRefitDecisions.IsAccessory(slot);
-            var beside = accessory || slot is "_glv" or "_sho"
-                ? AutoRefitDecisions.Slots.Where(s => s is "_top" or "_dwn" && now.ContainsKey(s))
-                                          .ToDictionary(s => s, s => new Beside(now[s], resolvedOf[s].Resolved,
-                                                                                resolvedOf[s].Root))
-                : null;
-            // Read only for a body piece drawn from a mod: one call per piece, on the framework thread.
-            var modSettings = !accessory && worn.ModDir != null
-                              && penumbra.GetModSettings(collection.Id, worn.ModDir) is { } ms
-                ? new PenumbraBridge.ModSettingsSnapshot(ms.Enabled, ms.Priority, ms.Options, Inherited: false, Temporary: false)
-                : (PenumbraBridge.ModSettingsSnapshot?)null;
-            Enqueue(new Request(slot, worn, resolved, root, collection.Id, all, beside,
-                                accessory ? AutoRefitTargets.ChosenOf(pref) : null,
-                                ModSettings: modSettings));
+            // A garment the second skin is appended into is drawn from Proteus's managed mod, rebuilt from its own
+            // file by every shell build: a refit saved into its mod would never reach what is drawn. Named, so a
+            // report of one left unrefitted can be told apart from jewellery.
+            if (skip == AutoRefitDecisions.Skip.Managed && AutoRefitDecisions.IsAccessory(slot)
+                && compositor.GetAppendHostSource(worn.GamePath) is { } host)
+                log.Information("[Proteus] auto refit: {0} {1} hosts the second skin (from {2}), left as it is", slot,
+                                worn.GamePath, host);
+            else
+                log.Debug("[Proteus] auto refit: {0} {1} left alone ({2})", slot, worn.GamePath, skip);
+            return "skipped:" + skip;
         }
+
+        // A piece whose refit the player undid stays as it is — unless they ask for what they are wearing now.
+        if (pref.Declined.Contains(worn.Key))
+        {
+            if (!all)
+            {
+                log.Information("[Proteus] auto refit: {0} {1} had its refit undone, left as it is", slot, worn.GamePath);
+                return "declined";
+            }
+            pref.Declined.Remove(worn.Key);
+            config.Save();
+        }
+        // An accessory is sized off the chest or legs piece worn with it, and a shoe or glove is kept outside it
+        // (OutfitPartners): what those draw now, before their own refits switch them to another file.
+        bool accessory = AutoRefitDecisions.IsAccessory(slot);
+        var beside = accessory || slot is "_glv" or "_sho"
+            ? AutoRefitDecisions.Slots.Where(s => s is "_top" or "_dwn" && now.ContainsKey(s))
+                                      .ToDictionary(s => s, s => new Beside(now[s], resolvedOf[s].Resolved,
+                                                                            resolvedOf[s].Root))
+            : null;
+        // Read only for a body piece drawn from a mod: one call per piece, on the framework thread.
+        var modSettings = !accessory && worn.ModDir != null
+                          && penumbra.GetModSettings(collectionId, worn.ModDir) is { } ms
+            ? new PenumbraBridge.ModSettingsSnapshot(ms.Enabled, ms.Priority, ms.Options, Inherited: false, Temporary: false)
+            : (PenumbraBridge.ModSettingsSnapshot?)null;
+        Enqueue(new Request(slot, worn, resolved, root, collectionId, all, beside,
+                            accessory ? AutoRefitTargets.ChosenOf(pref) : null,
+                            ModSettings: modSettings));
+        return "enqueued";
+    }
+
+    /// <summary>
+    /// "Refit what I'm wearing now" for the pieces drawn from one mod alone — the test harness's (see
+    /// <c>AutoRefitNowJob</c>): each piece goes through the walk's own checks (<see cref="WalkSlot"/>) as forced, and
+    /// nothing worn from any other mod is touched. Never arms <see cref="RunNow"/>'s walk. Framework thread.
+    /// </summary>
+    /// <returns>Per worn piece of that mod, its slot, game path and outcome ("enqueued" or "not-enqueued:&lt;reason&gt;");
+    /// one "-" row naming the reason when nothing of it could be looked at; null when auto refit cannot run now.</returns>
+    internal IReadOnlyList<(string Slot, string GamePath, string Outcome)>? RunNowFor(string modRoot)
+    {
+        var activity = Activity();
+        if (disposed || !EffectivelyEnabled || current.Busy || activity.Running || activity.Queued > 0 || activity.Undoing)
+            return null;
+        var models = penumbra.GetActivePlayerModelPaths();
+        if (!DrawnModelPaths.HasBodySlotModel(models)) return [("-", "", "not-enqueued:blank-models")];
+        if (penumbra.GetPlayerCollection() is not { } collection) return [("-", "", "not-enqueued:no-collection")];
+        if (!config.AutoRefitByCollection.TryGetValue(collection.Id.ToString("D"), out var pref) || !pref.HasAnyBody())
+            return [("-", "", "not-enqueued:no-preferred-body")];
+
+        var now = ReadWorn(models, penumbra.GetModDirectory(), out var resolvedOf);
+        string want = Path.GetFullPath(modRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        long tick = Environment.TickCount64;
+        var outcomes = new List<(string, string, string)>();
+        foreach (var (slot, worn) in now)
+        {
+            if (resolvedOf[slot].Root is not { } root
+                || !string.Equals(Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                                  want, StringComparison.OrdinalIgnoreCase))
+                continue;
+            string outcome = WalkSlot(slot, now, resolvedOf, pref, collection.Id, all: true, tick);
+            outcomes.Add((slot, worn.GamePath, outcome == "enqueued" ? outcome : "not-enqueued:" + outcome));
+        }
+        return outcomes;
     }
 
     /// <summary>What each body and accessory slot draws: the mod and file supplying it, or the game's own. Framework

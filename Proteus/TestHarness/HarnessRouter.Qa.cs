@@ -176,8 +176,19 @@ internal sealed partial class HarnessRouter
 
     private async Task<HarnessResponse> AutoRefitAction(HarnessRequest request)
     {
-        var (body, bad) = JsonBody(request, "enabled");
+        var (body, bad) = JsonBody(request, "enabled", "refitWornNow", "mod");
         if (bad != null) return bad;
+        if (body.TryGetProperty("refitWornNow", out var now))
+        {
+            if (now.ValueKind != JsonValueKind.True) return HarnessResponse.Error(400, "invalid-field", "refitWornNow must be true");
+            if (body.TryGetProperty("enabled", out _))
+                return HarnessResponse.Error(400, "invalid-field", "give enabled or refitWornNow, not both");
+            string? mod = OptionalString(body, "mod", out bad);
+            if (bad != null) return bad;
+            if (mod == null) return HarnessResponse.Error(400, "invalid-field", "mod is required with refitWornNow");
+            return await RefitWornNow(mod);
+        }
+        if (body.TryGetProperty("mod", out _)) return HarnessResponse.Error(400, "invalid-field", "mod goes with refitWornNow");
         if (!body.TryGetProperty("enabled", out var e) || e.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
             return HarnessResponse.Error(400, "invalid-field", "enabled is required: true or false");
         bool enabled = e.GetBoolean();
@@ -193,6 +204,49 @@ internal sealed partial class HarnessRouter
             return new { config = now.Config, harnessOverride = now.Override, effective = now.Effective, before = record.BeforeEffective };
         });
         return HarnessResponse.Json(200, answer);
+    }
+
+    /// <summary>
+    /// "Refit what I'm wearing now" for one worn mod (see <see cref="AutoRefitNowJob"/>). Refused unless auto refit can
+    /// run now, so nothing is ever left waiting to run; the mod's collection setting and the collection's auto refit
+    /// preference are recorded before the job exists (503 record-failed otherwise), the mod backed up by the job.
+    /// </summary>
+    private async Task<HarnessResponse> RefitWornNow(string mod)
+    {
+        if (changes.Stopping) return HarnessResponse.Error(503, "harness-stopping", "the test harness is stopping");
+        if (!jobs.TryReserve()) return HarnessResponse.Error(409, "busy", "a job is already running");
+        bool started = false;
+        try
+        {
+            var (job, args, error) = await OnFramework<(HarnessJob?, AutoRefitNowJob.Args?, HarnessResponse?)>(() =>
+            {
+                var (dir, mods, found) = FindMod(mod);
+                if (found != null) return (null, null, Answer(found));
+                if (Game.AutoRefit().Busy)
+                    return (null, null, HarnessResponse.Error(409, "auto-refit-busy", "auto refit is working; wait for /state autoRefit.busy == false"));
+                if (!Game.CanRunAutoRefitNow())
+                    return (null, null, HarnessResponse.Error(409, "auto-refit-off", "auto refit is off, or the character's collection has no preferred body"));
+                string modRoot = System.IO.Path.Combine(mods!.ModsRoot, dir!);
+                if (!Game.IsWornFrom(modRoot))
+                    return (null, null, HarnessResponse.Error(400, "mod-not-worn", $"nothing the character wears is drawn from '{dir}'"));
+                if (Game.PlayerCollection() is not { } coll)
+                    return (null, null, HarnessResponse.Error(409, "no-collection", "the character has no Penumbra collection"));
+                if (changes.Bindings.BeginExternalPermanent(coll, dir!, out var before) is { } refused)
+                    return (null, null, Answer(refused));
+                var j = new HarnessJob(HarnessJobs.NewJobId(), "auto-refit-now", dir!);
+                if (!changes.AutoRefitPreference.Begin(coll, j.Id))
+                    return (null, null, HarnessResponse.Error(503, "record-failed", "the auto refit preference could not be recorded; nothing was started"));
+                return (j, new AutoRefitNowJob.Args(dir!, modRoot, coll, before, changes), null);
+            });
+            if (error != null) return error;
+            _ = jobs.Start(job!, x => AutoRefitNowJob.Run(jobs, x, args!));
+            started = true;
+            return HarnessResponse.Json(202, new { job = job!.Id, mod = job.ModDir, state = "queued" });
+        }
+        finally
+        {
+            if (!started) jobs.Release();
+        }
     }
 
     /// <summary>The <c>/state</c> blocks the idle disk I/O checks add.</summary>

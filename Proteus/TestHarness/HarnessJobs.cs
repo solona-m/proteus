@@ -88,6 +88,10 @@ internal sealed class HarnessJob(string id, string kind, string modDir)
 internal sealed record HarnessTimings(TimeSpan FrameworkStart, TimeSpan RedrawWait, TimeSpan FollowWindow,
                                       TimeSpan FollowSample, TimeSpan Capture)
 {
+    /// <summary>How long the worn-refit trigger (<see cref="AutoRefitNowJob"/>) waits for the refits it started (5 min);
+    /// tests set it short.</summary>
+    public TimeSpan AutoRefitNowWait { get; init; } = TimeSpan.FromMinutes(5);
+
     public static readonly HarnessTimings Default = new(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10),
                                                         TimeSpan.FromSeconds(5), TimeSpan.FromMilliseconds(500),
                                                         TimeSpan.FromSeconds(10));
