@@ -81,21 +81,19 @@ public class LogExportServiceTests
     // [AC-mod-path-containment-7][EDGE-mod-path-containment-28] A read given up on that faults later is observed, never an
     // unobserved task exception.
     [Fact]
-    public async Task AbandonedNamesTaskFaultIsObserved()
+    public void AbandonedNamesTaskFaultIsObserved()
     {
-        var late = new TaskCompletionSource<(IReadOnlyCollection<string>, string?)>();
+        var tag = "late names " + Guid.NewGuid().ToString("N");
         int unobserved = 0;
         void OnUnobserved(object? _, UnobservedTaskExceptionEventArgs e)
         {
-            if (e.Exception.InnerException is TimeoutException { Message: "late names" }) Interlocked.Increment(ref unobserved);
+            if (e.Exception.InnerException is TimeoutException t && t.Message == tag) Interlocked.Increment(ref unobserved);
         }
         TaskScheduler.UnobservedTaskException += OnUnobserved;
         try
         {
-            await RunAbandoned(late);
-            late.SetException(new TimeoutException("late names"));
-            late = null!;
-            for (int i = 0; i < 3; i++)
+            AbandonThenFault(tag);
+            for (int i = 0; i < 5; i++)
             {
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
@@ -105,6 +103,13 @@ public class LogExportServiceTests
         finally { TaskScheduler.UnobservedTaskException -= OnUnobserved; }
     }
 
-    private static Task RunAbandoned(TaskCompletionSource<(IReadOnlyCollection<string>, string?)> late)
-        => LogExportService.GatherNamesAsync(() => late.Task, null, TimeSpan.FromMilliseconds(20));
+    /// Everything that could root the abandoned task lives and dies in here, so the finalizer gets to judge it.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void AbandonThenFault(string tag)
+    {
+        var late = new TaskCompletionSource<(IReadOnlyCollection<string>, string?)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        LogExportService.GatherNamesAsync(() => late.Task, null, TimeSpan.FromMilliseconds(10)).GetAwaiter().GetResult();
+        late.SetException(new TimeoutException(tag));
+        Thread.Sleep(50);   // any continuation runs
+    }
 }

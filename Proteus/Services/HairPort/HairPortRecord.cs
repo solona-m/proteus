@@ -86,10 +86,12 @@ internal sealed class HairPortRecord
         catch (Exception) { record = new HairPortRecord { Unreadable = true }; }
         record.Ports ??= [];
         record.Declined ??= [];
+        // A record the mod shipped may hold anything: an entry with no port file is no port.
+        int dropped = record.Ports.RemoveAll(e => e == null || string.IsNullOrWhiteSpace(e.File));
         foreach (var e in record.Ports)
         {
             e.File = Rel(e.File);
-            e.SourceFile = Rel(e.SourceFile);
+            e.SourceFile = Rel(e.SourceFile ?? "");
             // Game paths with forward slashes, as every comparison of them expects (the builder, the writer, the panel):
             // case is compared without regard to it everywhere, slashes are not.
             e.SourceGamePath = (e.SourceGamePath ?? "").Replace('\\', '/');
@@ -101,7 +103,7 @@ internal sealed class HairPortRecord
         // The record ships inside the mod, so its author controls it — and the manifest too, so agreeing with it proves
         // nothing: a port whose file (or source file) is outside the mod is dropped, as is a material redirect to one
         // outside it (ModPath). Before the owner filter, so a remake never writes where such an entry says.
-        int dropped = record.Ports.RemoveAll(e => e == null || !ModPath.TryResolve(modRoot, e.File, out _)
+        dropped += record.Ports.RemoveAll(e => !ModPath.TryResolve(modRoot, e.File, out _)
                                                   || e.SourceFile.Length > 0 && !ModPath.TryResolve(modRoot, e.SourceFile, out _));
         foreach (var e in record.Ports)
             foreach (var key in e.Materials.Where(m => !ModPath.TryResolve(modRoot, m.Value, out _)).Select(m => m.Key).ToList())

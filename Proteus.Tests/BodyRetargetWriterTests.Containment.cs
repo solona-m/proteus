@@ -138,6 +138,26 @@ public partial class BodyRetargetWriterTests
         kit.AssertVictimUntouched();
     }
 
+    // [AC-mod-path-containment-5][AC-mod-path-containment-6] The game path names where the refit goes inside the option's
+    // folder, and can come from a manifest (a size set, the headless refit): one climbing out fails the save, with
+    // nothing written anywhere.
+    [Theory]
+    [InlineData("../../../victim.bin")]
+    [InlineData("chara/../../../../victim.bin")]
+    public void SaveWithHostileGamePathFailsBeforeAnyWrite(string gamePath)
+    {
+        using var kit = NewRetargetMod(authorGroup: false);
+        var meta = File.ReadAllText(Path.Combine(kit.ModRoot, PenumbraModMeta.MetaFile));
+        var before = Directory.EnumerateFileSystemEntries(kit.Sandbox, "*", SearchOption.AllDirectories).Count();
+
+        var outcome = BodyRetargetWriter.Save(kit.ModRoot, Group, "Neolithe L", gamePath, [1, 2, 3], "Neolithe", "SFW M", "SFW L");
+
+        Assert.False(outcome.Ok);
+        Assert.Equal(meta, File.ReadAllText(Path.Combine(kit.ModRoot, PenumbraModMeta.MetaFile)));
+        Assert.Equal(before, Directory.EnumerateFileSystemEntries(kit.Sandbox, "*", SearchOption.AllDirectories).Count());
+        kit.AssertVictimUntouched();
+    }
+
     // [EDGE-mod-path-containment-4][EDGE-mod-path-containment-17] Pure: the drive and climb forms only here, never against
     // a real folder.
     [Theory]

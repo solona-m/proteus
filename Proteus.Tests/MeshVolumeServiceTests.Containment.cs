@@ -71,6 +71,23 @@ public partial class MeshVolumeServiceTests
         kit.AssertVictimUntouched();
     }
 
+    // [AC-mod-path-containment-6][EDGE-mod-path-containment-25] A caller handing the brush a rel outside the mod gets the
+    // failure outcome, with nothing written: no model, no backup, no record.
+    [Theory, MemberData(nameof(HostileForms))]
+    public void ApplyWithHostileRelFailsAndWritesNothing(string form)
+    {
+        using var kit = new HostilePathKit();
+        var (mdl, solve, _) = Setup();
+        kit.SetVictimContent(mdl);
+
+        var outcome = MeshVolumeService.Apply(kit.ModRoot, HostileRel(kit, form), mdl, solve, writeUntouched: true);
+
+        Assert.False(outcome.Ok);
+        Assert.Equal(0, outcome.FilesWritten);
+        Assert.False(Directory.Exists(Path.Combine(kit.ModRoot, "Proteus")));
+        kit.AssertVictimUntouched();
+    }
+
     // [AC-mod-path-containment-2][EDGE-mod-path-containment-13]
     [Fact]
     public void ReadRecordDropsHostileFilesAndKeys()

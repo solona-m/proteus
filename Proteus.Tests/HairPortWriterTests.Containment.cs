@@ -29,9 +29,11 @@ public partial class HairPortWriterTests
     };
 
     // [AC-mod-path-containment-4][EDGE-mod-path-containment-19] Sink: the record and the manifest agree on a port file
-    // outside the mod — the attacker wrote both — and the port is out of date, so the automatic save remakes it.
+    // outside the mod — the attacker wrote both — and the port is out of date, so the automatic save would remake it.
+    // The record entry is dropped; the manifest's own redirect still owns the target, so the save is refused as covered
+    // (a deviation from the plan's "writes a fresh port": the safer result, as the author's redirect stands).
     [Fact]
-    public void HostileRecordFileMatchingManifestIsDroppedAndAutoSaveWritesInside()
+    public void HostileRecordFileMatchingManifestIsDroppedAndAutoSaveIsRefused()
     {
         using var kit = new HostilePathKit();
         var hostile = kit.ClimbToVictim();
@@ -41,11 +43,36 @@ public partial class HairPortWriterTests
         mod.Put("long/c0801h0130_hir.mdl", HairModel(801));
         WritePortRecord(kit.ModRoot, PortEntry(hostile));
 
+        Assert.Empty(HairPortRecord.Read(kit.ModRoot).Ports);
+
         var outcome = HairPortWriter.Save(kit.ModRoot, [Write(mod, "Cut", "Long")], auto: true);
 
-        // Nothing outside the mod: either a fresh port inside it, or the option's redirect stands and is refused.
-        if (outcome.Ok)
-            Assert.All(HairPortRecord.Read(kit.ModRoot).Ports, p => Assert.StartsWith(HairPortPlan.Folder + "/", p.File));
+        Assert.False(outcome.Ok);
+        Assert.Equal(HairPortWriter.Covered(Target), outcome.Message);
+        Assert.False(Directory.Exists(Path.Combine(kit.ModRoot, HairPortPlan.Folder)));
+        kit.AssertVictimUntouched();
+    }
+
+    // [AC-mod-path-containment-6][EDGE-mod-path-containment-25] A material copy of the port's own is named from the
+    // model's material name, which the mod's author wrote: one climbing out of the mod refuses the save before anything
+    // is written.
+    [Fact]
+    public void MaterialNameClimbingOutRefusesBeforeAnyWrite()
+    {
+        using var kit = new HostilePathKit();
+        using var mod = TwoCuts(kit.ModRoot);
+        var climb = "/mt_c0201/" + string.Concat(Enumerable.Repeat("../", 12)) + "victim.mtrl";
+        var gamePath = HairMaterialPath.GamePath(201, Id, climb);
+        Assert.NotNull(gamePath);
+
+        var outcome = HairPortWriter.Save(kit.ModRoot,
+            [Write(mod, "Cut", "Long", HairModel(201, material: climb), new HairPortWriter.MaterialWrite(gamePath!, null, [7, 7, 7]))],
+            auto: true);
+
+        Assert.False(outcome.Ok);
+        Assert.Contains("is not a path inside the mod", outcome.Message);
+        Assert.False(Directory.Exists(Path.Combine(kit.ModRoot, HairPortPlan.Folder)));
+        Assert.Empty(HairPortRecord.Read(kit.ModRoot).Ports);
         kit.AssertVictimUntouched();
     }
 

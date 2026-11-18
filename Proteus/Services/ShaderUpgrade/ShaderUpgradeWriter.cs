@@ -462,7 +462,8 @@ internal static class ShaderUpgradeWriter
                 return Undone.Refused;
             }
 
-            var path = FileOf(modRoot, rel);
+            // Outside the mod is nothing of ours to undo (ModPath; the reader already drops such entries).
+            if (!ModPath.TryResolve(modRoot, rel, out var path)) return Undone.Nothing;
             var current = SafeRead(path);
             if (current is null or { Length: 0 } && File.Exists(path))
             {
