@@ -11,9 +11,15 @@ namespace Proteus.Services.Matcap;
 /// <list type="bullet">
 /// <item>the split model(s), each backed up first (<see cref="BackupSubdir"/>, first edit only);</item>
 /// <item>the material, a white mask and — for an own image — the baked texture, under <see cref="FilesFolder"/>;</item>
-/// <item>their redirects, in the mod's DEFAULT DATA only, under names no author or game file uses, so no group is ever
-/// added or reordered and no author option is touched;</item>
-/// <item>the record, <c>Proteus/matcaps.json</c>.</item>
+/// <item>their redirects, in the mod's DEFAULT DATA, under names no author or game file uses, so no group is ever
+/// added or reordered;</item>
+/// <item>for a matcap on one colour row (<see cref="RowPlan"/>): the cut copies of the part's own material
+/// (<c>…_mcut&lt;token&gt;&lt;N&gt;</c>) and their cut normals, each cut redirected the way the author's material resolves
+/// in that variant folder — INSIDE every author option or Combining container that redirects it, in default data for a
+/// folder the game serves, in the worn folder's containers otherwise (<see cref="MatcapRowCut"/>). Adds never replace a
+/// key. Undo removes every redirect to those files by file, wherever it is (a renamed option, Gear variants' copies),
+/// and sweeps unclaimed cut redirects (redirects only, never files);</item>
+/// <item>the record, <c>Proteus/matcaps.json</c> (version 2 once a row matcap is recorded).</item>
 /// </list>
 /// A library is only ever referenced by its shared texture path; nothing of a library is written here.
 /// <para/>
@@ -433,9 +439,15 @@ internal static class MatcapWriter
     }
 
     /// <summary>One entry's state, read-only: what opening a model shows. Writes nothing.</summary>
-    public enum State { Ok, Superseded, Edited }
+    /// <remarks><see cref="State.RowStale"/>: a row matcap's cut no longer resolves from the same source as the author's
+    /// material (it changed, or an option or variant now serves it differently) — Undo and Apply again.</remarks>
+    public enum State { Ok, Superseded, Edited, RowStale }
 
-    public static IReadOnlyDictionary<string, State> Detect(string modRoot)
+    /// <summary>
+    /// Every entry's state. Reads files (and hashes changed row sources), so the panel runs it on a worker, never on the
+    /// framework thread. <paramref name="readGameFile"/> lets row matcaps cut from game files be checked too.
+    /// </summary>
+    public static IReadOnlyDictionary<string, State> Detect(string modRoot, Func<string, byte[]?>? readGameFile = null)
     {
         var result = new Dictionary<string, State>(StringComparer.OrdinalIgnoreCase);
         var record = MatcapRecord.Read(modRoot);
@@ -454,7 +466,12 @@ internal static class MatcapWriter
                 named = true;
                 if (record.Model(rel) is { } me && !me.WrittenSha8s.Contains(HairPortPlan.Sha8(bytes))) edited = true;
             }
-            result[mat.Name] = !named ? State.Superseded : edited ? State.Edited : State.Ok;
+            var state = !named ? State.Superseded : edited ? State.Edited : State.Ok;
+            if (state == State.Ok && mat.Row != null
+                && record.Model(models.FirstOrDefault() ?? "") is { } me2 && MatcapPlan.TargetOf(me2.GamePath, out _) is { } target
+                && MatcapRowCut.Stale(modRoot, mat, target, readGameFile) != null)
+                state = State.RowStale;
+            result[mat.Name] = state;
         }
         return result;
     }

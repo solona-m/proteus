@@ -286,6 +286,11 @@ public sealed partial class PartsPanel : IStudioHarness
         note = matcapPreview.Wanted ? matcapPreview.Note : null,
         drawnNote = matcapPreview.DrawnNote,
         gamePaths = matcapPreview.ShownKey != null ? matcapShownPaths : [],
+        row = matcapRowOnly,
+        sub = matcapRowSub.ToString(),
+        rowMaterial = matcapRowOnly > 0 ? MatcapRowMaterial() : null,
+        resolvedFrom = matcapRowOnly > 0 ? matcapPreviewResolvedFrom : null,
+        rowHoles = matcapRowOnly > 0 && matcapRowHoles,
     };
 
     StudioMatcapPreviewOutcome IStudioHarness.MatcapPreview(StudioMatcapPreviewRequest request, StudioSession session)
@@ -322,9 +327,10 @@ public sealed partial class PartsPanel : IStudioHarness
         matcapRecord = Services.Matcap.MatcapRecord.Read(root);
         matcapRecordFor = null;
         try { matcapRoom = brushBase != null ? ModelMaterialWriter.MaterialRoom(brushBase) : 0; } catch { matcapRoom = 0; }
-        matcapRowOnly = request.Row;   // PROTOTYPE
+        matcapRowOnly = request.Row;
         if (request.Row > 0) matcapRowPick = request.Row;
         matcapRowSub = request.Sub;
+        matcapRowMaterial = request.Material;
         RequestMatcapPreview(choice!);
         return new StudioMatcapPreviewOutcome(null, MatcapPreviewView(), View());
     }

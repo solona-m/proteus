@@ -155,6 +155,16 @@ drive issue sweep D's recovery flows on demand:
 - `auto-redraw` switches the compositor's auto redraw for the session in memory
   only, never written to the configuration; put-back or unload clears it.
 
+**Amendment (2026-11-18, matcap on one colour row).** The `matcap` job (and the
+`matcap-preview` click preview) take `row`, `sub` and `material`. A row Apply writes
+the matcap as before and, new on this path, cut copies of the part's own material
+with a redirect **inside each author option or Combining container that redirects
+that material** (plus default data and the worn folder's containers by the same
+per-folder rule the panel uses). Nothing else changes: the job still takes its
+whole-mod backup first and put-back restores it byte for byte, the preview still
+writes no mod (a temporary Penumbra mod, cut copies at the cut's own paths only),
+and the whole harness stays compiled out of every CI build.
+
 ## Consequences
 
 Easier: QA can test the plugin in a running game unattended once the user turns

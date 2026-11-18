@@ -49,7 +49,8 @@ internal sealed record StudioDragOutcome(StudioRefusal? Refused, string Kind, bo
 /// option, or <see cref="End"/> the preview.</summary>
 internal sealed record StudioMatcapPreviewRequest(IReadOnlyList<string> Parts, string? Image, bool Pack, string? Library,
                                                   string? Group, string? Option, bool End,
-                                                  int Row = 0, Services.SubRowPick Sub = Services.SubRowPick.Both);
+                                                  int Row = 0, Services.SubRowPick Sub = Services.SubRowPick.Both,
+                                                  string? Material = null);
 
 /// <summary>What <c>matcap-preview</c> did: refused, or the preview's state (see <c>/studio</c>'s <c>matcapPreview</c>).</summary>
 internal sealed record StudioMatcapPreviewOutcome(StudioRefusal? Refused, object? Preview, IReadOnlyDictionary<string, object?>? State);

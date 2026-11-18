@@ -22,9 +22,13 @@ internal static class MatcapJob
     internal enum Action { Apply, Undo, Forget }
 
     /// <param name="Model">The model as QA named it: a mod-relative file or a game path the mod publishes.</param>
+    /// <param name="Row">A matcap on one colour row (1–16; 0: the whole part), with <paramref name="Sub"/>. With no
+    /// <paramref name="Parts"/>, the parts are <see cref="MatcapPlan.RowPool"/> of <paramref name="Material"/> (or the first
+    /// row-capable material).</param>
     internal sealed record Args(string ModDir, string ModRoot, string Model, Action Kind, IReadOnlyList<string> Parts,
                                 string? Image, string? Library, string? Group, string? Option, bool ConfirmEnable,
-                                MatcapHarnessPort Port, HarnessChanges Changes, bool Pack = false);
+                                MatcapHarnessPort Port, HarnessChanges Changes, bool Pack = false,
+                                int Row = 0, SubRowPick Sub = SubRowPick.Both, string? Material = null);
 
     /// <summary>The matcap QA named, found as the panel finds it, or the job error.</summary>
     internal static (MatcapChoice? Choice, JobError? Error) ResolveChoice(MatcapHarnessPort port, string modRoot, string? image, bool pack,
@@ -80,7 +84,7 @@ internal static class MatcapJob
         // Siblings line up for a NEW apply: against the tickable parts not already on a matcap.
         var tickableParts = parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p, kind, attrs) && !MatcapPlan.IsOnMatcap(p)).ToList();
         var record = MatcapRecord.Read(modRoot);
-        var states = MatcapWriter.Detect(modRoot);
+        var states = MatcapWriter.Detect(modRoot, port.Env.ReadGameFile);
         var siblings = HatCompatService.SiblingFiles(modRoot, gamePath!, rel!)
             .Where(s => !PenumbraModMeta.SameFile(s, rel!))
             .Select(s =>
@@ -104,6 +108,7 @@ internal static class MatcapJob
             parts = parts.Select(p => new
             {
                 label = p.Label, material = p.Material, skin = MatcapPlan.IsSkin(p), onMatcap = MatcapPlan.IsOnMatcap(p),
+                cut = MatcapPlan.IsCutName(p.Material),
                 tickable = MatcapPlan.Tickable(p, kind, attrs), horn = MatcapPlan.IsHorn(p, attrs), island = p.Island,
                 alphaTested = alpha.TryGetValue(p.Material, out var at) && at,
             }),
@@ -117,6 +122,7 @@ internal static class MatcapJob
                     ? (object)new { kind = "library", mod = m.Source.Library?.Mod, group = m.Source.Library?.Group, option = m.Source.Library?.Option }
                     : new { kind = "image", image = m.Source.Image },
                 state = states.TryGetValue(m.Name, out var st) ? st.ToString().ToLowerInvariant() : "ok",
+                row = m.Row is { } r ? RowView(r) : null,
             }),
             materialRoom = room,
         };
@@ -184,13 +190,22 @@ internal static class MatcapJob
             case Action.Apply:
             {
                 var bytes = File.ReadAllBytes(MatcapWriter.Full(args.ModRoot, rel!));
-                var parts = ModelPartReader.Read(bytes)?.Parts ?? [];
+                var read = ModelPartReader.Read(bytes);
+                var parts = read?.Parts ?? [];
                 var chosen = new List<ModelPart>();
                 foreach (var label in args.Parts)
                 {
                     if (parts.FirstOrDefault(p => p.Label == label) is not { } part)
                     { job.Fail(new JobError("unknown-part", $"the model has no part {label}")); return; }
                     chosen.Add(part);
+                }
+                // A row matcap with nothing named covers every part of the material, as the panel does with nothing ticked.
+                if (args.Row > 0 && chosen.Count == 0)
+                {
+                    var kind = MatcapPlan.TargetOf(gamePath!, out _)?.Kind;
+                    var attrs = read?.AttributeNames ?? [];
+                    var material = args.Material ?? MatcapPlan.RowMaterials(parts, kind, attrs).FirstOrDefault();
+                    if (material != null) chosen = MatcapPlan.RowPool(parts, kind, attrs, material);
                 }
                 // As the panel's Apply: parts that all have a matcap change it in place; a mix is refused.
                 switch (MatcapPlan.KindOfApply(chosen))
@@ -203,7 +218,8 @@ internal static class MatcapJob
                         outcome = MatcapWriter.Outcome.Refuse("already-matcap", Localization.Strings.Matcap.AlreadyMatcap);
                         break;
                     default:
-                        prepared = MatcapStudio.Prepare(args.ModRoot, rel!, gamePath!, bytes, chosen, choice!, args.Port.Env);
+                        prepared = MatcapStudio.Prepare(args.ModRoot, rel!, gamePath!, bytes, chosen, choice!,
+                                                        args.Port.Env with { RowOnly = args.Row, RowSub = args.Sub });
                         outcome = prepared.Ok ? MatcapWriter.Apply(args.ModRoot, prepared.Request!) : MatcapWriter.Outcome.Refuse(prepared.Code, prepared.Message);
                         break;
                 }
@@ -270,6 +286,9 @@ internal static class MatcapJob
                 : null,
             siblingsSkipped = prepared?.SiblingsSkipped,
             librarySetting,
+            row = entry?.Row is { } er ? RowView(er) : null,
+            rowHoles = prepared?.RowHoles ?? false,
+            cutAlphaSet = prepared?.CutAlphaSet ?? false,
         });
         if (changed)
         {
@@ -278,6 +297,20 @@ internal static class MatcapJob
         }
         job.Progress("");
     }
+
+    /// <summary>A row matcap's record as QA reads it: row, sub-row, cut name, its files with redirects and sources, normals, folders.</summary>
+    internal static object RowView(MatcapRecord.RowRef row) => new
+    {
+        row = row.Row, sub = row.Sub, cut = row.Cut, cutAlphaSet = row.CutAlphaSet,
+        files = row.Files.Select(f => new
+        {
+            file = f.File, thresholdZero = f.ThresholdZero,
+            containers = f.Redirects.Select(r => new { group = r.Group, option = r.Option, index = r.Index, gamePath = r.GamePath }),
+            source = f.Source.Game ? (object)new { game = f.Source.GamePath } : new { file = f.Source.File, group = f.Source.Group, option = f.Source.Option },
+        }),
+        normals = row.Normals.Select(n => new { file = n.File, gamePath = n.GamePath }),
+        folders = row.Fingerprint.Folders.Select(x => new { folder = x.Folder, @case = x.Case }),
+    };
 
     /// <summary>Select the library option with its Before recorded in the binding ledger. Framework thread.</summary>
     private static object? SelectRecorded(Args args, MatcapLibrary lib, string option)

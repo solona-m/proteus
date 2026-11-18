@@ -6670,5 +6670,145 @@
   "Parts.Matcap.PortKept": {
     "message": "Эта модель — одна из причёсок, перенесённых Proteus. Пока на ней мэткап, Proteus оставляет её как есть и сам не пересоздаёт переносы других рас с тем же материалом, пока вы не отмените мэткап. Перенос одной из этих рас вручную в Студии всё равно её пересоздаст.",
     "description": ""
+  },
+  "Matcap.Refused.RowFileSwap.Fmt": {
+    "message": "{0} подменяет материал этой части другим файлом, поэтому мэткап по строке не может за ним следовать.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoNormal": {
+    "message": "У материала этой части нет карты нормалей, по которой вырезается мэткап по строке.",
+    "description": ""
+  },
+  "Matcap.Refused.RowAmbiguousOption.Fmt": {
+    "message": "В группе «{0}» две опции с именем «{1}», поэтому мэткап по строке не может их различить.",
+    "description": ""
+  },
+  "Matcap.Refused.RowShader.Fmt": {
+    "message": "Мэткапу по строке нужна часть на character.shpk, а {0} использует {1}.",
+    "description": ""
+  },
+  "Matcap.Refused.RowOwnedByFeature.Fmt": {
+    "message": "{0} перезаписан обновлением шейдера экипировки Proteus. Сначала отмените его, затем добавьте мэткап по строке.",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Fmt": {
+    "message": "Не удалось вырезать строку: {0}.",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Normal": {
+    "message": "не удалось прочитать карту нормалей",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Index": {
+    "message": "не удалось прочитать карту индексов",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Write": {
+    "message": "не удалось записать вырезанный материал",
+    "description": ""
+  },
+  "Matcap.Refused.RowTextureVaries.Fmt": {
+    "message": "{0} подменяет карту нормалей или индексов этой части, поэтому один вырез не подойдёт ко всем вариантам.",
+    "description": ""
+  },
+  "Matcap.Refused.RowEmpty.Fmt": {
+    "message": "Ни один пиксель этой части не использует строку {0}.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNothingLeft": {
+    "message": "У всех частей с этим материалом уже есть мэткап.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNotGear": {
+    "message": "Мэткап на одну строку цвета работает только на экипировке и аксессуарах.",
+    "description": ""
+  },
+  "Matcap.Refused.RowOneMaterial": {
+    "message": "Мэткап на одну строку цвета работает только с одним материалом за раз. Отметьте части одного материала.",
+    "description": ""
+  },
+  "Matcap.Refused.RowMixedThreshold": {
+    "message": "Опции этой части расходятся в том, как её вырезать, а цвета вершин её вырежут. Мэткап по строке не подойдёт к обоим.",
+    "description": ""
+  },
+  "Matcap.Refused.RowVertexAlpha": {
+    "message": "Цвета вершин этой части вырезали бы мэткап по строке, и изменить их нельзя.",
+    "description": ""
+  },
+  "Matcap.Refused.RowGameGear": {
+    "message": "Мэткап на одну строку цвета работает на собственной экипировке мода, а не на предметах самой игры.",
+    "description": ""
+  },
+  "Matcap.Row.GameFile": {
+    "message": "собственный файл игры",
+    "description": ""
+  },
+  "Matcap.Row.DefaultData": {
+    "message": "файлы мода по умолчанию",
+    "description": ""
+  },
+  "Matcap.Row.Option.Fmt": {
+    "message": "опция «{1}» группы «{0}»",
+    "description": ""
+  },
+  "Matcap.Row.Container.Fmt": {
+    "message": "запись {1} группы «{0}»",
+    "description": ""
+  },
+  "Parts.Matcap.RowOnly": {
+    "message": "Только на одной строке цвета",
+    "description": ""
+  },
+  "Parts.Matcap.RowOnlyTip": {
+    "message": "Накладывает мэткап только на пиксели одной строки цвета материала части — например, кружевной или отделочный узор. Ничего не отмечайте, чтобы охватить все части с этим материалом.",
+    "description": ""
+  },
+  "Parts.Matcap.RowReading": {
+    "message": "Чтение строк цвета…",
+    "description": ""
+  },
+  "Parts.Matcap.RowNoRows": {
+    "message": "У материала этой части нет строк цвета для выбора.",
+    "description": ""
+  },
+  "Parts.Matcap.RowSub": {
+    "message": "Подстрока",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubBoth": {
+    "message": "A и B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubA": {
+    "message": "Только A",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubB": {
+    "message": "Только B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubOnly.Fmt": {
+    "message": "Этот материал использует только подстроку {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.RowMaterial": {
+    "message": "Материал",
+    "description": ""
+  },
+  "Parts.Matcap.RowAll.Fmt": {
+    "message": "Охватывает все части, нарисованные материалом {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.RowFollowWarn": {
+    "message": "Для этого материала в Proteus заданы цвета (или привязка к дизайну). Пиксели строки с мэткапом рисуются копией материала и не будут им следовать.",
+    "description": ""
+  },
+  "Parts.Matcap.RowHolesWarn": {
+    "message": "Некоторые вырезанные отверстия этой части лежат внутри треугольников строки, поэтому в них будет виден мэткап.",
+    "description": ""
+  },
+  "Parts.Matcap.RowStale": {
+    "message": "Материал автора изменился после создания этого мэткапа по строке. Отмените его и примените снова.",
+    "description": ""
   }
 }

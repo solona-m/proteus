@@ -6670,5 +6670,145 @@
   "Parts.Matcap.PortKept": {
     "message": "Ese modelo es una de las adaptaciones de pelo de Proteus. Mientras tenga un matcap, Proteus lo deja como está y no rehace por sí solo las adaptaciones de otras razas que comparten su material, hasta que deshagas el matcap. Adaptar a mano una de esas razas en el Estudio sigue rehaciéndola.",
     "description": ""
+  },
+  "Matcap.Refused.RowFileSwap.Fmt": {
+    "message": "{0} cambia el material de esta pieza por otro archivo, así que un matcap de fila no puede seguirlo.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoNormal": {
+    "message": "El material de esta pieza no tiene mapa de normales, que es lo que usa un matcap de fila para recortar.",
+    "description": ""
+  },
+  "Matcap.Refused.RowAmbiguousOption.Fmt": {
+    "message": "El grupo «{0}» tiene dos opciones llamadas «{1}», así que un matcap de fila no puede distinguirlas.",
+    "description": ""
+  },
+  "Matcap.Refused.RowShader.Fmt": {
+    "message": "Un matcap de fila necesita la pieza en character.shpk, y {0} usa {1}.",
+    "description": ""
+  },
+  "Matcap.Refused.RowOwnedByFeature.Fmt": {
+    "message": "{0} fue reescrito por la mejora de shader de equipo de Proteus. Deshazla primero y luego añade el matcap de fila.",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Fmt": {
+    "message": "No se pudo recortar la fila: {0}.",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Normal": {
+    "message": "no se pudo leer el mapa de normales",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Index": {
+    "message": "no se pudo leer el mapa de índices",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Write": {
+    "message": "no se pudo escribir el material recortado",
+    "description": ""
+  },
+  "Matcap.Refused.RowTextureVaries.Fmt": {
+    "message": "{0} cambia el mapa de normales o de índices de esta pieza, así que un solo recorte no sirve para todas las opciones.",
+    "description": ""
+  },
+  "Matcap.Refused.RowEmpty.Fmt": {
+    "message": "Ningún píxel de esta pieza usa la fila {0}.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNothingLeft": {
+    "message": "Todas las piezas con este material ya tienen un matcap.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNotGear": {
+    "message": "Un matcap en una sola fila de color solo funciona en equipo y accesorios.",
+    "description": ""
+  },
+  "Matcap.Refused.RowOneMaterial": {
+    "message": "Un matcap en una sola fila de color funciona con un material a la vez. Marca piezas de un único material.",
+    "description": ""
+  },
+  "Matcap.Refused.RowMixedThreshold": {
+    "message": "Las opciones de esta pieza no coinciden en cómo se recorta, y sus colores de vértice la recortarían. Un matcap de fila no puede servir para ambas.",
+    "description": ""
+  },
+  "Matcap.Refused.RowVertexAlpha": {
+    "message": "Los colores de vértice de esta pieza recortarían el matcap de fila, y no se pueden cambiar.",
+    "description": ""
+  },
+  "Matcap.Refused.RowGameGear": {
+    "message": "Un matcap en una sola fila de color funciona en el equipo propio de un mod, no en las piezas del propio juego.",
+    "description": ""
+  },
+  "Matcap.Row.GameFile": {
+    "message": "el archivo del propio juego",
+    "description": ""
+  },
+  "Matcap.Row.DefaultData": {
+    "message": "los archivos predeterminados del mod",
+    "description": ""
+  },
+  "Matcap.Row.Option.Fmt": {
+    "message": "la opción «{1}» de «{0}»",
+    "description": ""
+  },
+  "Matcap.Row.Container.Fmt": {
+    "message": "la entrada {1} de «{0}»",
+    "description": ""
+  },
+  "Parts.Matcap.RowOnly": {
+    "message": "Solo en una fila de color",
+    "description": ""
+  },
+  "Parts.Matcap.RowOnlyTip": {
+    "message": "Pone el matcap solo en los píxeles de una fila de color del material de la pieza, como un patrón de encaje o ribete. Deja todo sin marcar para cubrir todas las piezas con este material.",
+    "description": ""
+  },
+  "Parts.Matcap.RowReading": {
+    "message": "Leyendo las filas de color…",
+    "description": ""
+  },
+  "Parts.Matcap.RowNoRows": {
+    "message": "El material de esta pieza no tiene filas de color para elegir.",
+    "description": ""
+  },
+  "Parts.Matcap.RowSub": {
+    "message": "Subfila",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubBoth": {
+    "message": "A y B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubA": {
+    "message": "Solo A",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubB": {
+    "message": "Solo B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubOnly.Fmt": {
+    "message": "Este material solo usa la subfila {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.RowMaterial": {
+    "message": "Material del objeto",
+    "description": ""
+  },
+  "Parts.Matcap.RowAll.Fmt": {
+    "message": "Cubre todas las piezas dibujadas con {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.RowFollowWarn": {
+    "message": "Este material tiene colores definidos en Proteus (o un vínculo a un diseño). Los píxeles de la fila con matcap salen de una copia del material y no los seguirán.",
+    "description": ""
+  },
+  "Parts.Matcap.RowHolesWarn": {
+    "message": "Algunos huecos recortados de esta pieza están dentro de los triángulos de la fila, así que mostrarán el matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.RowStale": {
+    "message": "El material del autor cambió desde que se hizo este matcap de fila. Deshazlo y vuelve a aplicarlo.",
+    "description": ""
   }
 }

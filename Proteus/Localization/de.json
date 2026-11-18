@@ -6670,5 +6670,145 @@
   "Parts.Matcap.PortKept": {
     "message": "Dieses Modell ist eine Haar-Portierung von Proteus. Solange es eine Matcap hat, lässt Proteus es, wie es ist, und erstellt die Portierungen anderer Völker, die sein Material teilen, nicht von selbst neu, bis du die Matcap rückgängig machst. Portierst du eines dieser Völker von Hand im Studio, wird es trotzdem neu erstellt.",
     "description": ""
+  },
+  "Matcap.Refused.RowFileSwap.Fmt": {
+    "message": "{0} tauscht das Material dieses Teils gegen eine andere Datei, daher kann eine Zeilen-Matcap ihm nicht folgen.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoNormal": {
+    "message": "Das Material dieses Teils hat keine Normal-Map, nach der eine Zeilen-Matcap schneidet.",
+    "description": ""
+  },
+  "Matcap.Refused.RowAmbiguousOption.Fmt": {
+    "message": "Die Gruppe „{0}“ hat zwei Optionen namens „{1}“, daher kann eine Zeilen-Matcap sie nicht unterscheiden.",
+    "description": ""
+  },
+  "Matcap.Refused.RowShader.Fmt": {
+    "message": "Eine Zeilen-Matcap braucht das Teil auf character.shpk, und {0} nutzt {1}.",
+    "description": ""
+  },
+  "Matcap.Refused.RowOwnedByFeature.Fmt": {
+    "message": "{0} wurde von Proteus' Ausrüstungs-Shader-Upgrade umgeschrieben. Mach das zuerst rückgängig und füge dann die Zeilen-Matcap hinzu.",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Fmt": {
+    "message": "Die Zeile konnte nicht ausgeschnitten werden: {0}.",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Normal": {
+    "message": "die Normal-Map konnte nicht gelesen werden",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Index": {
+    "message": "die Index-Map konnte nicht gelesen werden",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Write": {
+    "message": "das ausgeschnittene Material konnte nicht geschrieben werden",
+    "description": ""
+  },
+  "Matcap.Refused.RowTextureVaries.Fmt": {
+    "message": "{0} tauscht die Normal- oder Index-Map dieses Teils, daher passt ein Schnitt nicht zu jeder Auswahl.",
+    "description": ""
+  },
+  "Matcap.Refused.RowEmpty.Fmt": {
+    "message": "Kein Pixel dieses Teils nutzt Zeile {0}.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNothingLeft": {
+    "message": "Jedes Teil mit diesem Material hat bereits eine Matcap.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNotGear": {
+    "message": "Eine Matcap auf einer Farbzeile funktioniert nur bei Ausrüstung und Accessoires.",
+    "description": ""
+  },
+  "Matcap.Refused.RowOneMaterial": {
+    "message": "Eine Matcap auf einer Farbzeile funktioniert immer nur mit einem Material. Hake Teile eines einzigen Materials an.",
+    "description": ""
+  },
+  "Matcap.Refused.RowMixedThreshold": {
+    "message": "Die Optionen dieses Teils sind sich nicht einig, wie es ausgeschnitten wird, und seine Vertexfarben würden es schneiden. Eine Zeilen-Matcap passt nicht zu beiden.",
+    "description": ""
+  },
+  "Matcap.Refused.RowVertexAlpha": {
+    "message": "Die Vertexfarben dieses Teils würden die Zeilen-Matcap schneiden, und sie lassen sich nicht ändern.",
+    "description": ""
+  },
+  "Matcap.Refused.RowGameGear": {
+    "message": "Eine Matcap auf einer Farbzeile funktioniert bei der eigenen Ausrüstung eines Mods, nicht bei Teilen des Spiels selbst.",
+    "description": ""
+  },
+  "Matcap.Row.GameFile": {
+    "message": "die Datei des Spiels selbst",
+    "description": ""
+  },
+  "Matcap.Row.DefaultData": {
+    "message": "die Standarddateien des Mods",
+    "description": ""
+  },
+  "Matcap.Row.Option.Fmt": {
+    "message": "die Option „{1}“ von „{0}“",
+    "description": ""
+  },
+  "Matcap.Row.Container.Fmt": {
+    "message": "Eintrag {1} von „{0}“",
+    "description": ""
+  },
+  "Parts.Matcap.RowOnly": {
+    "message": "Nur auf einer Farbzeile",
+    "description": ""
+  },
+  "Parts.Matcap.RowOnlyTip": {
+    "message": "Setzt die Matcap nur auf die Pixel einer Farbzeile des Materials, etwa ein Spitzen- oder Borten-Muster. Lass alles abgehakt, um jedes Teil mit diesem Material abzudecken.",
+    "description": ""
+  },
+  "Parts.Matcap.RowReading": {
+    "message": "Farbzeilen werden gelesen…",
+    "description": ""
+  },
+  "Parts.Matcap.RowNoRows": {
+    "message": "Das Material dieses Teils hat keine Farbzeilen zur Auswahl.",
+    "description": ""
+  },
+  "Parts.Matcap.RowSub": {
+    "message": "Unterzeile",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubBoth": {
+    "message": "A und B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubA": {
+    "message": "Nur A",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubB": {
+    "message": "Nur B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubOnly.Fmt": {
+    "message": "Dieses Material nutzt nur die Unterzeile {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.RowMaterial": {
+    "message": "Werkstoff",
+    "description": ""
+  },
+  "Parts.Matcap.RowAll.Fmt": {
+    "message": "Deckt jedes Teil ab, das mit {0} gezeichnet wird.",
+    "description": ""
+  },
+  "Parts.Matcap.RowFollowWarn": {
+    "message": "Für dieses Material sind in Proteus Farben gesetzt (oder eine Design-Bindung). Die Pixel der Matcap-Zeile kommen aus einer Kopie des Materials und folgen ihnen nicht.",
+    "description": ""
+  },
+  "Parts.Matcap.RowHolesWarn": {
+    "message": "Einige ausgeschnittene Löcher dieses Teils liegen in den Dreiecken der Zeile und zeigen daher die Matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.RowStale": {
+    "message": "Das Material des Autors hat sich geändert, seit diese Zeilen-Matcap erstellt wurde. Mach sie rückgängig und wende sie erneut an.",
+    "description": ""
   }
 }

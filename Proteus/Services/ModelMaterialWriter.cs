@@ -483,7 +483,7 @@ internal static class ModelMaterialWriter
         }
         if (collapse.Count > 0) ModelPartHider.CollapseTriangles(o, collapse);
 
-        // PROTOTYPE: push each copy's vertices (shape-key spares included: they sit in the same streams) out along
+        // Row matcaps: push each copy's vertices (shape-key spares included: they sit in the same streams) out along
         // their own normals, so the overlay sits just above the surface it copies.
         if (overlay)
             for (int k = 0; k < copies.Count; k++)

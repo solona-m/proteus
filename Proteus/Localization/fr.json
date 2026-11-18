@@ -6670,5 +6670,145 @@
   "Parts.Matcap.PortKept": {
     "message": "Ce modèle est l'un des portages de coiffure de Proteus. Tant qu'il a une matcap, Proteus le laisse tel quel et ne refait pas de lui-même les portages des autres races qui partagent son matériau, jusqu'à ce que vous annuliez la matcap. Porter l'une de ces races à la main dans le Studio la refait tout de même.",
     "description": ""
+  },
+  "Matcap.Refused.RowFileSwap.Fmt": {
+    "message": "{0} remplace le matériau de cette pièce par un autre fichier ; un matcap de ligne ne peut donc pas le suivre.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoNormal": {
+    "message": "Le matériau de cette pièce n'a pas de carte normale, ce qui sert à découper un matcap de ligne.",
+    "description": ""
+  },
+  "Matcap.Refused.RowAmbiguousOption.Fmt": {
+    "message": "Le groupe « {0} » a deux options nommées « {1} » ; un matcap de ligne ne peut pas les distinguer.",
+    "description": ""
+  },
+  "Matcap.Refused.RowShader.Fmt": {
+    "message": "Un matcap de ligne nécessite la pièce sur character.shpk, et {0} utilise {1}.",
+    "description": ""
+  },
+  "Matcap.Refused.RowOwnedByFeature.Fmt": {
+    "message": "{0} a été réécrit par la mise à niveau du shader d'équipement de Proteus. Annulez-la d'abord, puis ajoutez le matcap de ligne.",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Fmt": {
+    "message": "La ligne n'a pas pu être découpée : {0}.",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Normal": {
+    "message": "la carte normale n'a pas pu être lue",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Index": {
+    "message": "la carte d'index n'a pas pu être lue",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Write": {
+    "message": "le matériau découpé n'a pas pu être écrit",
+    "description": ""
+  },
+  "Matcap.Refused.RowTextureVaries.Fmt": {
+    "message": "{0} remplace la carte normale ou d'index de cette pièce ; une seule découpe ne peut pas convenir à tous les choix.",
+    "description": ""
+  },
+  "Matcap.Refused.RowEmpty.Fmt": {
+    "message": "Aucun pixel de cette pièce n'utilise la ligne {0}.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNothingLeft": {
+    "message": "Toutes les pièces avec ce matériau ont déjà un matcap.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNotGear": {
+    "message": "Un matcap sur une seule ligne de couleur ne fonctionne que sur l'équipement et les accessoires.",
+    "description": ""
+  },
+  "Matcap.Refused.RowOneMaterial": {
+    "message": "Un matcap sur une seule ligne de couleur fonctionne sur un seul matériau à la fois. Cochez les pièces d'un même matériau.",
+    "description": ""
+  },
+  "Matcap.Refused.RowMixedThreshold": {
+    "message": "Les options de cette pièce ne s'accordent pas sur sa découpe, et ses couleurs de sommets la découperaient. Un matcap de ligne ne peut pas convenir aux deux.",
+    "description": ""
+  },
+  "Matcap.Refused.RowVertexAlpha": {
+    "message": "Les couleurs de sommets de cette pièce découperaient le matcap de ligne, et elles ne peuvent pas être modifiées.",
+    "description": ""
+  },
+  "Matcap.Refused.RowGameGear": {
+    "message": "Un matcap sur une seule ligne de couleur fonctionne sur l'équipement propre d'un mod, pas sur les pièces du jeu lui-même.",
+    "description": ""
+  },
+  "Matcap.Row.GameFile": {
+    "message": "le fichier du jeu lui-même",
+    "description": ""
+  },
+  "Matcap.Row.DefaultData": {
+    "message": "les fichiers par défaut du mod",
+    "description": ""
+  },
+  "Matcap.Row.Option.Fmt": {
+    "message": "l'option « {1} » de « {0} »",
+    "description": ""
+  },
+  "Matcap.Row.Container.Fmt": {
+    "message": "l'entrée {1} de « {0} »",
+    "description": ""
+  },
+  "Parts.Matcap.RowOnly": {
+    "message": "Seulement sur une ligne de couleur",
+    "description": ""
+  },
+  "Parts.Matcap.RowOnlyTip": {
+    "message": "Place le matcap uniquement sur les pixels d'une ligne de couleur du matériau, comme un motif de dentelle ou de bordure. Ne cochez rien pour couvrir toutes les pièces de ce matériau.",
+    "description": ""
+  },
+  "Parts.Matcap.RowReading": {
+    "message": "Lecture des lignes de couleur…",
+    "description": ""
+  },
+  "Parts.Matcap.RowNoRows": {
+    "message": "Le matériau de cette pièce n'a aucune ligne de couleur à choisir.",
+    "description": ""
+  },
+  "Parts.Matcap.RowSub": {
+    "message": "Sous-ligne",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubBoth": {
+    "message": "A et B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubA": {
+    "message": "A seulement",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubB": {
+    "message": "B seulement",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubOnly.Fmt": {
+    "message": "Ce matériau n'utilise que la sous-ligne {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.RowMaterial": {
+    "message": "Matériau",
+    "description": ""
+  },
+  "Parts.Matcap.RowAll.Fmt": {
+    "message": "Couvre toutes les pièces dessinées avec {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.RowFollowWarn": {
+    "message": "Ce matériau a des couleurs définies dans Proteus (ou une liaison à un design). Les pixels de la ligne avec matcap viennent d'une copie du matériau et ne les suivront pas.",
+    "description": ""
+  },
+  "Parts.Matcap.RowHolesWarn": {
+    "message": "Certains trous découpés de cette pièce sont dans les triangles de la ligne ; ils montreront donc le matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.RowStale": {
+    "message": "Le matériau de l'auteur a changé depuis la création de ce matcap de ligne. Annulez-le puis appliquez-le à nouveau.",
+    "description": ""
   }
 }

@@ -31,6 +31,9 @@ internal static class MatcapPreview
 
         /// <summary>Row matcap: which cut copy the preview pushed — the one Penumbra resolves ("penumbra") or a guess ("heuristic").</summary>
         public string? ResolvedFrom { get; init; }
+
+        /// <summary>Row matcap: cut-out holes sit inside the row's triangles (they will show the matcap).</summary>
+        public bool RowHoles { get; init; }
     }
 
     /// <summary>
@@ -135,7 +138,7 @@ internal static class MatcapPreview
                 files.Add(new([MatcapWriter.FlatNormalGamePath(req.Token)], ".tex", File.ReadAllBytes(req.FlatNormalTemp)));
             if (input.Choice.Library is { } lib && optionBytes != null)
                 files.Add(new([lib.Texture], ".tex", optionBytes));
-            return new Built(files, "", "") { ResolvedFrom = resolvedFrom };
+            return new Built(files, "", "") { ResolvedFrom = resolvedFrom, RowHoles = prepared.RowHoles };
         }
         finally
         {
