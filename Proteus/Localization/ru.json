@@ -6751,8 +6751,20 @@
     "message": "запись {1} группы «{0}»",
     "description": ""
   },
-  "Parts.Matcap.RowOnly": {
-    "message": "Только на одной строке цвета",
+  "Parts.Matcap.PickHint": {
+    "message": "Выберите часть или строку колорсета.",
+    "description": ""
+  },
+  "Parts.Matcap.RowA": {
+    "message": "Строка A",
+    "description": ""
+  },
+  "Parts.Matcap.RowB": {
+    "message": "Строка B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubTip": {
+    "message": "Выберите одну или обе. При наведении она подсвечивается на персонаже.",
     "description": ""
   },
   "Parts.Matcap.RowOnlyTip": {
@@ -6765,26 +6777,6 @@
   },
   "Parts.Matcap.RowNoRows": {
     "message": "У материала этой части нет строк цвета для выбора.",
-    "description": ""
-  },
-  "Parts.Matcap.RowSub": {
-    "message": "Подстрока",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubBoth": {
-    "message": "A и B",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubA": {
-    "message": "Только A",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubB": {
-    "message": "Только B",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubOnly.Fmt": {
-    "message": "Этот материал использует только подстроку {0}.",
     "description": ""
   },
   "Parts.Matcap.RowMaterial": {

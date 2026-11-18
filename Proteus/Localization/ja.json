@@ -6751,8 +6751,20 @@
     "message": "「{0}」の項目 {1}",
     "description": ""
   },
-  "Parts.Matcap.RowOnly": {
-    "message": "1つのカラー行だけ",
+  "Parts.Matcap.PickHint": {
+    "message": "パーツかカラーセットの行を選んでください。",
+    "description": ""
+  },
+  "Parts.Matcap.RowA": {
+    "message": "行 A",
+    "description": ""
+  },
+  "Parts.Matcap.RowB": {
+    "message": "行 B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubTip": {
+    "message": "片方か両方を選びます。ポインターを合わせるとキャラクター上で光ります。",
     "description": ""
   },
   "Parts.Matcap.RowOnlyTip": {
@@ -6765,26 +6777,6 @@
   },
   "Parts.Matcap.RowNoRows": {
     "message": "このパーツのマテリアルには選べるカラー行がありません。",
-    "description": ""
-  },
-  "Parts.Matcap.RowSub": {
-    "message": "サブ行",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubBoth": {
-    "message": "AとB",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubA": {
-    "message": "Aのみ",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubB": {
-    "message": "Bのみ",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubOnly.Fmt": {
-    "message": "このマテリアルはサブ行 {0} だけを使います。",
     "description": ""
   },
   "Parts.Matcap.RowMaterial": {

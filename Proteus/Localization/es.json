@@ -6751,8 +6751,20 @@
     "message": "la entrada {1} de «{0}»",
     "description": ""
   },
-  "Parts.Matcap.RowOnly": {
-    "message": "Solo en una fila de color",
+  "Parts.Matcap.PickHint": {
+    "message": "Elige una parte o una fila del colorset.",
+    "description": ""
+  },
+  "Parts.Matcap.RowA": {
+    "message": "Fila A",
+    "description": ""
+  },
+  "Parts.Matcap.RowB": {
+    "message": "Fila B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubTip": {
+    "message": "Elige una o ambas. Al señalarla, se ilumina en tu personaje.",
     "description": ""
   },
   "Parts.Matcap.RowOnlyTip": {
@@ -6765,26 +6777,6 @@
   },
   "Parts.Matcap.RowNoRows": {
     "message": "El material de esta pieza no tiene filas de color para elegir.",
-    "description": ""
-  },
-  "Parts.Matcap.RowSub": {
-    "message": "Subfila",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubBoth": {
-    "message": "A y B",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubA": {
-    "message": "Solo A",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubB": {
-    "message": "Solo B",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubOnly.Fmt": {
-    "message": "Este material solo usa la subfila {0}.",
     "description": ""
   },
   "Parts.Matcap.RowMaterial": {

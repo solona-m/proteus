@@ -33,7 +33,22 @@ internal static class RowPickerView
     /// Show all, the first used row, or 1. A hidden selection lands on the first visible row. Under Show all a valid
     /// selection never moves, so a dimmed row can be picked on purpose.
     /// </summary>
-    public static int Land(int selected, IReadOnlyList<int> visible, bool showAll, Func<int, bool> inUse)
+    public static int Land(int selected, IReadOnlyList<int> visible, bool showAll, Func<int, bool> inUse, bool allowNone = false)
+    {
+        // A picker where no row is a choice (the Matcaps tool: no row = whole parts) keeps 0, and a hidden row drops to 0.
+        if (allowNone && (selected is <= 0 or > 16 || (!showAll && visible.Count > 0 && !visible.Contains(selected)))) return 0;
+        return LandOne(selected, visible, showAll, inUse);
+    }
+
+    /// <summary>A click on row <paramref name="clicked"/>: picks it; under <paramref name="allowNone"/>, a click on the
+    /// picked row unpicks it.</summary>
+    public static int Click(int selected, int clicked, bool allowNone) => allowNone && clicked == selected ? 0 : clicked;
+
+    /// <summary>The Row A / Row B toggles as a sub-row: one picked is that one; both or neither is both.</summary>
+    public static Proteus.Services.SubRowPick Sub(bool a, bool b) =>
+        a == b ? Proteus.Services.SubRowPick.Both : a ? Proteus.Services.SubRowPick.A : Proteus.Services.SubRowPick.B;
+
+    private static int LandOne(int selected, IReadOnlyList<int> visible, bool showAll, Func<int, bool> inUse)
     {
         if (selected is <= 0 or > 16)
         {

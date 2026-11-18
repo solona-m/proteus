@@ -373,7 +373,8 @@ public class MatcapRowUnitTests
         Assert.DoesNotContain("prototype", panel, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("PROTOTYPE", Source("Services/Matcap/MatcapStudio.cs"));
         Assert.DoesNotContain("PROTOTYPE", Source("Services/ModelMaterialWriter.cs"));
-        Assert.Contains("s.RowOnly", panel);
+        Assert.Contains("s.RowMaterial", panel);
+        Assert.Contains("Strings.Matcap.PickHint", Source("Gui/PartsPanel.cs"));
         Assert.DoesNotContain("\"Reading the colour rows", panel);
     }
 

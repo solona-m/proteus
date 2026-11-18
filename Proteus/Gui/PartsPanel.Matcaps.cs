@@ -111,8 +111,8 @@ public sealed partial class PartsPanel
     private int matcapRowOnly;
     private SubRowPick matcapRowSub = SubRowPick.Both;
 
-    /// <summary>The last row picked, kept while the row is switched off so switching it on comes back to it.</summary>
-    private int matcapRowPick;
+    /// <summary>The Row A / Row B toggles (neither or both: both sub-rows).</summary>
+    private bool matcapSubA, matcapSubB;
 
     /// <summary>The material picked for a row matcap with nothing ticked, when the model has more than one (null: the first).</summary>
     private string? matcapRowMaterial;
@@ -121,8 +121,9 @@ public sealed partial class PartsPanel
     internal void SetMatcapRow(int row, SubRowPick sub)
     {
         matcapRowOnly = Math.Clamp(row, 0, 16);
-        if (matcapRowOnly > 0) matcapRowPick = matcapRowOnly;
         matcapRowSub = sub;
+        // The toggles show what the sub-row is: a harness "both" clears them, as the panel's own both-or-neither does.
+        if (RowPickerView.Sub(matcapSubA, matcapSubB) != sub) (matcapSubA, matcapSubB) = (sub == SubRowPick.A, sub == SubRowPick.B);
         PumpMatcapPreview();
     }
 
@@ -153,8 +154,6 @@ public sealed partial class PartsPanel
         return all.FirstOrDefault(m => string.Equals(m, matcapRowMaterial, StringComparison.OrdinalIgnoreCase)) ?? all.FirstOrDefault();
     }
 
-    private string[] MatcapSubLabels() => [Strings.Matcap.RowSubBoth, Strings.Matcap.RowSubA, Strings.Matcap.RowSubB];
-
     /// <summary>The picker's rows for one material, read off the framework thread, by (mod, model, material).</summary>
     private string? matcapRowInfoKey;
     private Task<MatcapStudio.RowInfo?>? matcapRowInfo;
@@ -163,17 +162,14 @@ public sealed partial class PartsPanel
     private (string Key, bool Warn)? matcapRowFollow;
 
     /// <summary>
-    /// "Only on one colour row", the material list (nothing ticked, several materials), then the Colors window's own row
-    /// picker for the material — swatches, only the rows its index map uses, Glow, and hovering a row lights it.
+    /// The material list (nothing ticked, several materials), then the Colors window's own row picker for the material —
+    /// swatches, only the rows its index map uses, hovering a row lights it. Always shown: picking a row is what puts the
+    /// matcap on that row only (no row: the ticked parts, whole); clicking it again unpicks it. Row A / Row B narrow it.
     /// </summary>
     private void DrawMatcapRowPicker()
     {
         var s = Strings.Matcap;
-        bool on = matcapRowOnly > 0;
-        if (ImGui.Checkbox($"{s.RowOnly}##matcapRowOn", ref on))
-            SetMatcapRow(on ? Math.Max(1, matcapRowPick) : 0, matcapRowSub);
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.RowOnlyTip);
-        if (!on || parts == null) return;
+        if (parts == null) return;
 
         // Several materials and nothing ticked: pick which one the row is on.
         bool anyTicked = parts.Parts.Any(p => ticked.Contains(p.Label));
@@ -216,20 +212,13 @@ public sealed partial class PartsPanel
         }
 
         int pick = matcapRowOnly;
-        if (ColorTableEditor.DrawRowPicker($"matcaprow_{key}", info.Rows, info.UsedRows, [info.Leaf], ref pick, info.UsedSubRow)
+        bool a = matcapSubA, b = matcapSubB;
+        if (ColorTableEditor.DrawRowPicker($"matcaprow_{key}", info.Rows, info.UsedRows, [info.Leaf], ref pick, ref a, ref b, info.UsedSubRow)
             || pick != matcapRowOnly)
         {
-            matcapRowPick = pick;
-            SetMatcapRow(pick, matcapRowSub);
+            (matcapSubA, matcapSubB) = (a, b);
+            SetMatcapRow(pick, RowPickerView.Sub(a, b));
         }
-
-        ImGui.SetNextItemWidth(110 * ImGuiHelpers.GlobalScale);
-        int sub = matcapRowSub switch { SubRowPick.A => 1, SubRowPick.B => 2, _ => 0 };
-        var subLabels = MatcapSubLabels();
-        if (ImGui.Combo($"{s.RowSub}##matcapRowSub", ref sub, subLabels, subLabels.Length))
-            SetMatcapRow(matcapRowOnly, sub switch { 1 => SubRowPick.A, 2 => SubRowPick.B, _ => SubRowPick.Both });
-        if (info.UsedSubRow != null && matcapRowSub != SubRowPick.Both && matcapRowSub.ToString() != info.UsedSubRow)
-            ImGui.TextColored(ProteusStyle.Warn, string.Format(s.RowSubOnlyFmt, info.UsedSubRow));
     }
 
     /// <summary>

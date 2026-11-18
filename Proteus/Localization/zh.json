@@ -6751,8 +6751,20 @@
     "message": "“{0}”的条目 {1}",
     "description": ""
   },
-  "Parts.Matcap.RowOnly": {
-    "message": "仅限一个颜色行",
+  "Parts.Matcap.PickHint": {
+    "message": "选择一个部件或一行 colorset。",
+    "description": ""
+  },
+  "Parts.Matcap.RowA": {
+    "message": "行 A",
+    "description": ""
+  },
+  "Parts.Matcap.RowB": {
+    "message": "行 B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubTip": {
+    "message": "选择一个或两个。指向它时会在角色身上发光。",
     "description": ""
   },
   "Parts.Matcap.RowOnlyTip": {
@@ -6765,26 +6777,6 @@
   },
   "Parts.Matcap.RowNoRows": {
     "message": "此部件的材质没有可选的颜色行。",
-    "description": ""
-  },
-  "Parts.Matcap.RowSub": {
-    "message": "子行",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubBoth": {
-    "message": "A 和 B",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubA": {
-    "message": "仅 A",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubB": {
-    "message": "仅 B",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubOnly.Fmt": {
-    "message": "此材质只使用子行 {0}。",
     "description": ""
   },
   "Parts.Matcap.RowMaterial": {

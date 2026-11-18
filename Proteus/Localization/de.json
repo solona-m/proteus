@@ -6751,8 +6751,20 @@
     "message": "Eintrag {1} von „{0}“",
     "description": ""
   },
-  "Parts.Matcap.RowOnly": {
-    "message": "Nur auf einer Farbzeile",
+  "Parts.Matcap.PickHint": {
+    "message": "Wähle ein Teil oder eine Colorset-Zeile.",
+    "description": ""
+  },
+  "Parts.Matcap.RowA": {
+    "message": "Zeile A",
+    "description": ""
+  },
+  "Parts.Matcap.RowB": {
+    "message": "Zeile B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubTip": {
+    "message": "Wähle eine oder beide. Zeigst du darauf, leuchtet sie an deinem Charakter auf.",
     "description": ""
   },
   "Parts.Matcap.RowOnlyTip": {
@@ -6765,26 +6777,6 @@
   },
   "Parts.Matcap.RowNoRows": {
     "message": "Das Material dieses Teils hat keine Farbzeilen zur Auswahl.",
-    "description": ""
-  },
-  "Parts.Matcap.RowSub": {
-    "message": "Unterzeile",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubBoth": {
-    "message": "A und B",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubA": {
-    "message": "Nur A",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubB": {
-    "message": "Nur B",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubOnly.Fmt": {
-    "message": "Dieses Material nutzt nur die Unterzeile {0}.",
     "description": ""
   },
   "Parts.Matcap.RowMaterial": {

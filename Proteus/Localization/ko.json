@@ -6751,8 +6751,20 @@
     "message": "\"{0}\"의 항목 {1}",
     "description": ""
   },
-  "Parts.Matcap.RowOnly": {
-    "message": "한 색상 행에만",
+  "Parts.Matcap.PickHint": {
+    "message": "파츠나 컬러셋 행을 고르세요.",
+    "description": ""
+  },
+  "Parts.Matcap.RowA": {
+    "message": "행 A",
+    "description": ""
+  },
+  "Parts.Matcap.RowB": {
+    "message": "행 B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubTip": {
+    "message": "하나 또는 둘 다 고르세요. 가리키면 캐릭터에서 빛납니다.",
     "description": ""
   },
   "Parts.Matcap.RowOnlyTip": {
@@ -6765,26 +6777,6 @@
   },
   "Parts.Matcap.RowNoRows": {
     "message": "이 부위의 머티리얼에는 고를 색상 행이 없습니다.",
-    "description": ""
-  },
-  "Parts.Matcap.RowSub": {
-    "message": "하위 행",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubBoth": {
-    "message": "A와 B",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubA": {
-    "message": "A만",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubB": {
-    "message": "B만",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubOnly.Fmt": {
-    "message": "이 머티리얼은 하위 행 {0}만 씁니다.",
     "description": ""
   },
   "Parts.Matcap.RowMaterial": {

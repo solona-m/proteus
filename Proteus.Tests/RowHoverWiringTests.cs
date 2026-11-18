@@ -106,8 +106,11 @@ public class RowHoverWiringTests
     public void DrawRows_lands_through_RowPickerView()
     {
         var body = DrawRows;
-        Assert.Contains("selectedRow = RowPickerView.Land(selectedRow, visible, _showAllRows, InUse);", body);
+        Assert.Contains("selectedRow = RowPickerView.Land(selectedRow, visible, _showAllRows, InUse, allowNone);", body);
         Assert.DoesNotContain("if (selectedRow is <= 0 or > 16)", body);
+        // The Colors window's own tables always land on a row; only the Matcaps picker allows none.
+        Assert.DoesNotContain("allowNone: true", Method(Editor, "public static void DrawRows("));
+        Assert.Contains("allowNone: true", Method(Editor, "public static bool DrawRowPicker("));
     }
 
     [Fact]
@@ -187,7 +190,7 @@ public class RowHoverWiringTests
         var writes = Regex.Matches(body, @"selectedRow\s*=[^=]").Select(m => body.Substring(m.Index, Math.Min(60, body.Length - m.Index))).ToArray();
         Assert.Equal(2, writes.Length);
         Assert.Contains(writes, w => w.StartsWith("selectedRow = RowPickerView.Land(", StringComparison.Ordinal));
-        Assert.Contains(writes, w => w.StartsWith("selectedRow = row;", StringComparison.Ordinal));
+        Assert.Contains(writes, w => w.StartsWith("selectedRow = RowPickerView.Click(selectedRow, row, ", StringComparison.Ordinal));
         Assert.DoesNotContain("selectedRow", Commit);
     }
 
@@ -209,7 +212,8 @@ public class RowHoverWiringTests
             return body[at..end];
         }
         var gear = Case("case HoverAction.Gear:");
-        Assert.Contains("Highlighter?.SetPreview(a!.ShellLeaves!, ColorRowMask.Pair(a.Row))", gear);
+        // Both sub-rows of the hovered row (RowHoverOffer.GearMask), or one for a sub-row button.
+        Assert.Contains("Highlighter?.SetPreview(a!.ShellLeaves!, a.GearMask)", gear);
         Assert.Contains("SkinGlow?.EndPreview()", gear);
 
         var skin = Case("case HoverAction.Skin:");

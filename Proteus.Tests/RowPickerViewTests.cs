@@ -11,6 +11,43 @@ public class RowPickerViewTests
 {
     private static readonly int[] All = Enumerable.Range(1, 16).ToArray();
 
+    // ── the Matcaps picker: no row is a choice ──
+
+    [Fact]
+    public void Allow_none_keeps_no_row_and_drops_a_hidden_one()
+    {
+        var used = new HashSet<int> { 3, 10 };
+        Assert.Equal(0, RowPickerView.Land(0, [3, 10], false, used.Contains, allowNone: true));
+        Assert.Equal(0, RowPickerView.Land(5, [3, 10], false, used.Contains, allowNone: true));   // hidden: unpicked, not moved
+        Assert.Equal(10, RowPickerView.Land(10, [3, 10], false, used.Contains, allowNone: true));
+        Assert.Equal(5, RowPickerView.Land(5, All, true, used.Contains, allowNone: true));        // Show all: a dimmed row stays
+        Assert.Equal(3, RowPickerView.Land(0, [3, 10], false, used.Contains));                    // the Colors window: lands as before
+    }
+
+    [Fact]
+    public void Clicking_the_picked_row_unpicks_it_only_where_none_is_allowed()
+    {
+        Assert.Equal(0, RowPickerView.Click(15, 15, allowNone: true));
+        Assert.Equal(16, RowPickerView.Click(15, 16, allowNone: true));
+        Assert.Equal(15, RowPickerView.Click(15, 15, allowNone: false));
+    }
+
+    [Fact]
+    public void Row_A_and_B_toggles_are_one_sub_row_or_both()
+    {
+        Assert.Equal(SubRowPick.A, RowPickerView.Sub(true, false));
+        Assert.Equal(SubRowPick.B, RowPickerView.Sub(false, true));
+        Assert.Equal(SubRowPick.Both, RowPickerView.Sub(true, true));
+        Assert.Equal(SubRowPick.Both, RowPickerView.Sub(false, false));
+    }
+
+    [Fact]
+    public void A_sub_row_hover_lights_one_game_row_a_row_hover_both()
+    {
+        Assert.Equal(ColorRowMask.Pair(16), new RowHoverOffer("s", 16, HighlightRoute.Gear, ["m.mtrl"], null).GearMask);
+        Assert.Equal(1u << 31, new RowHoverOffer("s", 16, HighlightRoute.Gear, ["m.mtrl"], null, ColorRowMask.Sub(16, false)).GearMask);
+    }
+
     [Fact]
     [Trait("Plan", "AC-row-hover-highlight-8")]
     public void Visible_lists_only_used_rows_ascending()

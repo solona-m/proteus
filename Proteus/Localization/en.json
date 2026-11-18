@@ -6751,8 +6751,20 @@
     "message": "entry {1} of \"{0}\"",
     "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
   },
-  "Parts.Matcap.RowOnly": {
-    "message": "Only on one colour row",
+  "Parts.Matcap.PickHint": {
+    "message": "Pick a part or colorset row.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowA": {
+    "message": "Row A",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowB": {
+    "message": "Row B",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowSubTip": {
+    "message": "Pick one or both. Pointing at it lights it on your character.",
     "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
   },
   "Parts.Matcap.RowOnlyTip": {
@@ -6765,26 +6777,6 @@
   },
   "Parts.Matcap.RowNoRows": {
     "message": "This part's material has no colour rows to pick from.",
-    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
-  },
-  "Parts.Matcap.RowSub": {
-    "message": "Sub-row",
-    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
-  },
-  "Parts.Matcap.RowSubBoth": {
-    "message": "A and B",
-    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
-  },
-  "Parts.Matcap.RowSubA": {
-    "message": "A only",
-    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
-  },
-  "Parts.Matcap.RowSubB": {
-    "message": "B only",
-    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
-  },
-  "Parts.Matcap.RowSubOnly.Fmt": {
-    "message": "This material only uses sub-row {0}.",
     "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
   },
   "Parts.Matcap.RowMaterial": {
