@@ -214,6 +214,8 @@ public sealed class ContribCleanRoomRecordTests
         foreach (var name in CleanAgents)
         {
             var s = sections[name];
+            // A gate step that could not run (a QA Blocker) records the block instead of an agent's reads.
+            if (s.Contains("Blocked:", StringComparison.Ordinal) && s.Contains("No agent was started", StringComparison.Ordinal)) continue;
             Assert.Contains("Opened:", s);
             Assert.Contains("Sub-agents: none", s);
             Assert.Contains("Grep without line numbers: 0", s);
