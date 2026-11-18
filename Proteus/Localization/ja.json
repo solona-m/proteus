@@ -6727,6 +6727,14 @@
     "message": "行マットキャップにはパーツが character.shpk である必要がありますが、{0} は {1} を使っています。",
     "description": ""
   },
+  "Matcap.Refused.RowGlassLayout.Fmt": {
+    "message": "{0} は {1} を、Proteus が行マットキャップのために character.shpk へ移せない構成で使っています（法線・マスク・インデックスマップがちょうど1枚ずつと、黄金のレガシーのカラーテーブルが必要です）。",
+    "description": ""
+  },
+  "Matcap.Refused.RowGlassTemplate": {
+    "message": "ガラス部位の切り抜きの元になるゲーム本体のマテリアルを読み込めなかったため、何も変更していません。",
+    "description": ""
+  },
   "Matcap.Refused.RowLegacyWear.Fmt": {
     "message": "{0} はまだ古いシェーダー（characterlegacy.shpk）のままで、行マットキャップには character.shpk が必要です。一度装備して装備シェーダーで character.shpk に移してから、行マットキャップを追加してください。古いシェーダーのままの場合は、{1} の件数にカーソルを合わせると理由が分かります。",
     "description": ""
@@ -6847,6 +6855,10 @@
     "message": "このパーツの切り抜き穴の一部が行の三角形の中にあるため、そこにマットキャップが見えます。",
     "description": ""
   },
+  "Parts.Matcap.RowGlassWarn.Fmt": {
+    "message": "この部位はガラスで、切り抜けません。代わりに Proteus は、行の周りの {1} 個の三角形を、マテリアルを不透明（character.shpk）にした独自のコピーで描画します。元のガラスのマテリアルは変更されず、「{0}」で元に戻ります。",
+    "description": ""
+  },
   "Parts.Matcap.Chat.Applied.Fmt": {
     "message": "{0} 個のモデルファイルにマットキャップを適用しました。",
     "description": ""
@@ -6857,6 +6869,10 @@
   },
   "Parts.Matcap.Chat.Edges": {
     "message": "透ける縁をゲーム内で確認してください。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Glass.Fmt": {
+    "message": "この部位はガラスです。行の周りの {0} 個の三角形は、ガラスではなく不透明で描画されるようになりました。",
     "description": ""
   },
   "Parts.Matcap.Chat.Skipped.Fmt": {

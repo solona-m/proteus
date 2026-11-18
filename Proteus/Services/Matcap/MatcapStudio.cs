@@ -62,6 +62,10 @@ internal static class MatcapStudio
         public bool RowHoles { get; init; }
         /// <summary>Row matcap: the cut meshes' vertex alpha was raised to 1.</summary>
         public bool CutAlphaSet { get; init; }
+        /// <summary>Row matcap: a glass part's cut copy was moved to character.shpk (its row's triangles draw solid).</summary>
+        public bool RowGlass { get; init; }
+        /// <summary>How many of the open model's triangles draw from that converted copy (summed over glass sources).</summary>
+        public int RowGlassTriangles { get; init; }
     }
 
     public const string CodeRowNotGear = "row-not-gear", CodeRowOneMaterial = "row-one-material",
@@ -236,6 +240,7 @@ internal static class MatcapStudio
         var meshesOf = names.ToDictionary(n => n, _ => new List<(string Rel, int Source, int Drawn)>(), StringComparer.Ordinal);
         var cutMeshes = new List<(string Rel, int Source, int Drawn)>();
         bool rowHoles = false, cutAlphaSet = false;
+        int rowGlassTriangles = 0;
         for (int si = 0; si < sources.Count; si++)
         {
             for (int mi = 0; mi < running.Count; mi++)
@@ -283,6 +288,7 @@ internal static class MatcapStudio
                             "This part's options don't agree on how it is cut out, and its vertex colours would cut it. A row matcap can't fit both."));
                     var moved = ModelMaterialWriter.MoveToMaterial(copy.Model, mine2!, cutName!, 0f, keep2.Contains, alphaOne);
                     cutAlphaSet |= alphaOne;
+                    if (mi == 0 && rowCut.Glass) rowGlassTriangles += keep2.Count;
                     meshesOf[names[si]].AddRange(copy.Meshes.Select(x => (m.Rel, x.Source, x.Drawn)));
                     cutMeshes.AddRange(moved.Meshes.Select(x => (m.Rel, x.Source, x.Drawn)));
                     running[mi] = m with { Current = moved.Model, Cut = m.Cut || copy.Lod0Cut || moved.Lod0Cut };
@@ -402,7 +408,8 @@ internal static class MatcapStudio
         }
 
         var req = new MatcapWriter.ApplyRequest(token, plans, edits, maskTemp, flatTemp);
-        return new Prepared(req, "", "", skipped, alphaTested, cut) { RowHoles = rowHoles, CutAlphaSet = cutAlphaSet };
+        return new Prepared(req, "", "", skipped, alphaTested, cut) { RowHoles = rowHoles, CutAlphaSet = cutAlphaSet,
+                   RowGlass = rowCut?.Glass ?? false, RowGlassTriangles = rowGlassTriangles };
     }
 
     /// <summary>

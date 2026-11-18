@@ -89,6 +89,9 @@ public sealed partial class PartsPanel
         public int ModelCount { get; init; }
         /// <summary>A row Apply over cut-out holes inside the row's triangles (they show the matcap).</summary>
         public bool RowHoles { get; init; }
+        /// <summary>A row Apply on a glass part: its cut copy was moved to character.shpk, drawing this many triangles.</summary>
+        public bool RowGlass { get; init; }
+        public int RowGlassTriangles { get; init; }
         /// <summary>An Apply wrote one of Proteus's hair ports, which is kept as it is while it has a matcap.</summary>
         public bool PortKept { get; init; }
     }
@@ -401,6 +404,8 @@ public sealed partial class PartsPanel
         }
         if (!built.Ok)
         {
+            matcapRowGlass = false;   // nothing built: no glass line about a cut that isn't shown
+            matcapRowGlassTriangles = 0;
             matcapPreview.Failed(key, built.Message);
             log.Information("[Proteus] matcap preview: not shown ({0}): {1}", built.Code, built.Message);
             // What is on the character no longer matches what is ticked: take it down.
@@ -408,6 +413,8 @@ public sealed partial class PartsPanel
             return;
         }
         matcapRowHoles = built.RowHoles;
+        matcapRowGlass = built.RowGlass;
+        matcapRowGlassTriangles = built.RowGlassTriangles;
         matcapPreviewResolvedFrom = built.ResolvedFrom;
         PushMatcapPreview(gen, key, built);
     }
@@ -570,6 +577,8 @@ public sealed partial class PartsPanel
             GamePiece = vanilla != null,
             RowFollowWarn = MatcapRowFollowWarn(),
             RowHoles = matcapRowHoles,
+            RowGlass = matcapRowGlass,
+            RowGlassTriangles = matcapRowGlassTriangles,
         });
     }
 
@@ -579,6 +588,9 @@ public sealed partial class PartsPanel
     private Dictionary<string, long>? matcapManifestStamps;
     /// <summary>The last row preview found cut-out holes inside the row's triangles.</summary>
     private bool matcapRowHoles;
+    /// <summary>The last row preview or Apply moved a glass part's cut copy to character.shpk, and its triangle count.</summary>
+    private bool matcapRowGlass;
+    private int matcapRowGlassTriangles;
 
     /// <summary>
     /// Re-read the entries' states on a worker: <paramref name="force"/> (mod open, after a write) always; otherwise only
@@ -668,6 +680,7 @@ public sealed partial class PartsPanel
             return new MatcapJobResult(root, outcome, outcome.Ok && choice.IsLibrary ? choice : null, confirmEnable,
                                        prepared.SiblingsSkipped, prepared.Lod0Cut, prepared.AlphaTested, model.GamePath)
                 { IsApply = true, ModelCount = prepared.Request?.Models.Count ?? 0, RowHoles = prepared.RowHoles,
+                  RowGlass = prepared.RowGlass, RowGlassTriangles = prepared.RowGlassTriangles,
                   PortKept = outcome.Ok && MatcapWriter.WritesHairPort(root, prepared.Request) };
         });
     }
@@ -771,6 +784,7 @@ public sealed partial class PartsPanel
         Finish(new MatcapJobResult(c.Root, outcome, outcome.Ok && original.IsLibrary ? original : null, confirm,
                                    prepared?.SiblingsSkipped ?? [], prepared?.Lod0Cut ?? false, prepared?.AlphaTested ?? false, piece.GamePath)
             { IsApply = true, ModelCount = prepared?.Request?.Models.Count ?? 0, RowHoles = prepared?.RowHoles ?? false,
+              RowGlass = prepared?.RowGlass ?? false, RowGlassTriangles = prepared?.RowGlassTriangles ?? 0,
               PortKept = outcome.Ok && MatcapWriter.WritesHairPort(c.Root, prepared?.Request) });
     }
 
@@ -815,7 +829,8 @@ public sealed partial class PartsPanel
 
         // The panel keeps one short line; the details go to chat, short; the log keeps the full message and file names.
         var (_, panel, chat) = MatcapPanelModel.Report(new MatcapPanelModel.JobReport(r.Outcome.Message, r.IsApply, r.ModelCount, r.RowHoles,
-                                                                                      r.SiblingsSkipped, r.AlphaTested, r.Lod0Cut, extra, r.PortKept));
+                                                                                      r.SiblingsSkipped, r.AlphaTested, r.Lod0Cut, extra, r.PortKept,
+                                                                                      r.RowGlass, r.RowGlassTriangles));
         status = panel;
         statusIsError = false;
         matcapError = null;
@@ -825,6 +840,10 @@ public sealed partial class PartsPanel
             r.SiblingsSkipped.Count > 0 ? " Skipped: " + string.Join(", ", r.SiblingsSkipped) + "." : "",
             extra.Count > 0 ? " " + string.Join(" ", extra) : "");
         AfterModChange(r.Root, r.Outcome.Files.Where(f => f.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)).ToList());
+        // After AfterModChange (whose preview take-down clears the line): an Apply says whether it converted glass; an Undo
+        // or Forget took any conversion away.
+        matcapRowGlass = r.IsApply && r.RowGlass;
+        matcapRowGlassTriangles = matcapRowGlass ? r.RowGlassTriangles : 0;
     }
 
     /// <summary>The warning when the character draws another file for this game path than the ones written.</summary>

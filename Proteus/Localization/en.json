@@ -6727,6 +6727,14 @@
     "message": "A row matcap needs the part on character.shpk, and {0} uses {1}.",
     "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
   },
+  "Matcap.Refused.RowGlassLayout.Fmt": {
+    "message": "{0} uses {1} in a layout Proteus can't move to character.shpk for a row matcap (it needs exactly a normal, mask and index map and a Dawntrail colour table).",
+    "description": "Studio Matcaps tool, matcap on one colour row, refusal. {0} = where the material is (e.g. the option \"Everything\" of \"Enaretos Bracelet\"); {1} = the shader name (characterglass.shpk). Keep character.shpk exactly as written."
+  },
+  "Matcap.Refused.RowGlassTemplate": {
+    "message": "The game's own material a glass part's cut is built from could not be read, so nothing was changed.",
+    "description": "Studio Matcaps tool, matcap on one colour row, refusal: the game's own material that a glass part's converted cut copy takes its shader settings from could not be read (game files unavailable, or changed by a patch)."
+  },
   "Matcap.Refused.RowLegacyWear.Fmt": {
     "message": "{0} is still on the old shader (characterlegacy.shpk), and a row matcap needs character.shpk. Wear it once so Gear shaders moves it to character.shpk, then add the row matcap. If it stays on the old shader, hover the count under {1} to see why.",
     "description": "Studio Matcaps tool, matcap on one colour row. {0} = where the file is (e.g. the option \"Blue\" of \"Colour\"); {1} = \"Settings > Gear shaders\" (built from Tab.Settings and Settings.Section.GearShaders). Keep characterlegacy.shpk and character.shpk exactly as written."
@@ -6847,6 +6855,10 @@
     "message": "Some cut-out holes in this part sit inside the row's triangles, so they will show the matcap.",
     "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
   },
+  "Parts.Matcap.RowGlassWarn.Fmt": {
+    "message": "This part is glass, which can't be cut: Proteus draws {1} triangle(s) around the row from its own solid (character.shpk) copy of the material instead. Your glass material isn't changed, and \"{0}\" puts it all back.",
+    "description": "Studio Matcaps tool, warning under the row options after a row matcap preview or Apply on a glass part. {0} = the label of the button \"Undo matcaps on this model\" (Parts.Matcap.Undo); {1} = a number of triangles. Keep character.shpk exactly as written."
+  },
   "Parts.Matcap.Chat.Applied.Fmt": {
     "message": "Matcap applied to {0} model file(s).",
     "description": "Studio Matcaps tool, a finished matcap Apply said in game chat, short."
@@ -6858,6 +6870,10 @@
   "Parts.Matcap.Chat.Edges": {
     "message": "Check see-through edges in game.",
     "description": "Studio Matcaps tool, a finished matcap Apply said in game chat, short."
+  },
+  "Parts.Matcap.Chat.Glass.Fmt": {
+    "message": "This part is glass: {0} triangle(s) around the row now draw solid, not glass.",
+    "description": "Chat line after a row matcap Apply on a glass part. {0} = a number of triangles."
   },
   "Parts.Matcap.Chat.Skipped.Fmt": {
     "message": "Not applied to {0}: their parts differ.",

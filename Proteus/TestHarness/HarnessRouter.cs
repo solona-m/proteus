@@ -125,6 +125,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
             character = s.Character,
             collection = s.CollectionId is { } id ? new { id } : null,
             models,
+            materials = GearMaterials(s.ResourceMap),
             compositor = new
             {
                 phase = CompositorPhase.Of(c), inFlight = c.InFlight, epoch = c.Epoch,
@@ -159,6 +160,19 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
             harnessChanges,
         });
     }
+
+    /// <summary>
+    /// The player's gear materials in <c>/state</c>: each equipment or accessory material game path and the file Penumbra
+    /// resolves it to (prefixes stripped), from the resource map <c>/state</c> already read on the framework thread — what
+    /// a row matcap's cut copy is checked by. Paths only (scrubbed with the rest); empty when Penumbra can't be read.
+    /// </summary>
+    internal static object GearMaterials(IReadOnlyDictionary<string, HashSet<string>>? map) =>
+        (map ?? new Dictionary<string, HashSet<string>>())
+            .SelectMany(kv => kv.Value.Where(Proteus.Services.ShaderUpgradePlan.IsGearMaterial)
+                                      .Select(gp => (GamePath: gp, Resolved: Proteus.Services.ShaderUpgradePlan.StripPenumbraPrefix(kv.Key))))
+            .OrderBy(x => x.GamePath, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.Resolved, StringComparer.OrdinalIgnoreCase)
+            .Select(x => new { gamePath = x.GamePath, resolved = x.Resolved })
+            .ToList();
 
     /// <summary>The ten slots in <c>/state</c>, in slot order: item and dyes (null when unreadable), set/variant for a custom id.</summary>
     internal static object GearBlock(IReadOnlyDictionary<string, Worn>? gear)

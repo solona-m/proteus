@@ -14,7 +14,7 @@ internal sealed partial class HarnessRouter
 {
     private async Task<HarnessResponse> Equip(HarnessRequest request)
     {
-        var (body, bad) = JsonBody(request, "slot", "item", "set", "variant");
+        var (body, bad) = JsonBody(request, "slot", "item", "set", "variant", "dyes");
         if (bad != null) return bad;
         string? rawSlot = OptionalString(body, "slot", out bad);
         if (bad != null) return bad;
@@ -45,7 +45,18 @@ internal sealed partial class HarnessRouter
             sentId = HarnessGear.CustomId(slot, (int)set, (int)variant);
         }
 
-        var result = await OnFramework(() => changes.Gate(jobs.Busy, Game.AutoRefit().Busy) ?? changes.Equip(slot, sentId, requested));
+        // Optional stains (Glamourer stain ids, channel 1 and 2): what a dyed check needs; put-back restores the original's.
+        byte dye1 = 0, dye2 = 0;
+        if (body.TryGetProperty("dyes", out var dyesEl))
+        {
+            if (dyesEl.ValueKind != JsonValueKind.Array || dyesEl.GetArrayLength() != 2
+                || !WholeNumber(dyesEl[0], 0, 255, out var d1) || !WholeNumber(dyesEl[1], 0, 255, out var d2))
+                return HarnessResponse.Error(400, "invalid-field", "dyes must be two whole numbers from 0 to 255");
+            dye1 = (byte)d1;
+            dye2 = (byte)d2;
+        }
+
+        var result = await OnFramework(() => changes.Gate(jobs.Busy, Game.AutoRefit().Busy) ?? changes.Equip(slot, sentId, requested, dye1, dye2));
         return Answer(result);
     }
 

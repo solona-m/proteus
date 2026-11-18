@@ -34,6 +34,9 @@ internal static class MatcapPreview
 
         /// <summary>Row matcap: cut-out holes sit inside the row's triangles (they will show the matcap).</summary>
         public bool RowHoles { get; init; }
+        /// <summary>Row matcap on a glass part: the cut copy is character.shpk (see <see cref="MatcapStudio.Prepared.RowGlass"/>).</summary>
+        public bool RowGlass { get; init; }
+        public int RowGlassTriangles { get; init; }
     }
 
     /// <summary>
@@ -144,7 +147,8 @@ internal static class MatcapPreview
                 files.Add(new([MatcapWriter.FlatNormalGamePath(req.Token)], ".tex", File.ReadAllBytes(req.FlatNormalTemp)));
             if (input.Choice.Library is { } lib && optionBytes != null)
                 files.Add(new([lib.Texture], ".tex", optionBytes));
-            return new Built(files, "", "") { ResolvedFrom = resolvedFrom, RowHoles = prepared.RowHoles };
+            return new Built(files, "", "") { ResolvedFrom = resolvedFrom, RowHoles = prepared.RowHoles,
+                                               RowGlass = prepared.RowGlass, RowGlassTriangles = prepared.RowGlassTriangles };
         }
         finally
         {

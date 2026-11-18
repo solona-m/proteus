@@ -912,6 +912,9 @@ public sealed partial class PartsPanel
         previewHides = 0;
         share.Reset();
         matcapPending = null;
+        // The glass line describes a shown preview (or, set after this by Finish, the Apply that just converted one).
+        matcapRowGlass = false;
+        matcapRowGlassTriangles = 0;
         matcapPreview.Ended(keepMatcapWanted);
         preview.End(redraw: refreshGame);
     }

@@ -77,6 +77,10 @@ internal sealed class MatcapPanel
         public bool RowFollowWarn;
         /// <summary>The last row Apply found holes inside the row's triangles (they show the matcap).</summary>
         public bool RowHoles;
+        /// <summary>The built preview or the last row Apply moved a glass part's cut copy to character.shpk, and how many
+        /// of the open model's triangles draw from it.</summary>
+        public bool RowGlass;
+        public int RowGlassTriangles;
     }
 
     /// <summary>Where the matcap is picked from.</summary>
@@ -335,6 +339,7 @@ internal sealed class MatcapPanel
             ImGui.PushTextWrapPos(0f);
             if (ctx.RowFollowWarn) ImGui.TextColored(ProteusStyle.Warn, s.RowFollowWarn);
             if (ctx.RowHoles) ImGui.TextColored(ProteusStyle.Warn, s.RowHolesWarn);
+            if (ctx.RowGlass) ImGui.TextColored(ProteusStyle.Warn, string.Format(s.RowGlassWarnFmt, s.UndoLabel, ctx.RowGlassTriangles));
             ImGui.PopTextWrapPos();
         }
         // Apply on parts that have a matcap changes those matcaps wherever they are used: say so before it is pressed.

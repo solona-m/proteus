@@ -6727,6 +6727,14 @@
     "message": "Un matcap de ligne nécessite la pièce sur character.shpk, et {0} utilise {1}.",
     "description": ""
   },
+  "Matcap.Refused.RowGlassLayout.Fmt": {
+    "message": "{0} utilise {1} dans une disposition que Proteus ne peut pas passer à character.shpk pour un matcap de ligne (il faut exactement une normal map, un masque, une index map et une table de couleurs Dawntrail).",
+    "description": ""
+  },
+  "Matcap.Refused.RowGlassTemplate": {
+    "message": "Le matériau du jeu à partir duquel la découpe d'une pièce en verre est construite n'a pas pu être lu, donc rien n'a été modifié.",
+    "description": ""
+  },
   "Matcap.Refused.RowLegacyWear.Fmt": {
     "message": "{0} utilise encore l'ancien shader (characterlegacy.shpk), et un matcap de ligne a besoin de character.shpk. Porte-le une fois pour que les shaders d'équipement le passent à character.shpk, puis ajoute le matcap de ligne. S'il reste sur l'ancien shader, survole le compte sous {1} pour voir pourquoi.",
     "description": ""
@@ -6847,6 +6855,10 @@
     "message": "Certains trous découpés de cette pièce sont dans les triangles de la ligne ; ils montreront donc le matcap.",
     "description": ""
   },
+  "Parts.Matcap.RowGlassWarn.Fmt": {
+    "message": "Cette pièce est en verre, qui ne peut pas être découpé : Proteus dessine à la place {1} triangle(s) autour de la ligne avec sa propre copie opaque du matériau (character.shpk). Ton matériau en verre n'est pas modifié, et « {0} » remet tout en place.",
+    "description": ""
+  },
   "Parts.Matcap.Chat.Applied.Fmt": {
     "message": "Matcap appliqué à {0} fichier(s) de modèle.",
     "description": ""
@@ -6857,6 +6869,10 @@
   },
   "Parts.Matcap.Chat.Edges": {
     "message": "Vérifiez les bords transparents en jeu.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Glass.Fmt": {
+    "message": "Cette pièce est en verre : {0} triangle(s) autour de la ligne sont maintenant dessinés opaques, pas en verre.",
     "description": ""
   },
   "Parts.Matcap.Chat.Skipped.Fmt": {

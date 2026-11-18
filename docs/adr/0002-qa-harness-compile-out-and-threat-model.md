@@ -191,6 +191,13 @@ configuration, in one bounded way:
   timed out leaves it as it is and says so.
 - Compiled out of every CI build like the rest of the harness.
 
+**Amendment (2026-11-18, row matcaps on glass).** `equip` takes optional `dyes`
+(two Glamourer stain ids), so QA can check a dyed part: the stains are recorded with
+the slot for the session and put-back restores the slot's original item and dyes, as
+for any equip. `/state` gains read-only `materials` (gear material game paths and the
+files Penumbra resolves them to, scrubbed like `models`). A glass part's row cut is
+written by the same `matcap` job and backup as before.
+
 ## Consequences
 
 Easier: QA can test the plugin in a running game unattended once the user turns

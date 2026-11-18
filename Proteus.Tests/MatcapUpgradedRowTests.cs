@@ -923,10 +923,10 @@ public class MatcapUpgradedRowTests
         var generic = string.Format(ProteusLoc.Localize("Matcap.Refused.RowShader.Fmt",
             "A row matcap needs the part on character.shpk, and {0} uses {1}."), Blue, MatcapRowCut.LegacyShader);
         Assert.Equal(generic, f.Prepare(f.Env(gearShadersOn: null)).Message);
-        ShaderUpgradeTestKit.Put(f.ModRoot, blue, RowFixture.Material(shader: "characterglass.shpk"));
+        ShaderUpgradeTestKit.Put(f.ModRoot, blue, RowFixture.Material(shader: "hair.shpk"));
         var glass = f.Prepare(f.Env(gearShadersOn: true));
         Assert.Equal(MatcapRowCut.CodeShader, glass.Code);
-        Assert.Contains("characterglass.shpk", glass.Message);
+        Assert.Contains("hair.shpk", glass.Message);
         Assert.DoesNotContain(MatcapRowCut.LegacyShader, glass.Message);
     }
 

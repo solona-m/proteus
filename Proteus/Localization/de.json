@@ -6727,6 +6727,14 @@
     "message": "Eine Zeilen-Matcap braucht das Teil auf character.shpk, und {0} nutzt {1}.",
     "description": ""
   },
+  "Matcap.Refused.RowGlassLayout.Fmt": {
+    "message": "{0} nutzt {1} in einem Aufbau, den Proteus für eine Zeilen-Matcap nicht auf character.shpk umstellen kann (es braucht genau eine Normal-, Masken- und Index-Map und eine Dawntrail-Farbtabelle).",
+    "description": ""
+  },
+  "Matcap.Refused.RowGlassTemplate": {
+    "message": "Das spieleigene Material, aus dem der Schnitt eines Glasteils gebaut wird, konnte nicht gelesen werden, daher wurde nichts geändert.",
+    "description": ""
+  },
   "Matcap.Refused.RowLegacyWear.Fmt": {
     "message": "{0} nutzt noch den alten Shader (characterlegacy.shpk), und eine Zeilen-Matcap braucht character.shpk. Trag es einmal, damit Ausrüstungs-Shader es auf character.shpk umstellt, und füge dann die Zeilen-Matcap hinzu. Bleibt es beim alten Shader, fahr unter {1} über die Anzahl, um zu sehen, warum.",
     "description": ""
@@ -6847,6 +6855,10 @@
     "message": "Einige ausgeschnittene Löcher dieses Teils liegen in den Dreiecken der Zeile und zeigen daher die Matcap.",
     "description": ""
   },
+  "Parts.Matcap.RowGlassWarn.Fmt": {
+    "message": "Dieses Teil ist Glas, das sich nicht ausschneiden lässt: Proteus zeichnet stattdessen {1} Dreieck(e) um die Zeile aus seiner eigenen, undurchsichtigen Kopie des Materials (character.shpk). Dein Glasmaterial bleibt unverändert, und „{0}“ stellt alles wieder her.",
+    "description": ""
+  },
   "Parts.Matcap.Chat.Applied.Fmt": {
     "message": "Matcap auf {0} Modelldatei(en) angewendet.",
     "description": ""
@@ -6857,6 +6869,10 @@
   },
   "Parts.Matcap.Chat.Edges": {
     "message": "Prüfe durchsichtige Kanten im Spiel.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Glass.Fmt": {
+    "message": "Dieses Teil ist Glas: {0} Dreieck(e) um die Zeile werden jetzt undurchsichtig gezeichnet, nicht als Glas.",
     "description": ""
   },
   "Parts.Matcap.Chat.Skipped.Fmt": {
