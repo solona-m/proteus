@@ -295,4 +295,17 @@ public sealed class SharedSeamResolverTests : IDisposable
         string some = JsonSerializer.Serialize(new BodyRetargetWriter.Entry { Name = "A", Seam = "C|L|t.mdl" }, options);
         Assert.Equal("C|L|t.mdl", JsonSerializer.Deserialize<BodyRetargetWriter.Entry>(some)!.Seam);
     }
+
+    [Fact]
+    [Trait("Plan", "EDGE-split-waist-seam-27")]
+    public void SizeSetMadeOnOtherBody_NoPin()
+    {
+        byte[] legs = File.ReadAllBytes(Path.Combine(root, "legs/a.mdl"));
+        var notes = new List<string>();
+        var request = new SizeSetRefit.Request(root, ["rue"], false, false, [], MadeOn: "Other Body");
+        var piece = new SizeSetRefit.Piece(LegsPath, "_dwn", null, [], "Legs", "Leg Size", Race);
+        Assert.Null(SizeSetRefit.SharedSeamFor(request, piece, ModelPartReader.Read(legs)!, legs, "Body",
+                                               Catalog(("body/legs.mdl", "_dwn")), Race, Mod(), [], new(), null, notes.Add));
+        Assert.Contains(notes, n => n.Contains("Made on", StringComparison.Ordinal));
+    }
 }

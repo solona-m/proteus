@@ -402,4 +402,50 @@ public class SharedSeamTests
             }
         }
     }
+
+    [Fact]
+    [Trait("Plan", "EDGE-split-waist-seam-18")]
+    public void BeltOverSplit_StaysOutside()
+    {
+        // A belt band over the legs' waist, 3 mm outside the dress, in the legs file: the legs' waist is held back where
+        // the author put it and the belt is carried with it — never left inside the dress.
+        var belt = Tube(Cloth, ClothRadius + 0.003f, 0.985f, 1.0f, 3, (_, _) => [("j_kosi", 1f)]) with
+        {
+            Material = "/mt_c0201e0628_dwn_belt.mtrl",
+        };
+        byte[] legs = SyntheticModel.BuildSurface([], Tube(Cloth, ClothRadius, 0.97f, Split, 3, Weights("j_asi_a_l")), belt);
+        byte[] top = TopBytes();
+        var (_, legsSeam) = Seams(top, legs);
+        var plan = BodyRetarget.Plan(ModelPartReader.Read(legs)!, legs, [Pair("_dwn", 0.12f, 0.126f)], "_dwn", sharedSeam: legsSeam);
+        Assert.Null(plan.Report.SeamDropped);
+        var parts = ModelPartReader.Read(legs)!;
+        var beltVerts = parts.Parts.Where(p => p.Material.Contains("belt", StringComparison.Ordinal) && p.Island < 0)
+                             .SelectMany(p => p.Triangles).Distinct().ToList();
+        float dressAtWaist = ClothRadius;                       // the held waist, where the author put it
+        foreach (int v in beltVerts)
+        {
+            var p = Moved(parts, plan, v);
+            Assert.True(new Vector2(p.X, p.Z).Length() > dressAtWaist, $"belt vertex {v} came inside the dress");
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-split-waist-seam-21")]
+    [Trait("Plan", "EDGE-split-waist-seam-29")]
+    public void HipLevelSplit_AndBodyCopiedSuit_NoNewFoldsOrDropped()
+    {
+        // Both pieces made on the same body and refitted alike (a suit copied off one body): the hold changes nothing it
+        // does not have to, adds no fold and is not dropped.
+        byte[] top = TopBytes(true), legs = LegsBytes(true);
+        var (topSeam, legsSeam) = Seams(top, legs);
+        var bareTop = BodyRetarget.Plan(ModelPartReader.Read(top)!, top, [Pair("_top", 0.12f, 0.126f)], "_top");
+        var heldTop = BodyRetarget.Plan(ModelPartReader.Read(top)!, top, [Pair("_top", 0.12f, 0.126f)], "_top", sharedSeam: topSeam);
+        var bareLegs = BodyRetarget.Plan(ModelPartReader.Read(legs)!, legs, [Pair("_dwn", 0.12f, 0.126f)], "_dwn");
+        var heldLegs = BodyRetarget.Plan(ModelPartReader.Read(legs)!, legs, [Pair("_dwn", 0.12f, 0.126f)], "_dwn", sharedSeam: legsSeam);
+        Assert.Null(heldTop.Report.SeamDropped);
+        Assert.Null(heldLegs.Report.SeamDropped);
+        Assert.True(heldTop.Report.Folded <= bareTop.Report.Folded);
+        Assert.True(heldLegs.Report.Folded <= bareLegs.Report.Folded);
+        Assert.True(RingGap(top, heldTop, legs, heldLegs) <= 5e-5f);
+    }
 }

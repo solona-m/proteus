@@ -334,4 +334,115 @@ public class SarelleSplitSeamLocalTests(ITestOutputHelper output)
         Assert.True(topHeld.Report.Folded <= topBare.Report.Folded);
         Assert.True(legsHeld.Report.Folded <= legsBare.Report.Folded);
     }
+    /// <summary>The seam each of the user's pieces holds onto Tre, as the gate gives it.</summary>
+    private static (BodyRetarget.SharedSeam Top, BodyRetarget.SharedSeam Legs) UserSeams()
+    {
+        var gate = Gate(LocalData.TreMod, out _, [], out _);
+        var top = Load(TreMTop);
+        var legs = Load(BiboLLegs);
+        var t = RefitCore.SeamForGarment(gate, top.Parts, top.Bytes, "Tre", "Tre");
+        var l = RefitCore.SeamForGarment(gate, legs.Parts, legs.Bytes, "Tre", "Tre");
+        return (t.Seam!, l.Seam!);
+    }
+
+    [LocalDataFact(LocalData.SarelleMod, LocalData.TreMod, LocalData.BiboPlusMod, LocalData.RueMod, LocalData.YabMod)]
+    [Trait("Plan", "AC-split-waist-seam-2")]
+    [Trait("Plan", "EDGE-split-waist-seam-1")]
+    public void LegsClose_AuthoredTopAndEveryTreChest()
+    {
+        var (topSeam, legsSeam) = UserSeams();
+        var (_, legsHeld) = RefitUserCombination(null, legsSeam);
+        var top = Load(TreMTop);
+        var legs = Load(BiboLLegs);
+        var pairs = AuthoredPairs(top.Parts, legs.Parts);
+        var tre = Body(LocalData.TreMod);
+        string treM = Path.Combine(LocalData.Path(LocalData.TreMod), "files/common/4/c0201e0000_top.mdl");
+        var chests = tre.Catalog.For("_top", Race).Where(o => o.Label.StartsWith("Omit", StringComparison.Ordinal)).ToList();
+        Assert.NotEmpty(chests);
+        foreach (var chest in chests)
+        {
+            Assert.Null(BodyRetarget.BuildPair("_top", treM, tre.Catalog.PathOf(chest), "_top", false, null, null, null, out var pair));
+            var plan = BodyRetarget.Plan(top.Parts, top.Bytes, [pair], "_top", sharedSeam: topSeam);
+            float gap = Gap(top.Parts, plan, legs.Parts, legsHeld, pairs, out int within);
+            output.WriteLine($"{chest.Label}: worst {gap * 1000f:0.000} mm, {within} of {pairs.Count}; dropped {plan.Report.SeamDropped ?? "no"}");
+            Assert.Null(plan.Report.SeamDropped);
+            Assert.Equal(pairs.Count, within);
+        }
+        // [EDGE-split-waist-seam-1] Against the author's own top, not refitted: every legs seam vertex is where it was.
+        foreach (var (i, j) in pairs)
+        {
+            var d = legsHeld.Edit.DeltaAt(j);
+            Assert.Equal(0f, MathF.Sqrt(d.X * d.X + d.Y * d.Y + d.Z * d.Z));
+        }
+    }
+
+    [LocalDataFact(LocalData.SarelleMod, LocalData.TreMod, LocalData.BiboPlusMod, LocalData.RueMod, LocalData.YabMod)]
+    [Trait("Plan", "AC-split-waist-seam-3")]
+    [Trait("Plan", "EDGE-split-waist-seam-24")]
+    public void WeightsHeld_PositionsBitIdentical_OnWrittenModels()
+    {
+        var (topSeam, legsSeam) = UserSeams();
+        var (topHeld, legsHeld) = RefitUserCombination(topSeam, legsSeam);
+        var top = Load(TreMTop);
+        var legs = Load(BiboLLegs);
+        var pairs = AuthoredPairs(top.Parts, legs.Parts);
+        foreach (var (written, authored) in new[] { (topHeld.Model, top), (legsHeld.Model, legs) })
+        {
+            var parts = ModelPartReader.Read(written)!;
+            var skin = ModelSkinReader.Read(written, null, null)!;
+            var byPos = new Dictionary<Vector3, int>();
+            for (int v = 0; v < parts.Positions.Length / 3; v++) byPos.TryAdd(At(parts, v), v);
+            int exact = 0;
+            foreach (var (i, j) in pairs)
+            {
+                int a = ReferenceEquals(authored.Parts, top.Parts) ? i : j;
+                var p = At(authored.Parts, a);
+                // [EDGE-split-waist-seam-24] The written position is the authored one to the last bit.
+                Assert.True(byPos.TryGetValue(p, out int w), $"{p} not drawn exactly where the author put it");
+                exact++;
+                var mine = BodyRetarget.Influences(authored.Skin, a).OrderBy(x => x.Bone, StringComparer.Ordinal).ToList();
+                var now = BodyRetarget.Influences(skin, w).OrderBy(x => x.Bone, StringComparer.Ordinal).ToList();
+                Assert.Equal(mine.Select(x => x.Bone), now.Select(x => x.Bone));
+                for (int k = 0; k < mine.Count; k++) Assert.InRange(now[k].W, mine[k].W - 0.005f, mine[k].W + 0.005f);
+            }
+            output.WriteLine($"{exact} seam vertices bit-identical with the author's weights");
+        }
+    }
+
+    [LocalDataFact(LocalData.SarelleMod, LocalData.TreMod, LocalData.BiboPlusMod, LocalData.RueMod, LocalData.YabMod)]
+    [Trait("Plan", "AC-split-waist-seam-7")]
+    public void Gen3AndRueLegsOntoTre_HoldNothing()
+    {
+        var gate = Gate(LocalData.TreMod, out _, [], out _);
+        foreach (var rel in new[] { "leg size/bibo l/chara/equipment/e0628/model/c0201e0628_dwn_3.mdl",
+                                    "leg size/yiggle rue wc/chara/equipment/e0628/model/c0201e0628_dwn.mdl" })
+        {
+            var legs = Load(rel);
+            var (seam, key, why) = RefitCore.SeamForGarment(gate, legs.Parts, legs.Bytes, "Tre", "Tre");
+            output.WriteLine($"{rel}: {why}");
+            Assert.Null(seam);
+            Assert.Null(key);
+            Assert.Contains("another waist", why, StringComparison.Ordinal);
+        }
+    }
+
+    [LocalDataFact(LocalData.SarelleMod, LocalData.TreMod, LocalData.BiboPlusMod, LocalData.RueMod, LocalData.YabMod)]
+    [Trait("Plan", "EDGE-split-waist-seam-8")]
+    public void SarelleOntoRue_MatchesRecordedReading()
+    {
+        var notes = new List<string>();
+        var gate = Gate(LocalData.RueMod, out _, notes, out int reads);
+        output.WriteLine($"onto Rue: {gate.Top?.File ?? "none"} ({gate.Top?.Points.Count ?? 0} places) {gate.Refusal}; {reads} readings");
+        notes.ForEach(output.WriteLine);
+        var bibo = Load(BiboLLegs);
+        var main = RefitCore.SeamForGarment(gate, bibo.Parts, bibo.Bytes, "Rue", "Rue");
+        output.WriteLine($"bibo l legs onto Rue: {(main.Seam == null ? main.Why : "held")}");
+        // Recorded 2026-11-18: Yiggles Rue M reads clearly on Rue+ (1 reading), so the Rue waist is the seam onto Rue and
+        // the main-waist legs (Bibo L) hold none of it (0 of 133 places).
+        Assert.NotNull(gate.Top);
+        Assert.Contains("yiggles rue m", gate.Top!.File, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(main.Seam);
+        var rueLegs = Load("leg size/yiggle rue wc/chara/equipment/e0628/model/c0201e0628_dwn.mdl");
+        Assert.NotNull(RefitCore.SeamForGarment(gate, rueLegs.Parts, rueLegs.Bytes, "Rue", "Rue").Seam);
+    }
 }

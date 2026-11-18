@@ -63,4 +63,14 @@ public class AutoRefitRunNowForTests
         Assert.Contains("AutoRefitDecisions.ShouldRefit(", slot);
         Assert.Single(Regex.Matches(src, Regex.Escape("Enqueue(new Request(slot, worn, resolved, root,")));
     }
+
+    [Fact]
+    [Trait("Plan", "EDGE-split-waist-seam-22")]
+    public void RacialRoute_HoldsNoSeam()
+    {
+        // A garment baked for another race before its refit no longer lies where its author's files put the split: no
+        // seam is resolved for it (the refit is as before; a racial bake after the refit is RefitCore.Finish's).
+        var src = Source();
+        Assert.Contains("if (r.ModRoot != null && root != null && !route.Any && primary is \"_top\" or \"_dwn\"", src);
+    }
 }
