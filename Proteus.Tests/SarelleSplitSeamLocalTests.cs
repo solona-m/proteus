@@ -165,7 +165,7 @@ public class SarelleSplitSeamLocalTests(ITestOutputHelper output)
     internal static RefitCore.SeamGate Gate(string body, out RefitCore.SeamFiles files, List<string> notes, out int reads,
                                             bool bellyCheck = true)
     {
-        var bodies = new[] { Body(LocalData.TreMod), Body(LocalData.BiboPlusMod), Body(LocalData.RueMod) }.ToList();
+        var bodies = new[] { Body(LocalData.TreMod), Body(LocalData.BiboPlusMod), Body(LocalData.RueMod), Body(LocalData.YabMod) }.ToList();
         var target = bodies.First(b => string.Equals(b.Dir, Path.GetFileName(LocalData.Path(body)), StringComparison.OrdinalIgnoreCase));
         string root = LocalData.Path(LocalData.SarelleMod);
         files = RefitCore.SeamFilesOf(PenumbraModMeta.ReadAllRedirects(root), BodyRetargetWriter.ReadRecord(root), Race, notes.Add)!;
@@ -210,6 +210,63 @@ public class SarelleSplitSeamLocalTests(ITestOutputHelper output)
         output.WriteLine($"Step 0(h): all-miss gate onto Bibo+ in {clock.Elapsed.TotalSeconds:0.0} s cold, {reads} readings: {gate.Refusal}");
         Assert.Null(gate.Top);
         Assert.Contains("made on", gate.Refusal, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The size set on a copy of the mod: every size it cuts from a main-waist source holds the split where the author put
+    /// it, so the author's own pieces on that body (which it leaves as they are) close against it; a size cut from another
+    /// waist's source is left to the refit and said so. Onto YAB it makes only YAB S (the author ships YAB's legs).
+    /// <para/>
+    /// Onto plain YAB, whose Yab M top and Yab WC/SC legs are on the main waist. A YAS run takes only YAS-rigged sources,
+    /// and Sarelle's only ones are its Rue-waist pieces (Yiggles Rue tops, Yiggle Rue WC legs: 0 of 133 places): measured
+    /// 2026-11-18 onto YAS Tre, both legs sizes left unheld and logged — the off-waist case, a deferred known-issue.
+    /// </para>
+    /// </summary>
+    [LocalDataTheory(LocalData.SarelleMod, LocalData.TreMod, LocalData.BiboPlusMod, LocalData.RueMod, LocalData.YabMod,
+                     LocalData.UvMaps)]
+    [InlineData("yab", false, 1)]
+    [InlineData("tre", true, 0)]
+    [Trait("Plan", "AC-split-waist-seam-4")]
+    [Trait("Plan", "EDGE-split-waist-seam-33")]
+    public void SizeSet_FloorPinned_ZeroDrops(string key, bool yas, int floor)
+    {
+        var gate = Gate(key == "yab" ? LocalData.YabMod : LocalData.TreMod, out _, [], out _);
+        var points = gate.Top!.Points;
+        string copy = Path.Combine(Path.GetTempPath(), "proteus-sarelle-seam-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            SizeSetRefitTests.CopyModels(LocalData.Path(LocalData.SarelleMod), copy, withRecord: true);
+            var before = Directory.GetFiles(copy, "*.mdl", SearchOption.AllDirectories).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var lines = new List<string>();
+            var log = NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+            NSubstitute.SubstituteExtensions.When(log, l => l.Information(NSubstitute.Arg.Any<string>(), NSubstitute.Arg.Any<object[]>()))
+                       .Do(ci => lines.Add(string.Format(ci.ArgAt<string>(0), ci.ArgAt<object[]>(1))));
+            var bodies = SizeSetBatch.ScanBodies(LocalData.Path(LocalData.Mods));
+            SizeSetRefit.Run(new SizeSetRefit.Request(copy, [key], Yas: yas, Remake: false, bodies, _ => null, Ends: false,
+                                                      _ => null, Piercings: false),
+                             new UVRemapService(log, LocalData.Path(LocalData.UvMaps)), log, _ => { }, System.Threading.CancellationToken.None);
+
+            lines.Where(l => l.Contains("shared seam", StringComparison.Ordinal) || l.Contains("size set:", StringComparison.Ordinal) && l.Contains(" from ", StringComparison.Ordinal))
+                 .ToList().ForEach(output.WriteLine);
+            var written = Directory.GetFiles(copy, "*.mdl", SearchOption.AllDirectories).Where(f => !before.Contains(f)).ToList();
+            int pinned = 0;
+            foreach (string file in written.Where(f => f.EndsWith("_dwn.mdl", StringComparison.OrdinalIgnoreCase)
+                                                      || f.EndsWith("_top.mdl", StringComparison.OrdinalIgnoreCase)))
+            {
+                var grid = Positions(File.ReadAllBytes(file));
+                int held = points.At.Count(p => Has(grid, p));
+                output.WriteLine($"{Path.GetRelativePath(copy, file)}: {held} of {points.Count} split places where the author put them");
+                if (held == points.Count) pinned++;
+            }
+            Assert.DoesNotContain(lines, l => l.Contains("shared seam not held", StringComparison.Ordinal));
+            Assert.True(pinned >= floor, $"{pinned} size(s) held the split, fewer than {floor}");
+            if (floor == 0)
+                Assert.Contains(lines, l => l.Contains("another waist", StringComparison.Ordinal));
+        }
+        finally
+        {
+            try { Directory.Delete(copy, recursive: true); } catch (IOException) { }
+        }
     }
 
     [LocalDataFact(LocalData.SarelleMod, LocalData.TreMod, LocalData.BiboPlusMod)]
