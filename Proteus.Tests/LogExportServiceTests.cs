@@ -34,7 +34,7 @@ public class LogExportServiceTests
     }
 
     private static string ComposeExportOf(string header, IReadOnlyList<string> lines, string slice)
-        => LogExportService.ComposeExport(header, lines, slice, null, ["Rue Mod"], "Jane Doe");
+        => LogExportService.ComposeExport(header, lines, slice, null, ["Rue Mod"], ["Jane Doe"]);
 
     // [AC-mod-path-containment-7][EDGE-mod-path-containment-28]
     [Fact]
@@ -46,20 +46,24 @@ public class LogExportServiceTests
             () => Task.FromResult<(IReadOnlyCollection<string>, string?)>((["Alt"], "John Roe")), start, TimeSpan.FromSeconds(5));
 
         Assert.Equal(new HashSet<string> { "Main", "Rue", "Alt" }, end.Collections);
-        Assert.Equal("John Roe", end.Character);
+        // A switch mid-capture: both characters are scrubbed, not only the one drawn at the end.
+        Assert.Equal(new HashSet<string> { "Jane Doe", "John Roe" }, end.Characters);
+        var both = LogExportService.ComposeExport("", ["Jane Doe left", "John Roe came"], "", null, end.Collections, end.Characters);
+        Assert.DoesNotContain("Jane Doe", both);
+        Assert.DoesNotContain("John Roe", both);
 
         var failed = await LogExportService.GatherNamesAsync(() => throw new InvalidOperationException("no framework"), start, TimeSpan.FromSeconds(5));
         Assert.Equal(start.Collections, failed.Collections);
-        Assert.Equal("Jane Doe", failed.Character);
+        Assert.Equal(["Jane Doe"], failed.Characters);
 
         var faulted = await LogExportService.GatherNamesAsync(
             () => Task.FromException<(IReadOnlyCollection<string>, string?)>(new InvalidOperationException()), start, TimeSpan.FromSeconds(5));
-        Assert.Equal("Jane Doe", faulted.Character);
+        Assert.Equal(["Jane Doe"], faulted.Characters);
 
         var empty = await LogExportService.GatherNamesAsync(
             () => Task.FromResult<(IReadOnlyCollection<string>, string?)>(([], null)), null, TimeSpan.FromSeconds(5));
         Assert.Empty(empty.Collections);
-        Assert.Null(empty.Character);
+        Assert.Empty(empty.Characters);
     }
 
     // [AC-mod-path-containment-7][EDGE-mod-path-containment-28] A framework thread that never answers costs the timeout,
@@ -68,14 +72,15 @@ public class LogExportServiceTests
     public async Task GatherNamesTimesOutAndKeepsEarlierNames()
     {
         var never = new TaskCompletionSource<(IReadOnlyCollection<string>, string?)>();
-        var earlier = (new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Main" }, (string?)"Jane Doe");
+        var earlier = (new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Main" },
+                       new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Jane Doe" });
         var clock = Stopwatch.StartNew();
 
         var names = await LogExportService.GatherNamesAsync(() => never.Task, earlier, TimeSpan.FromMilliseconds(50));
 
         Assert.True(clock.Elapsed < TimeSpan.FromSeconds(1), $"took {clock.Elapsed}");
         Assert.Equal(["Main"], names.Collections);
-        Assert.Equal("Jane Doe", names.Character);
+        Assert.Equal(["Jane Doe"], names.Characters);
     }
 
     // [AC-mod-path-containment-7][EDGE-mod-path-containment-28] A read given up on that faults later is observed, never an

@@ -59,7 +59,7 @@ public class LogAnonymizerTests
     public void LogTagNamedCollectionKeepsTheTag()
     {
         Assert.Equal("[Proteus] refresh", LogAnonymizer.Scrub("[Proteus] refresh", null, ["Proteus", "penumbra"], "Glamourer"));
-        Assert.Equal("<COLLECTION> body", LogAnonymizer.Scrub("Rue body", null, ["Rue"], null));
+        Assert.Equal("<COLLECTION> body", LogAnonymizer.Scrub("Rue body", null, ["Rue"], (string?)null));
     }
 
     // [EDGE-mod-path-containment-27]

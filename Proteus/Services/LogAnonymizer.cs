@@ -73,6 +73,11 @@ internal static class LogAnonymizer
     /// that is both is a collection. Plus <see cref="LogTagStoplist"/>.
     /// </summary>
     public static string Scrub(string text, string? profileDir, IEnumerable<string>? collections, string? character)
+        => Scrub(text, profileDir, collections, character == null ? null : [character]);
+
+    /// <inheritdoc cref="Scrub(string, string?, IEnumerable{string}?, string?)"/>
+    /// <param name="characters">Every character to scrub (a switch mid-capture saw two).</param>
+    public static string Scrub(string text, string? profileDir, IEnumerable<string>? collections, IEnumerable<string>? characters)
     {
         text = Scrub(text, profileDir);
         if (string.IsNullOrEmpty(text)) return text;
@@ -87,7 +92,7 @@ internal static class LogAnonymizer
             names[name] = placeholder;
         }
         foreach (var c in collections ?? []) Add(c, CollectionPlaceholder);
-        Add(character, CharacterPlaceholder);
+        foreach (var character in characters ?? []) Add(character, CharacterPlaceholder);
 
         foreach (var (name, placeholder) in names.OrderByDescending(n => n.Key.Length))
             text = Regex.Replace(text, @"(?<![A-Za-z0-9_])" + Regex.Escape(name) + @"(?![A-Za-z0-9_])", placeholder,

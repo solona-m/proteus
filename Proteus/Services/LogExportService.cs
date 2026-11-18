@@ -107,7 +107,7 @@ public sealed class LogExportService
         var dir = DesktopFolder.Path() ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         var path = Path.Combine(dir, $"Proteus-log-{started:yyyyMMdd-HHmmss}.txt");
         var text = ComposeExport(header.ToString(), lines, DalamudLogSince(dalamudStart),
-                                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), names.Collections, names.Character);
+                                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), names.Collections, names.Characters);
         await File.WriteAllTextAsync(path, text).ConfigureAwait(false);
         return path;
     }
@@ -116,10 +116,11 @@ public sealed class LogExportService
     /// The whole exported file: <paramref name="header"/>, the captured Proteus lines and the dalamud.log slice, in that
     /// order under their headings — scrubbed as a whole, the slice included. The file is meant to be posted, so neither the
     /// Windows user name nor the character's or any collection's name leaves the machine in it
-    /// (<see cref="LogAnonymizer.Scrub(string, string?, IEnumerable{string}?, string?)"/>).
+    /// (<see cref="LogAnonymizer.Scrub(string, string?, IEnumerable{string}?, IEnumerable{string}?)"/>).
     /// </summary>
+    /// <param name="characters">Every character the capture saw — the start's and the end's after a switch mid-capture.</param>
     internal static string ComposeExport(string header, IReadOnlyList<string> lines, string dalamudSlice,
-                                         string? profileDir, IEnumerable<string> collections, string? character)
+                                         string? profileDir, IEnumerable<string> collections, IEnumerable<string> characters)
     {
         var sb = new StringBuilder();
         sb.Append(header);
@@ -130,37 +131,38 @@ public sealed class LogExportService
         sb.AppendLine();
         sb.AppendLine("==== dalamud.log, same window ====");
         sb.AppendLine(dalamudSlice);
-        return LogAnonymizer.Scrub(sb.ToString(), profileDir, collections, character);
+        return LogAnonymizer.Scrub(sb.ToString(), profileDir, collections, characters);
     }
 
     /// <summary>
-    /// The names to scrub, merged with <paramref name="earlier"/>: every collection either read saw, and the latest
-    /// character. Never throws and never waits past <paramref name="timeout"/>: a read that fails or takes too long
-    /// keeps the earlier names. A read given up on is still observed, so its late fault is never an unobserved one.
+    /// The names to scrub, merged with <paramref name="earlier"/>: every collection and every character either read saw,
+    /// so a character switched away from mid-capture is scrubbed too. Never throws and never waits past
+    /// <paramref name="timeout"/>: a read that fails or takes too long keeps the earlier names. A read given up on is still
+    /// observed, so its late fault is never an unobserved one.
     /// </summary>
-    internal static async Task<(HashSet<string> Collections, string? Character)> GatherNamesAsync(
+    internal static async Task<(HashSet<string> Collections, HashSet<string> Characters)> GatherNamesAsync(
         Func<Task<(IReadOnlyCollection<string> Collections, string? Character)>> namesNow,
-        (HashSet<string> Collections, string? Character)? earlier, TimeSpan timeout)
+        (HashSet<string> Collections, HashSet<string> Characters)? earlier, TimeSpan timeout)
     {
         var collections = new HashSet<string>(earlier?.Collections ?? [], StringComparer.OrdinalIgnoreCase);
-        var character = earlier?.Character;
+        var characters = new HashSet<string>(earlier?.Characters ?? [], StringComparer.OrdinalIgnoreCase);
         try
         {
             var call = namesNow();
             if (await Task.WhenAny(call, Task.Delay(timeout)).ConfigureAwait(false) != call)
             {
                 _ = call.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
-                return (collections, character);
+                return (collections, characters);
             }
             var (now, who) = await call.ConfigureAwait(false);
             foreach (var c in now ?? []) if (!string.IsNullOrWhiteSpace(c)) collections.Add(c);
-            if (!string.IsNullOrWhiteSpace(who)) character = who;
+            if (!string.IsNullOrWhiteSpace(who)) characters.Add(who);
         }
         catch (Exception)
         {
             // Unknown names: keep what the start read saw. The export itself never fails on this.
         }
-        return (collections, character);
+        return (collections, characters);
     }
 
     private long? DalamudLogLength()
