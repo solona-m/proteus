@@ -6119,6 +6119,10 @@
     "message": "отменено вами",
     "description": ""
   },
+  "Settings.GearShaders.Reason.RowMatcap": {
+    "message": "из его прежнего обновления вырезан маткап строки (сначала отмените маткап)",
+    "description": ""
+  },
   "Settings.GearShaders.UpgradeNow": {
     "message": "Обновить надетое сейчас",
     "description": ""
@@ -6141,6 +6145,22 @@
   },
   "Settings.GearShaders.Edited.Fmt": {
     "message": "{0} был изменён после обновления шейдера, поэтому отмена оставляет его как есть. Оригинал автора хранится в Proteus/shaderupgrade-backup/{0}: скопируйте его поверх файла, чтобы отменить.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcap.Fmt": {
+    "message": "Из обновлённого материала {0} вырезан маткап строки, поэтому отмена оставляет его как есть. Сначала отмените этот маткап ({1}), затем это.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapKept.Fmt": {
+    "message": "Из обновлённого материала {0} вырезан маткап строки, который всё ещё рисуют подгонки или переносы причёсок, сделанные из {1}. Пересоздайте или отмените их, снова отмените маткап, затем это.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapEdited.Fmt": {
+    "message": "Из обновлённого материала {0} вырезан маткап строки, а {1} был изменён после этого маткапа, поэтому маткап тоже пока нельзя отменить. Сначала отмените более позднее изменение (или верните копию из Proteus/matcap-backup), затем маткап, затем это.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapLater.Fmt": {
+    "message": "Из обновлённого материала {0} вырезан маткап строки, а {1} изменил(а) {2} после этого маткапа. Сначала отмените {1}, затем маткап, затем это.",
     "description": ""
   },
   "Settings.GearShaders.Busy": {
@@ -6707,8 +6727,16 @@
     "message": "Мэткапу по строке нужна часть на character.shpk, а {0} использует {1}.",
     "description": ""
   },
-  "Matcap.Refused.RowOwnedByFeature.Fmt": {
-    "message": "{0} перезаписан обновлением шейдера экипировки Proteus. Сначала отмените его, затем добавьте мэткап по строке.",
+  "Matcap.Refused.RowLegacyWear.Fmt": {
+    "message": "{0} всё ещё на старом шейдере (characterlegacy.shpk), а маткапу строки нужен character.shpk. Наденьте это один раз, чтобы шейдеры снаряжения перевели его на character.shpk, затем добавьте маткап строки. Если он остаётся на старом шейдере, наведите курсор на счётчик в {1}, чтобы узнать почему.",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyDeclined.Fmt": {
+    "message": "{0} всё ещё на старом шейдере (characterlegacy.shpk), потому что вы отменили его обновление, а маткапу строки нужен character.shpk. Наденьте это и нажмите «{1}» в {2}, затем добавьте маткап строки.",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyOff.Fmt": {
+    "message": "{0} всё ещё на старом шейдере (characterlegacy.shpk), а маткапу строки нужен character.shpk. Включите «{1}» в {2} и наденьте это один раз, затем добавьте маткап строки.",
     "description": ""
   },
   "Matcap.Refused.RowBake.Fmt": {

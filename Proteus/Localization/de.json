@@ -6119,6 +6119,10 @@
     "message": "von dir rückgängig gemacht",
     "description": ""
   },
+  "Settings.GearShaders.Reason.RowMatcap": {
+    "message": "aus seinem früheren Upgrade wurde eine Zeilen-Matcap geschnitten (mach zuerst die Matcap rückgängig)",
+    "description": ""
+  },
   "Settings.GearShaders.UpgradeNow": {
     "message": "Getragenes jetzt umstellen",
     "description": ""
@@ -6141,6 +6145,22 @@
   },
   "Settings.GearShaders.Edited.Fmt": {
     "message": "{0} wurde nach dem Shader-Upgrade bearbeitet, daher lässt Rückgängig die Datei unverändert. Das Original des Autors liegt in Proteus/shaderupgrade-backup/{0}: kopiere es über die Datei, um das Upgrade rückgängig zu machen.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcap.Fmt": {
+    "message": "Aus dem aufgewerteten Material von {0} wurde eine Zeilen-Matcap geschnitten, deshalb lässt Rückgängig es, wie es ist. Mach zuerst diese Matcap rückgängig ({1}), dann dies.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapKept.Fmt": {
+    "message": "Aus dem aufgewerteten Material von {0} wurde eine Zeilen-Matcap geschnitten, die Refits oder Haar-Ports aus {1} noch zeichnen. Erstelle sie neu oder mach sie rückgängig, mach die Matcap erneut rückgängig und dann dies.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapEdited.Fmt": {
+    "message": "Aus dem aufgewerteten Material von {0} wurde eine Zeilen-Matcap geschnitten, und {1} wurde nach dieser Matcap geändert, deshalb kann auch die Matcap noch nicht rückgängig gemacht werden. Mach zuerst die spätere Änderung rückgängig (oder lege die Kopie aus Proteus/matcap-backup zurück), dann die Matcap, dann dies.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapLater.Fmt": {
+    "message": "Aus dem aufgewerteten Material von {0} wurde eine Zeilen-Matcap geschnitten, und {1} hat {2} nach dieser Matcap geändert. Mach zuerst {1} rückgängig, dann die Matcap, dann dies.",
     "description": ""
   },
   "Settings.GearShaders.Busy": {
@@ -6707,8 +6727,16 @@
     "message": "Eine Zeilen-Matcap braucht das Teil auf character.shpk, und {0} nutzt {1}.",
     "description": ""
   },
-  "Matcap.Refused.RowOwnedByFeature.Fmt": {
-    "message": "{0} wurde von Proteus' Ausrüstungs-Shader-Upgrade umgeschrieben. Mach das zuerst rückgängig und füge dann die Zeilen-Matcap hinzu.",
+  "Matcap.Refused.RowLegacyWear.Fmt": {
+    "message": "{0} nutzt noch den alten Shader (characterlegacy.shpk), und eine Zeilen-Matcap braucht character.shpk. Trag es einmal, damit Ausrüstungs-Shader es auf character.shpk umstellt, und füge dann die Zeilen-Matcap hinzu. Bleibt es beim alten Shader, fahr unter {1} über die Anzahl, um zu sehen, warum.",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyDeclined.Fmt": {
+    "message": "{0} nutzt noch den alten Shader (characterlegacy.shpk), weil du sein Upgrade rückgängig gemacht hast, und eine Zeilen-Matcap braucht character.shpk. Trag es und drück „{1}“ unter {2}, dann füge die Zeilen-Matcap hinzu.",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyOff.Fmt": {
+    "message": "{0} nutzt noch den alten Shader (characterlegacy.shpk), und eine Zeilen-Matcap braucht character.shpk. Schalte „{1}“ unter {2} ein und trag es einmal, dann füge die Zeilen-Matcap hinzu.",
     "description": ""
   },
   "Matcap.Refused.RowBake.Fmt": {
