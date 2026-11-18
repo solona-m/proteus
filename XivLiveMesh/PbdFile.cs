@@ -1,154 +1,220 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Ported from Meddle (https://github.com/PassiveModding/Meddle), Copyright (c) Meddle contributors,
-// Meddle.Utils/Files/PbdFile.cs and Meddle.Utils/RaceDeformer.cs, as vendored in SkinTattoo @bc3663a.
-// Changes: matrices converted to System.Numerics row-vector form, a working identity, the parent-bone
-// fallback moved onto a caller-supplied parent lookup, and deformers composed per bone.
+// Copyright (c) Solona
+// Written from docs/pbd-format-spec.md (clean-room implementation).
 
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Numerics;
 using System.Text;
 
 namespace XivLiveMesh;
 
 /// <summary>
-/// The racial bone deformer, <c>chara/xls/boneDeformer/human.pbd</c>.
+/// The game's racial bone deformer file (<c>chara/xls/boneDeformer/human.pbd</c>): per race, a set of bone matrices
+/// that bend a model authored for one race onto another race's skeleton, and the tree the races form.
 /// <para/>
-/// Gear is authored once per body shape family — most of it for Midlanders — and the game bends it onto
-/// every other race at draw time with these per-bone matrices, rather than shipping a model per race. A
-/// vertex posed without them sits where a Midlander's would, which on a Roegadyn or a Lalafell is nowhere
-/// near the cloth the player can see.
+/// Everything is read once, in the constructor; the object never changes afterwards, so one instance can be shared
+/// across threads. See <c>docs/pbd-format-spec.md</c> for the format and the rules followed here.
 /// </summary>
 public sealed class PbdFile
 {
-    private readonly record struct Header(ushort GenderRace, ushort LinkIndex, int Offset);
-    private readonly record struct Link(ushort Parent, ushort FirstChild, ushort NextSibling, ushort HeaderIndex);
+    private const ushort NoLink = 0xFFFF;
+    private const int MaxAncestorNames = 256;   // the bone itself and up to 255 ancestors (spec §5)
 
-    private readonly Header[] headers;
-    private readonly Link[] links;
-    private readonly Dictionary<int, Dictionary<string, Matrix4x4>> deformers = [];
+    private readonly int _count;
+    private readonly ushort[] _entryRace;
+    private readonly ushort[] _entryLink;
+    private readonly IReadOnlyDictionary<string, Matrix4x4>?[] _entryBlock;
+    private readonly ushort[] _linkParent;
+    private readonly ushort[] _linkEntry;
+    private readonly Dictionary<ushort, int> _firstEntryOfRace;
 
     public PbdFile(ReadOnlySpan<byte> data)
     {
-        int count = BitConverter.ToInt32(data);
-        headers = new Header[count];
-        links = new Link[count];
+        int count = ReadInt32(data, 0);
 
-        int p = 4;
-        for (int i = 0; i < count; i++, p += 12)
-            headers[i] = new Header(BitConverter.ToUInt16(data[p..]), BitConverter.ToUInt16(data[(p + 2)..]),
-                                    BitConverter.ToInt32(data[(p + 4)..]));
-        for (int i = 0; i < count; i++, p += 8)
-            links[i] = new Link(BitConverter.ToUInt16(data[p..]), BitConverter.ToUInt16(data[(p + 2)..]),
-                                BitConverter.ToUInt16(data[(p + 4)..]), BitConverter.ToUInt16(data[(p + 6)..]));
+        // Check the race count against the bytes there are before allocating anything from it (spec §3).
+        if (count < 0 || 4L + 20L * count > data.Length)
+            throw new ArgumentOutOfRangeException(nameof(data),
+                $"The deformer file claims {count} races, which do not fit in its {data.Length} bytes.");
 
-        foreach (var h in headers)
-            if (h.Offset > 0 && h.Offset < data.Length && !deformers.ContainsKey(h.Offset))
-                deformers[h.Offset] = ReadDeformer(data, h.Offset);
+        _count = count;
+        _entryRace = new ushort[count];
+        _entryLink = new ushort[count];
+        _entryBlock = new IReadOnlyDictionary<string, Matrix4x4>?[count];
+        _linkParent = new ushort[count];
+        _linkEntry = new ushort[count];
+        _firstEntryOfRace = new Dictionary<ushort, int>(count);
+
+        var blocksByOffset = new Dictionary<int, IReadOnlyDictionary<string, Matrix4x4>>();
+        int linkTable = 4 + 12 * count;
+
+        for (int i = 0; i < count; i++)
+        {
+            int entry = 4 + 12 * i;
+            ushort race = ReadUInt16(data, entry);
+            _entryRace[i] = race;
+            _entryLink[i] = ReadUInt16(data, entry + 2);
+            _firstEntryOfRace.TryAdd(race, i);
+
+            int offset = ReadInt32(data, entry + 4);
+            if (offset > 0 && offset < data.Length)
+            {
+                if (!blocksByOffset.TryGetValue(offset, out var block))
+                {
+                    block = ReadBlock(data, offset);
+                    blocksByOffset.Add(offset, block);
+                }
+                _entryBlock[i] = block;
+            }
+
+            int link = linkTable + 8 * i;
+            _linkParent[i] = ReadUInt16(data, link);
+            _linkEntry[i] = ReadUInt16(data, link + 6);
+        }
     }
 
-    private static Dictionary<string, Matrix4x4> ReadDeformer(ReadOnlySpan<byte> data, int start)
-    {
-        int boneCount = BitConverter.ToInt32(data[start..]);
-        var names = new string[boneCount];
-        int p = start + 4;
-        for (int i = 0; i < boneCount; i++, p += 2)
-        {
-            // Unsigned: a deformer of 600-odd bones (NIRÆ's) puts its names more than 32 KB past its start.
-            int at = start + BitConverter.ToUInt16(data[p..]);
-            int end = at;
-            while (end < data.Length && data[end] != 0) end++;
-            names[i] = Encoding.UTF8.GetString(data[at..end]);
-        }
-        p += boneCount * 2 % 4;
-
-        var result = new Dictionary<string, Matrix4x4>(boneCount, StringComparer.Ordinal);
-        Span<float> f = stackalloc float[12];   // outside the loop: a stackalloc is only freed on return
-        for (int i = 0; i < boneCount; i++, p += 48)
-        {
-            // Stored as three rows of a column-vector matrix, translation in the last column. System.Numerics
-            // transforms row vectors, so the same matrix is its transpose.
-            for (int k = 0; k < 12; k++) f[k] = BitConverter.ToSingle(data[(p + k * 4)..]);
-            var m = new Matrix4x4(
-                f[0], f[4], f[8], 0f,
-                f[1], f[5], f[9], 0f,
-                f[2], f[6], f[10], 0f,
-                f[3], f[7], f[11], 1f);
-            result.TryAdd(names[i], m);
-        }
-        return result;
-    }
-
-    /// <summary>
-    /// The deformers that take a model authored for <paramref name="from"/> onto a <paramref name="to"/>
-    /// skeleton, in the order they apply. Empty when no bending is needed — or none is defined, in which case
-    /// the model is drawn as authored.
-    /// </summary>
+    // The deformers that take a model authored for `from` onto a `to` skeleton, in the order they apply;
+    // empty when no bending is needed or none is defined.
     public IReadOnlyList<IReadOnlyDictionary<string, Matrix4x4>> Chain(ushort from, ushort to)
     {
-        var chain = new List<IReadOnlyDictionary<string, Matrix4x4>>();
-        if (from == to || from == 0 || to == 0) return chain;
+        if (from == to || from == 0 || to == 0)
+            return new List<IReadOnlyDictionary<string, Matrix4x4>>();
 
-        var current = to;
-        for (int guard = 0; guard < headers.Length && current != from; guard++)
+        var collected = new List<IReadOnlyDictionary<string, Matrix4x4>>();
+        ushort current = to;
+        while (true)
         {
-            int hi = Array.FindIndex(headers, h => h.GenderRace == current);
-            if (hi < 0) return [];
-            var header = headers[hi];
-            if (!deformers.TryGetValue(header.Offset, out var deformer)) return [];
-            chain.Add(deformer);
+            if (!_firstEntryOfRace.TryGetValue(current, out int entry))
+                return Empty();
+            var block = _entryBlock[entry];
+            if (block == null)
+                return Empty();
+            if (collected.Count >= _count)
+                return Empty();   // a loop: N blocks gathered without meeting the source
+            collected.Add(block);
 
-            if (header.LinkIndex >= links.Length) return [];
-            var parent = links[header.LinkIndex].Parent;
-            if (parent == ushort.MaxValue || parent >= links.Length) return [];
-            var parentHeader = links[parent].HeaderIndex;
-            if (parentHeader >= headers.Length) return [];
-            current = headers[parentHeader].GenderRace;
+            ushort link = _entryLink[entry];
+            if (link >= _count)
+                return Empty();
+            ushort parentLink = _linkParent[link];
+            if (parentLink == NoLink || parentLink >= _count)
+                return Empty();
+            ushort parentEntry = _linkEntry[parentLink];
+            if (parentEntry >= _count)
+                return Empty();
+
+            ushort parentRace = _entryRace[parentEntry];
+            if (parentRace == from)
+            {
+                collected.Reverse();   // source side first, the target's own block last
+                return collected;
+            }
+            current = parentRace;
         }
-        if (current != from) return [];
 
-        chain.Reverse();
-        return chain;
+        static List<IReadOnlyDictionary<string, Matrix4x4>> Empty() => new();
     }
 
-    /// <summary>
-    /// One bone's deformation through a whole chain, as a single matrix: each deformer in turn, a bone the
-    /// deformer does not list taking its nearest listed ancestor's matrix, and identity where none is listed.
-    /// </summary>
-    /// <param name="parentOf">The bone's parent name in the character's skeleton, or null at the root.</param>
+    // One bone's deformation through a whole chain, as a single matrix.
     public static Matrix4x4 Resolve(IReadOnlyList<IReadOnlyDictionary<string, Matrix4x4>> chain, string bone,
                                     Func<string, string?> parentOf)
     {
         var result = Matrix4x4.Identity;
-        foreach (var deformer in chain)
-        {
-            string? name = bone;
-            for (int guard = 0; name != null && guard < 256; guard++)
-            {
-                if (deformer.TryGetValue(name, out var m)) { result *= m; break; }
-                name = parentOf(name);
-            }
-        }
+        for (int i = 0; i < chain.Count; i++)
+            if (TryFind(chain[i], bone, parentOf, out var m))
+                result *= m;
         return result;
     }
 
-    /// <summary>
-    /// Whether any deformer of <paramref name="chain"/> lists <paramref name="bone"/> or one of its ancestors — whether
-    /// <see cref="Resolve"/> found a matrix for it at all, rather than falling back to identity because the bone is
-    /// unknown everywhere.
-    /// </summary>
+    // Whether any deformer in the chain lists the bone or one of its ancestors.
     public static bool Lists(IReadOnlyList<IReadOnlyDictionary<string, Matrix4x4>> chain, string bone,
                              Func<string, string?> parentOf)
     {
-        foreach (var deformer in chain)
-        {
-            string? name = bone;
-            for (int guard = 0; name != null && guard < 256; guard++)
-            {
-                if (deformer.ContainsKey(name)) return true;
-                name = parentOf(name);
-            }
-        }
+        for (int i = 0; i < chain.Count; i++)
+            if (TryFind(chain[i], bone, parentOf, out _))
+                return true;
         return false;
+    }
+
+    /// <summary>The bone's own matrix in one deformer, else its nearest listed ancestor's, trying at most 256 names.</summary>
+    private static bool TryFind(IReadOnlyDictionary<string, Matrix4x4> deformer, string bone,
+                                Func<string, string?> parentOf, out Matrix4x4 matrix)
+    {
+        string? name = bone;
+        for (int tried = 1; ; tried++)
+        {
+            if (deformer.TryGetValue(name, out matrix))
+                return true;
+            if (tried >= MaxAncestorNames)
+                break;
+            name = parentOf(name);
+            if (name == null)
+                break;
+        }
+        matrix = default;
+        return false;
+    }
+
+    /// <summary>One deformer block (spec §2): bone names and their matrices; the first of a repeated name wins.</summary>
+    private static IReadOnlyDictionary<string, Matrix4x4> ReadBlock(ReadOnlySpan<byte> data, int origin)
+    {
+        int bones = ReadInt32(data, origin);
+        long pad = (2L * bones) % 4;
+        // Check the bone count against the bytes left before allocating anything from it (spec §3).
+        if (bones < 0 || origin + 4L + 2L * bones + pad + 48L * bones > data.Length)
+            throw new ArgumentOutOfRangeException(nameof(data),
+                $"A deformer block at byte {origin} claims {bones} bones, which do not fit in the file.");
+
+        int matrices = origin + 4 + 2 * bones + (int)pad;
+        var map = new Dictionary<string, Matrix4x4>(bones, StringComparer.Ordinal);
+        for (int b = 0; b < bones; b++)
+        {
+            string name = ReadName(data, origin + (long)ReadUInt16(data, origin + 4 + 2 * b));
+            if (map.ContainsKey(name))
+                continue;
+            map.Add(name, ReadMatrix(data, matrices + 48 * b));
+        }
+        return new ReadOnlyDictionary<string, Matrix4x4>(map);
+    }
+
+    /// <summary>Bytes up to the next zero (or the end of the file), decoded as UTF-8.</summary>
+    private static string ReadName(ReadOnlySpan<byte> data, long position)
+    {
+        if (position < 0 || position > data.Length)
+            throw new ArgumentOutOfRangeException(nameof(data),
+                $"A bone name at byte {position} lies past the end of the file ({data.Length} bytes).");
+        var rest = data[(int)position..];
+        int end = rest.IndexOf((byte)0);
+        return Encoding.UTF8.GetString(end < 0 ? rest : rest[..end]);
+    }
+
+    /// <summary>Twelve floats, the top three rows of a column-vector transform, stored transposed (spec §2.3).</summary>
+    private static Matrix4x4 ReadMatrix(ReadOnlySpan<byte> data, int at)
+    {
+        var f = data.Slice(at, 48);
+        return new Matrix4x4(
+            F(f, 0), F(f, 4), F(f, 8), 0f,
+            F(f, 1), F(f, 5), F(f, 9), 0f,
+            F(f, 2), F(f, 6), F(f, 10), 0f,
+            F(f, 3), F(f, 7), F(f, 11), 1f);
+
+        static float F(ReadOnlySpan<byte> floats, int n) => BinaryPrimitives.ReadSingleLittleEndian(floats[(4 * n)..]);
+    }
+
+    private static int ReadInt32(ReadOnlySpan<byte> data, long at)
+        => BinaryPrimitives.ReadInt32LittleEndian(Bytes(data, at, 4));
+
+    private static ushort ReadUInt16(ReadOnlySpan<byte> data, long at)
+        => BinaryPrimitives.ReadUInt16LittleEndian(Bytes(data, at, 2));
+
+    private static ReadOnlySpan<byte> Bytes(ReadOnlySpan<byte> data, long at, int width)
+    {
+        if (at < 0 || at + width > data.Length)
+            throw new ArgumentOutOfRangeException(nameof(data),
+                $"Reading {width} bytes at byte {at} runs past the end of the file ({data.Length} bytes).");
+        return data.Slice((int)at, width);
     }
 }

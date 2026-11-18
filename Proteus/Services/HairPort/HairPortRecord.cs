@@ -86,17 +86,32 @@ internal sealed class HairPortRecord
         catch (Exception) { record = new HairPortRecord { Unreadable = true }; }
         record.Ports ??= [];
         record.Declined ??= [];
+        // A record the mod shipped may hold anything: an entry with no port file is no port.
+        int dropped = record.Ports.RemoveAll(e => e == null || string.IsNullOrWhiteSpace(e.File));
         foreach (var e in record.Ports)
         {
             e.File = Rel(e.File);
-            e.SourceFile = Rel(e.SourceFile);
+            e.SourceFile = Rel(e.SourceFile ?? "");
             // Game paths with forward slashes, as every comparison of them expects (the builder, the writer, the panel):
             // case is compared without regard to it everywhere, slashes are not.
             e.SourceGamePath = (e.SourceGamePath ?? "").Replace('\\', '/');
             e.TargetGamePath = (e.TargetGamePath ?? "").Replace('\\', '/');
             e.Materials = new Dictionary<string, string>(
-                (e.Materials ?? []).ToDictionary(p => p.Key, p => Rel(p.Value)), StringComparer.OrdinalIgnoreCase);
+                (e.Materials ?? []).Where(p => p.Value != null).ToDictionary(p => p.Key, p => Rel(p.Value)), StringComparer.OrdinalIgnoreCase);
         }
+
+        // The record ships inside the mod, so its author controls it — and the manifest too, so agreeing with it proves
+        // nothing: a port whose file (or source file) is outside the mod is dropped, as is a material redirect to one
+        // outside it (ModPath). Before the owner filter, so a remake never writes where such an entry says.
+        dropped += record.Ports.RemoveAll(e => !ModPath.TryResolve(modRoot, e.File, out _)
+                                                  || e.SourceFile.Length > 0 && !ModPath.TryResolve(modRoot, e.SourceFile, out _));
+        foreach (var e in record.Ports)
+            foreach (var key in e.Materials.Where(m => !ModPath.TryResolve(modRoot, m.Value, out _)).Select(m => m.Key).ToList())
+            {
+                e.Materials.Remove(key);
+                dropped++;
+            }
+        ModPath.NoteDropped("hair ports", modRoot, dropped);
 
         if (record.Ports.Count > 0 && HairPortPlan.ReadOwners(modRoot) is { } owners)
             record.Ports.RemoveAll(e => !owners.Any(o => HairPortPlan.Same(o, e.Owner)

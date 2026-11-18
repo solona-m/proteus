@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using CheapLoc;
 using Dalamud.Interface.Windowing;
@@ -30,7 +31,7 @@ public sealed class Plugin : IDalamudPlugin
 #endif
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1464;
+    public const int BuildNumber = 1467;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -293,7 +294,11 @@ public sealed class Plugin : IDalamudPlugin
             presets, editRouter, uvMapDl, uvRemap,
             modCreation, onionImport, contentImport, luminisImport, emissiveImport, eyeImport, modExport,
             textureLoader, partsPanel, hatCompat, hairPort, autoRefit, shaderUpgrade, variantRepoint, modMoves,
-            new LogExportService(capture, compositor, penumbra, config, dataDir));
+            new LogExportService(capture, compositor, penumbra, config, dataDir,
+                // The names Copy Logs must keep out of the file, read where ObjectTable may be read.
+                () => Framework.RunOnFrameworkThread(() => (
+                    (IReadOnlyCollection<string>?)penumbra.GetCollections()?.Values.ToList() ?? [],
+                    ObjectTable.LocalPlayer?.Name.TextValue))));
 
         liveMesh = new Gui.LiveMeshOverlay(ObjectTable, DataManager, penumbra, ChatGui, log);
 

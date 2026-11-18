@@ -7,9 +7,8 @@ Licensed under the GNU Affero General Public License v3.0 or later — see `LICE
 
 ## Third-party sources
 
-| File | Ported from | License |
-|---|---|---|
-| `PbdFile.cs` | [Meddle](https://github.com/PassiveModding/Meddle) `Meddle.Utils/Files/PbdFile.cs`, `Meddle.Utils/RaceDeformer.cs` (as vendored in SkinTattoo @bc3663a) | AGPL-3.0 |
+None remain: every source file in this library is Proteus's own. (`PbdFile.cs` is a clean-room
+implementation written from `docs/pbd-format-spec.md`; see `docs/pbd-clean-room-log.md`.)
 
 Uses [FFXIVClientStructs](https://github.com/aers/FFXIVClientStructs) (MIT), referenced from Dalamud's own
 copy and not redistributed.

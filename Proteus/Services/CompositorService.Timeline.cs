@@ -334,17 +334,29 @@ public partial class CompositorService
         // Read-decide-write over both fields, so it runs under the lock as one step. See _drawnRaceLock.
         lock (_drawnRaceLock)
         {
-            // Null owner (draw object gone mid-switch) counts as a different character: drop the cached code.
-            if (owner == null || !string.Equals(owner, _drawnRaceOwner, StringComparison.Ordinal))
-            {
-                if (_drawnRaceCode != null && code == null)
-                    Plugin.Log.Information("[Proteus] drawn race code c{0} dropped — read off {1}, now {2}",
-                        _drawnRaceCode, _drawnRaceOwner ?? "(nobody)", owner ?? "(nobody)");
-                _drawnRaceCode  = code;
-                _drawnRaceOwner = owner;
-                return;
-            }
-            _drawnRaceCode = code ?? _drawnRaceCode;
+            var step = DrawnRaceStep(_drawnRaceCode, _drawnRaceOwner, code, owner);
+            _drawnRaceCode = step.Code;
+            _drawnRaceOwner = step.Owner;
+            if (step.Line is { } line) Plugin.Log.Information(line.Template, line.Args);
         }
+    }
+
+    /// <summary>
+    /// <see cref="UpdateDrawnRaceCode"/>'s decision, pure: the code and owner to keep, and the line to log. A changed or
+    /// null owner (draw object gone mid-switch counts as a different character) takes the new reading even when null;
+    /// the same owner keeps the old code when the walk carried none. The line is logged only when a code is dropped for
+    /// none, and NEVER holds a name: the log is exported for posting (Copy Logs), and owners are character names.
+    /// </summary>
+    internal static (string? Code, string? Owner, (string Template, object[] Args)? Line) DrawnRaceStep(
+        string? oldCode, string? oldOwner, string? newCode, string? owner)
+    {
+        if (owner == null || !string.Equals(owner, oldOwner, StringComparison.Ordinal))
+        {
+            (string, object[])? line = oldCode != null && newCode == null
+                ? ("[Proteus] drawn race code c{0} dropped — now {1}", [oldCode, owner == null ? "nobody drawn" : "another character"])
+                : null;
+            return (newCode, owner, line);
+        }
+        return (newCode ?? oldCode, oldOwner, null);
     }
 }

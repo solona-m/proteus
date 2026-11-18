@@ -12,7 +12,7 @@ namespace Proteus.Tests;
 /// The whole write, end to end against a mod folder on disk: the model is edited, the IMC group appears, and
 /// revert leaves the folder exactly as it was found.
 /// </summary>
-public class MeshToggleServiceTests
+public partial class MeshToggleServiceTests
 {
     private const string GamePath = "chara/equipment/e0043/model/c0201e0043_top.mdl";
     private const string ModelRel = "items/top.mdl";

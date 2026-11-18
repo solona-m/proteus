@@ -5451,6 +5451,18 @@
     "message": "{0}: \"{1}\" was read as made on {2}, not on {3} chosen under \"Made on\", and its sizes were cut as made on {2}.",
     "description": "{0} is the piece, {1} the author's size, {2} the body it was read on, {3} the body chosen under \"Made on\"."
   },
+  "SizeSet.MadeOnNoSizeName.Fmt": {
+    "message": "{0}: it hasn't enough skin to tell its sizes by, and none of its option names gives one of {1}'s sizes, so no sizes were made of it.",
+    "description": "{0} is the piece, {1} the body chosen under \"Made on\". Its option names give none of that body's sizes."
+  },
+  "SizeSet.MadeOnNoSizeTable.Fmt": {
+    "message": "{0}: it hasn't enough skin to tell its sizes by, and Proteus knows no named sizes of {1} for it, so no sizes were made of it.",
+    "description": "{0} is the piece, {1} the body chosen under \"Made on\". Proteus knows no named sizes of that body for the piece."
+  },
+  "SizeSet.MadeOnTrusted.Fmt": {
+    "message": "{0}: it hasn't enough skin to tell its sizes by, so its sizes were taken as the {1} sizes their names give (Small as S, and so on); any whose name gives none weren't used.",
+    "description": "{0} is the piece, {1} the body chosen under \"Made on\". Said under \"Check in game\"."
+  },
   "SizeSet.LeftOut": {
     "message": "Left out:",
     "description": "Heading over the list of sizes that were not made, each with its reason."

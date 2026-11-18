@@ -69,8 +69,8 @@ internal static class ModelBackupOrder
 
     private static DateTime? BackupTime(string modRoot, string subdir, string rel)
     {
-        var at = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, subdir,
-                              rel.Replace('/', Path.DirectorySeparatorChar));
+        // Never a probe outside the feature's backup folder: rel can come from a record the mod shipped (ModPath).
+        if (!ModPath.TryBackup(modRoot, subdir, rel.Replace('\\', '/'), out var at)) return null;
         try { return File.Exists(at) ? File.GetLastWriteTimeUtc(at) : null; }
         catch (IOException) { return null; }
         catch (UnauthorizedAccessException) { return null; }

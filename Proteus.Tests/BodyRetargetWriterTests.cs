@@ -12,7 +12,7 @@ namespace Proteus.Tests;
 /// Writing a retarget into somebody else's mod. Over a real temp folder rather than a mock, because the thing being
 /// tested is the shape of the json Penumbra parses.
 /// </summary>
-public class BodyRetargetWriterTests : IDisposable
+public partial class BodyRetargetWriterTests : IDisposable
 {
     private const string GamePath = "chara/equipment/e6255/model/c0201e6255_top.mdl";
     private const string Group = "Body — c0201e6255_top";

@@ -31,9 +31,12 @@ internal static class BodyRetargetWriter
     /// deleting those would break their mod for every size, permanently, to undo one refit. Everything this writer
     /// creates goes under <see cref="Subfolder"/>, and nothing outside it may ever be removed.
     /// </summary>
+    /// A file an option names is the author's to write, so a name that merely STARTS with the folder
+    /// (<c>Body Retarget/../../x</c>) is not ours either (<see cref="ModPath"/>).
     private static bool Ours(string rel)
-        => rel.Replace('\\', '/').TrimStart('/')
-              .StartsWith(Subfolder + "/", StringComparison.OrdinalIgnoreCase);
+        => ModPath.IsSafeRel(rel.Replace('\\', '/').TrimStart('/'))
+           && rel.Replace('\\', '/').TrimStart('/')
+                 .StartsWith(Subfolder + "/", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Which option of <paramref name="group"/> publishes <paramref name="modelRel"/> — the option a refit of that
@@ -528,7 +531,16 @@ internal static class BodyRetargetWriter
                     var published = Published(modRoot);
                     foreach (string rel in stale)
                         if (Deletable(rel, published))
-                            DeleteQuietly(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
+                            DeleteQuietly(modRoot, rel);
+                }
+                // Every place this save writes, checked before the first write: the option's folder (its manifest is the
+                // author's to write) and the game path must name a place inside Body Retarget/ (ModPath). The throw is
+                // caught below as a failed save, with nothing written.
+                if (!ModPath.IsSafeRel(gamePath)) throw new UnsafeModPathException(gamePath);
+                foreach (var r in refits)
+                {
+                    string f = FolderOf(options, r.Option) ?? Sanitise(r.Option);
+                    if (!ModPath.IsSafeRel(f) || f.IndexOfAny(['/', '\\']) >= 0) throw new UnsafeModPathException(f);
                 }
                 foreach (var refit0 in refits)
                 {
@@ -540,7 +552,7 @@ internal static class BodyRetargetWriter
                                                                               folder, redirects, claimed, bodyMod);
                     string rel = Free(claimed, folder, TailOf(gamePath));
                     claimed.Add(rel.Replace('\\', '/'));   // and two refits in one batch cannot collide either
-                    string full = Path.Combine(modRoot, rel);
+                    string full = ModPath.Resolve(modRoot, rel.Replace('\\', '/'), within: Subfolder);
                     Directory.CreateDirectory(Path.GetDirectoryName(full)!);
                     PenumbraModMeta.AtomicWrite(full, refit.Model);
                     written.Add((refit, rel));
@@ -568,6 +580,8 @@ internal static class BodyRetargetWriter
                         foreach (var (path, at) in existing.Files)
                         {
                             if (files.ContainsKey(path)) continue;
+                            // Outside the mod: never carried, never ours to delete (ModPath).
+                            if (!ModPath.IsSafeRel(at.Replace('\\', '/'))) continue;
                             if (IsPublishedMaterial(gamePath, path, at)) stale.Add(at);
                             else files[path] = at;
                         }
@@ -583,9 +597,10 @@ internal static class BodyRetargetWriter
                     // fromOption parameter.
                     if (cutFrom.Files != null)
                         foreach (var (path, at) in cutFrom.Files)
-                            if (!files.TryGetValue(path, out var had)
-                                || (sourceFilesWin && !string.Equals(path, gamePath, StringComparison.OrdinalIgnoreCase)
-                                    && !Ours(had)))
+                            if (ModPath.IsSafeRel(at.Replace('\\', '/'))   // one outside the mod is never carried
+                                && (!files.TryGetValue(path, out var had)
+                                    || (sourceFilesWin && !string.Equals(path, gamePath, StringComparison.OrdinalIgnoreCase)
+                                        && !Ours(had))))
                                 files[path] = at;
 
                     return files;
@@ -754,13 +769,16 @@ internal static class BodyRetargetWriter
     /// An option keeps one folder for the life of it: saving a second slot into an option whose folder was numbered
     /// (see <see cref="Free"/>) must put the new file in that same folder, not start another.
     /// </summary>
-    private static string? FolderOf(IReadOnlyList<PenumbraModMeta.FileOption> options, string option)
+    /// A "folder" that is not a plain name — a climb (<c>..</c>), a drive (<c>C:</c>) — is passed over: the manifest is the
+    /// author's to write, and the refit must land under <see cref="Subfolder"/> (<see cref="ModPath"/>).
+    internal static string? FolderOf(IReadOnlyList<PenumbraModMeta.FileOption> options, string option)
     {
         var existing = options.FirstOrDefault(o => string.Equals(o.Name, option, StringComparison.OrdinalIgnoreCase));
         foreach (string at in existing.Files?.Values ?? Enumerable.Empty<string>())
         {
             var parts = at.Replace('\\', '/').Split('/');
-            if (parts.Length > 2 && string.Equals(parts[0], Subfolder, StringComparison.OrdinalIgnoreCase))
+            if (parts.Length > 2 && string.Equals(parts[0], Subfolder, StringComparison.OrdinalIgnoreCase)
+                && ModPath.IsSafeRel(parts[1]))
                 return parts[1];
         }
         return null;
@@ -828,7 +846,7 @@ internal static class BodyRetargetWriter
                     {
                         var stillPublished = Published(modRoot);
                         foreach (var rel in removed.Values.Where(rel => Deletable(rel, stillPublished)))
-                            DeleteQuietly(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
+                            DeleteQuietly(modRoot, rel);
                     }
                     PruneEmptyFolders(Path.Combine(modRoot, Subfolder));
                     return new Outcome(true, groupName, optionName, Removed(optionName));
@@ -869,7 +887,7 @@ internal static class BodyRetargetWriter
                 {
                     var stillPublished = Published(modRoot);
                     foreach (var rel in going.Files.Values.Where(rel => Deletable(rel, stillPublished)))
-                        DeleteQuietly(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
+                        DeleteQuietly(modRoot, rel);
                 }
 
                 PruneEmptyFolders(Path.Combine(modRoot, Subfolder));
@@ -1051,7 +1069,7 @@ internal static class BodyRetargetWriter
     }
 
     private static void DeleteRecord(string modRoot)
-        => DeleteQuietly(Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, RecordFile));
+        => DeleteFileQuietly(Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, RecordFile));
 
     private static readonly JsonSerializerOptions RecordJson = new()
     {
@@ -1164,7 +1182,8 @@ internal static class BodyRetargetWriter
 
             string rel = Free(claimed, folder, TailOf(materials + variants.Min + "/" + name));
             claimed.Add(rel.Replace('\\', '/'));
-            string full = Path.Combine(modRoot, rel);
+            // Never outside Body Retarget/ — unreachable after the save's own check of the folder and the game path.
+            string full = ModPath.Resolve(modRoot, rel.Replace('\\', '/'), within: Subfolder);
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
             PenumbraModMeta.AtomicWrite(full, material.Bytes);
             foreach (string v in variants) files[materials + v + "/" + name] = rel.Replace('\\', '/');
@@ -1199,7 +1218,15 @@ internal static class BodyRetargetWriter
         return cleaned.Length > 0 ? cleaned : "option";
     }
 
-    private static void DeleteQuietly(string path)
+    /// <summary>Deletes one of an option's files — only under <see cref="Subfolder"/> of the mod (<see cref="ModPath"/>):
+    /// the name comes from the manifest, which is the author's to write.</summary>
+    private static void DeleteQuietly(string modRoot, string rel)
+    {
+        if (ModPath.TryResolve(modRoot, rel.Replace('\\', '/').TrimStart('/'), out var full, within: Subfolder))
+            DeleteFileQuietly(full);
+    }
+
+    private static void DeleteFileQuietly(string path)
     {
         try
         {
