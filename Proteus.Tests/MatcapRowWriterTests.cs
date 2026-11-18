@@ -277,6 +277,24 @@ public class MatcapRowWriterTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-matcap-row-18")]
+    public void A_new_cut_name_skips_a_stem_a_kept_file_of_ours_carries()
+    {
+        using var f = new RowFixture();
+        var first = f.Prepare();
+        Assert.True(first.Ok, first.Message);
+        var cut = first.Request!.Materials.Single().Row!.CutName;
+        // A hand-edited extra cut file Undo kept ("<stem>_2.mtrl"): a new cut never takes that stem again.
+        var kept = MatcapWriter.Full(f.ModRoot, $"{MatcapWriter.FilesFolder}/{MatcapWriter.StemOf(cut)}_2.mtrl");
+        Directory.CreateDirectory(Path.GetDirectoryName(kept)!);
+        File.WriteAllBytes(kept, [1, 2, 3]);
+        var second = f.Prepare();
+        Assert.True(second.Ok, second.Message);
+        Assert.NotEqual(cut, second.Request!.Materials.Single().Row!.CutName);
+        Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(kept));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-matcap-row-28")]
     public void Imported_piece_refused_in_row_mode()
     {
