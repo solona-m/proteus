@@ -23,7 +23,8 @@
 
   <PropertyGroup>
     <Version>$(ProteusVersion)</Version>
-    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
+    <!-- Licence: the Proteus Licence (LICENSE at the repository root, shipped as LICENSE.txt). It has no SPDX id,
+         and the project is not packable, so no NuGet licence expression is set. -->
     <IsPackable>false</IsPackable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -87,6 +88,10 @@
 
   <ItemGroup>
 <Content Include="..\THIRD_PARTY_NOTICES.txt" Link="THIRD_PARTY_NOTICES.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- The Proteus Licence travels with every copy of the plugin (licence §2.5: mirrors keep it intact). -->
+    <Content Include="..\LICENSE" Link="LICENSE.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <!-- Native SIMD block-compressor (bc7enc + rgbcx, built via native\src\build.bat). Ships next to the
@@ -165,14 +170,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Penumbra.Api\Penumbra.Api.csproj" />
-    <!-- Penumbra.Api's IPC subscribers (EventSubscriber, FuncSubscriber, …) live in Luna since 5.19 and it
-         references Luna privately, so a consumer references it itself — as Penumbra and Glamourer do. Glamourer.Api
-         uses Luna's too, built against Glamourer's own Luna submodule: keep this Luna on the commit Glamourer pins,
-         so the one Luna.dll shipped is the one both APIs were built against. -->
-    <ProjectReference Include="..\Luna\Luna\Luna.csproj" />
-    <ProjectReference Include="..\Glamourer\Glamourer.Api\Glamourer.Api.csproj" />
-    <!-- Posing worn models on the live character; shared with other plugins, AGPL-3.0-or-later. -->
+    <!-- Posing worn models on the live character; under the Proteus Licence with the rest of Proteus. -->
     <ProjectReference Include="..\XivLiveMesh\XivLiveMesh.csproj" />
   </ItemGroup>
 

@@ -61,8 +61,8 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     private readonly OverlayEditRouter editRouter;
     private readonly PresetService presets;
     private readonly SidecarDiscoveryService discovery;
-    private readonly Glamourer.Api.IpcSubscribers.ApplyDesign applyDesign;
-    private readonly Glamourer.Api.IpcSubscribers.ApplyState applyState;
+    private readonly GlamourerApplyDesign applyDesign;
+    private readonly GlamourerApplyState applyState;
     private long designApplied;
 
     private readonly RedrawCounter redraws = new();
@@ -105,8 +105,8 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
         this.editRouter = editRouter;
         this.presets = presets;
         // Created here, not in GlamourerBridge: apply and state-write IPC never ship outside a harness build.
-        applyDesign = new Glamourer.Api.IpcSubscribers.ApplyDesign(pluginInterface);
-        applyState = new Glamourer.Api.IpcSubscribers.ApplyState(pluginInterface);
+        applyDesign = new GlamourerApplyDesign(pluginInterface);
+        applyState = new GlamourerApplyState(pluginInterface);
         glamourer.LocalPlayerStateFinalized += OnStateFinalized;
         penumbra.LocalPlayerRedrawn += redraws.Note;
         framework.Update += OnUpdate;
