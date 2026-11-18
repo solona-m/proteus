@@ -140,4 +140,64 @@ public class BulgeLocalTests(ITestOutputHelper output)
         Assert.Contains("gen a", fitted);
         Assert.Contains("flaccid m a", fitted);
     }
+
+    /// <summary>
+    /// Men's pants moved between men's bodies (AC-4): Twill Trousers, made on TBSE SFW, onto TBSE Gen A (within one body
+    /// mod) and onto TBSE-X Flaccid M A (across body mods), as Studio's Body size builds the pair and plans it — fewer
+    /// folds than today, no penis skin left, the bulge's log line said.
+    /// </summary>
+    [LocalDataFact(CrossSexRefitLocalTests.TwillTbse, LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-featureless-bulge-4")]
+    [Trait("Plan", "EDGE-featureless-bulge-9")]
+    public void Twill_sfw_to_gen_a_and_tbsex_flaccid()
+    {
+        var maps = new UVRemapService(Substitute.For<IPluginLog>(), LocalData.Path(LocalData.TbseUvMaps));
+        var garment = File.ReadAllBytes(LocalData.Path(CrossSexRefitLocalTests.TwillTbse));
+        var sfw = File.ReadAllBytes(LocalData.Path(TbseOpt + "sfw" + E0));
+        foreach (var (name, need, across) in new[] { ("TBSE Gen A", TbseOpt + "gen a" + E0, false), ("TBSE-X Flaccid M A", TbseXOpt + "flaccid m a" + E0, true) })
+        {
+            var target = File.ReadAllBytes(LocalData.Path(need));
+            Assert.Null(BodyRetarget.BuildPair("_dwn", sfw, target, "_dwn", true, null, null, maps, out var pair));
+            BodyRetarget.Planned Run(bool noBulge, List<string> log)
+                => BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoBulge: noBulge), () =>
+                    BodyRetarget.Plan(ModelPartReader.Read(garment)!, (byte[])garment.Clone(), [pair], "_dwn", replaceSkin: true,
+                                      acrossBodies: across, cutHidden: true, log: log.Add));
+            var log = new List<string>();
+            var withBulge = Run(false, log);
+            var plain = Run(true, []);
+            int Penis(byte[] m) => PenisVerticesOf(m, target);
+            // How far the crotch cloth stands off the bulge: fitted to it, near; pushed out over the penis, far.
+            var bulge = TbseBulge.Shared!.Positions;
+            var centre = bulge.Aggregate(Vector3.Zero, (a, p) => a + p) / bulge.Length;
+            float Standoff(byte[] model)
+            {
+                var m = ModelPartReader.Read(model)!;
+                var cloth = m.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material)).SelectMany(p => p.Triangles)
+                             .Distinct().Select(v => At(m, v)).Where(p => Vector3.Distance(p, centre) < 0.05f).ToList();
+                return cloth.Count == 0 ? 0f : cloth.Max(p => bulge.Min(b => Vector3.Distance(b, p)));
+            }
+            output.WriteLine($"{name}: {string.Join(" | ", log.Where(l => l.StartsWith("bulge:", StringComparison.Ordinal)))}");
+            output.WriteLine($"{name}: with the bulge {CrossSexRefit.ClothFolded(garment, withBulge)} folds, penis skin {Penis(withBulge.Model)}, "
+                             + $"crotch cloth up to {Standoff(withBulge.Model) * 1000f:0} mm off the bulge; without {CrossSexRefit.ClothFolded(garment, plain)} "
+                             + $"folds, penis skin {Penis(plain.Model)}, {Standoff(plain.Model) * 1000f:0} mm");
+            Assert.Contains(log, l => l.StartsWith("bulge: _dwn featureless", StringComparison.Ordinal));
+            Assert.Equal(0, Penis(withBulge.Model));
+            Assert.True(CrossSexRefit.ClothFolded(garment, withBulge) <= CrossSexRefit.ClothFolded(garment, plain),
+                        $"{name}: more folds with the bulge");
+        }
+    }
+
+    /// <summary>Output skin vertices where a body's own genital piece stood proud of the bulge (any TBSE-family body).</summary>
+    internal static int PenisVerticesOf(byte[] model, byte[] body)
+    {
+        var g = ModelPartReader.Read(body)!;
+        var reading = GenitalParts.Read(g, ModelSkinReader.Read(body, null, null)!)!;
+        var penis = reading.Genitals.Where(x => x.Rule == "c").SelectMany(x => x.Part.Triangles.Distinct()).Select(v => At(g, v)).ToList();
+        var bulge = TbseBulge.Shared!.Positions;
+        var proud = penis.Where(p => bulge.Min(b => Vector3.Distance(b, p)) > 0.005f).ToList();
+        var m = ModelPartReader.Read(model)!;
+        var drawn = m.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                     .SelectMany(p => p.Triangles).Distinct().Select(v => At(m, v)).ToList();
+        return drawn.Count(d => proud.Any(p => Vector3.Distance(p, d) < 0.001f));
+    }
 }

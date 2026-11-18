@@ -19,6 +19,9 @@ internal static partial class BodyRetarget
     internal const float BulgeCoverReach = 0.020f;
     internal const int BulgeCoverPoints = 20;
 
+    /// <summary>How near the new body's genitals the old body's smallclothes must lie to stand in for its crotch (3 cm).</summary>
+    internal const float BulgeBriefsReach = 0.03f;
+
     /// <summary>How near the old body's genitals a garment's own skin triangle must lie, every corner, to be them (2 mm).</summary>
     internal const float BulgeGarmentGenitalReach = 0.002f;
 
@@ -151,6 +154,12 @@ internal static partial class BodyRetarget
                 var p = PointOf(source, v);
                 if (near.Any(p + new Vector3(d.X, d.Y, d.Z), BulgeCrotchReach)) crotch.Add(p);
             }
+        // A body that draws smallclothes over a hole at its crotch (TBSE SFW's briefs) has no skin there to land: its
+        // smallclothes within 3 cm of the new body's genitals count as its crotch too — bodies of one family share their space.
+        var briefs = new SpatialSet(genital, BulgeBriefsReach);
+        crotch.AddRange(source.Parts.Where(p => p.Island < 0 && BodySurface.IsSmallclothes(p.Material))
+                              .SelectMany(p => p.Triangles).Distinct().Select(v => PointOf(source, v))
+                              .Where(p => briefs.Any(p, BulgeBriefsReach)));
         if (crotch.Count == 0) return false;
         var crotchSet = new SpatialSet(crotch, BulgeCoverReach);
         int covering = garment.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material))
