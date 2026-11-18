@@ -9,7 +9,7 @@ namespace Proteus.Tests;
 /// The featureless bulge through <see cref="BodyRetarget.Plan"/>: a garment covering the crotch of a body with a penis is
 /// fitted over a smooth bulge instead, and every other refit comes out exactly as it did before the bulge existed.
 /// </summary>
-public class BulgeRefitTests
+public partial class BulgeRefitTests
 {
     /// <summary>
     /// The refits the bulge must never touch, hashed as they came out before it was built: a women's pair, a men's pair

@@ -175,7 +175,8 @@ internal static class BulgeSwap
                 }
             }
             else foreach (var (b, x) in bulge.Data.weights[i]) w[b] = w.GetValueOrDefault(b) + x;
-            foreach (var b in w.Keys.Where(GenitalParts.IsPenisBone).ToList())
+            // A genital bone's share, and a bone the body's skin does not carry (the sculpt's rig may name one), go to j_kosi.
+            foreach (var b in w.Keys.Where(b => GenitalParts.IsPenisBone(b) || (LocalBone(b) < 0 && b != "j_kosi")).ToList())
             {
                 w["j_kosi"] = w.GetValueOrDefault("j_kosi") + w[b];
                 w.Remove(b);
@@ -198,8 +199,11 @@ internal static class BulgeSwap
             }
         }
 
-        // Triangles: the bulge's into the piece's first, the rest collapsed onto their first corner.
+        // Triangles: the bulge's into the piece's first, the rest collapsed onto the bulge's first vertex — not onto their
+        // own corners, which would leave the old genitals' vertices referenced (by zero-area triangles, at their old places
+        // and uvs) for a landing by uv to find.
         int collapsed = 0;
+        ushort onto = (ushort)(slotOf[0] - span.BaseVertex);
         for (uint t = 0; t < sc / 3; t++)
         {
             int at = src.Ib + (int)(so + t * 3) * 2;
@@ -208,9 +212,7 @@ internal static class BulgeSwap
                     BitConverter.TryWriteBytes(o.AsSpan(at + k * 2), (ushort)(slotOf[tris[t * 3 + k]] - span.BaseVertex));
             else
             {
-                ushort a = BitConverter.ToUInt16(o, at);
-                BitConverter.TryWriteBytes(o.AsSpan(at + 2), a);
-                BitConverter.TryWriteBytes(o.AsSpan(at + 4), a);
+                for (int k = 0; k < 3; k++) BitConverter.TryWriteBytes(o.AsSpan(at + k * 2), onto);
                 collapsed++;
             }
         }
