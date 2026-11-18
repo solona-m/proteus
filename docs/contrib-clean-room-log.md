@@ -1,10 +1,16 @@
 # Clean-room log: Caraxi's and AzureRavie's code
 
-This feature makes **no licence change**: `LICENSE` stays the GNU AGPL v3 and `docs/LICENSE-DRAFT.md` stays a draft.
-It replaces every line Caraxi and AzureRavie wrote with code written by an agent who never saw theirs, so that a later
-relicensing is possible. The method extends the PbdFile precedent (`docs/pbd-clean-room.md`, `docs/pbd-clean-room-log.md`)
-from one whole file to code mixed into files Solona otherwise wrote. The plan is `docs/contrib-clean-room-plan.md`
-(revision 7) and the spec is `docs/contrib-clean-room-spec.md`.
+This feature has three phases:
+- **Phase A** replaces every line Caraxi and AzureRavie wrote with code written by an agent who never saw theirs.
+- **Phase B** makes Proteus talk to Penumbra and Glamourer through its own IPC call gates, so Luna (AGPL-3.0), Penumbra.Api
+  and Glamourer.Api are no longer shipped.
+- **Phase C** publishes the Proteus Licence.
+
+Phases A and B made no licence change. The original scope was Phase A alone; the user brought B and C back mid-run (see
+"Orchestrator (Phase B)"). The method extends the PbdFile precedent (`docs/pbd-clean-room.md`,
+`docs/pbd-clean-room-log.md`) from one whole file to code mixed into files Solona otherwise wrote. The plan is
+`docs/contrib-clean-room-plan.md` (revision 12 with amendments 12a–12c; earlier revisions are in its git history). The
+spec is `docs/contrib-clean-room-spec.md`, and the IPC contract is `docs/ipc-contract.md`.
 
 ## Method
 
@@ -473,7 +479,7 @@ Expressive hits: 0 (none)
 
 ## Orchestrator (steps 5-7)
 
-Phases delivered: A,B
+Phases delivered: A,B,C
 
 ### Step 5: Agent B
 
@@ -644,3 +650,64 @@ forbidden locations in listing/search results: 0
   - The warning to `matcap-gear-shader-5d` was held by that session and expired undelivered. The other two warnings were delivered.
   - The QA-lite agent found no harness session file (`test-harness.json` missing): the game wasn't running or the plugin wasn't loaded. Per the QA rules that is a Blocker, so all four smoke items are **UNVERIFIED**, not passes. Nothing was changed in game.
   - Following the global rule (a QA Blocker is noted and the run finishes without that part), the run continues to Phase C. The in-game check of the new IPC layer is left to step 8's QA, or to the owner.
+
+## Planning participants
+
+**Who took part.** The planner (revisions 1 to 12, then amendments 12a, 12b and 12c), plan-critics 1 to 13, and the planning orchestrator. All were on the clean side. None opened the code being replaced or its history, or the Luna, Glamourer or Penumbra.Api sources (apart from LICENSE and README files). None started a sub-agent or opened a URL.
+
+**Where their reads are recorded.** Each revision's *Environment & Preconditions* section lists every planning participant's reads verbatim, with full paths:
+- Opened: every file each participant opened.
+- Shell commands: every command each participant ran.
+
+The revisions are in `docs/contrib-clean-room-plan.md` and its git history:
+- revision 7, at `71d450fb`;
+- revision 10, at `14b9118b`;
+- revision 11, at `16b93eab`;
+- revision 12 with 12a–12c, at `e560d301`.
+
+Plan-critics 7, 10, 12 and 13 read only plan output files. Their reads are in the committed plan's preface and in the 12a–12c amendments.
+
+**The planning orchestrator's disclosures** are in revision 12's *Reads, for the log*. They are:
+- the earlier `Plugin.cs` lines 31–34 Read, from the PbdFile run;
+- the count-only `-L 31,34` blame, which printed 0;
+- the meddle-worktree greps and blame counts, which ran before the window started;
+- the transcript greps;
+- the two `head -n 3` LICENSE reads.
+
+**Deviation from the precedent.** These reads are recorded once, in the committed plan revisions, rather than copied into a separate section per participant here. The plan text is the committed record.
+
+## Orchestrator (Phase C)
+
+- **The Phase B tip correction.** The commit `02d2514a` (the Phase B record) also carried the deletion of `docs/LICENSE-DRAFT.md`, which had been staged early for Phase C. Rewriting history is a hard stop, so the next commit, `ef7aa083`, restores the draft. **`T_B` is `ef7aa083`.** The phases line went to "A,B" in `02d2514a` and to "A,B,C" in the commit holding this section.
+
+### C1 (XivLiveMesh usage check)
+
+These were name-only searches:
+- A files-with-matches Grep for `XivLiveMesh` over `E:\repos` with glob `**/*.csproj` found only Proteus checkouts: `E:\repos\Proteus`, `E:\repos\Proteus-milieu-route` and `E:\repos\Proteus-wt\release-main`. A first run with glob `*/*.csproj` matched nothing, because the glob was too shallow.
+- A count-mode Grep for `XivLiveMesh` over `E:\repos\DragAndDropTexturing` found 0. No file there was opened.
+- `gh search code XivLiveMesh --owner solona-m --json repository,path --limit 50` found hits in `solona-m/proteus` only.
+
+So no other plugin uses XivLiveMesh, and it moves to the Proteus Licence outright: there is no dual licence. `XivLiveMesh/LICENSE` is byte-identical to `LICENSE`.
+
+### C2 (publication)
+
+This is commit `4f535282`.
+- **`LICENSE`:** the reviewed draft, word for word, with line 3 changed to "*Version 1.0 — in force from 2026-11-17*". The date is corrected at step 9 if the push falls on a later day.
+- **`docs/LICENSE-DRAFT.md`:** moved to `Proteus.Tests/Fixtures/proteus-licence-1.0-draft.md`, as the licence test's expected text. `LICENSE` ships as `LICENSE.txt`.
+- **SPDX:** `LicenseRef-Proteus` in the 7 `XivLiveMesh/*.cs` files, `IpcProvider.cs` and `PenumbraApiTypes.cs`. `GlamourerApiTypes.cs` stays `Apache-2.0`.
+- **Project files:** `PackageLicenseExpression` is removed from both csproj files.
+- **Package licences,** read from the nuspec files in the local NuGet cache, with these exceptions:
+  - BitMiracle.LibTiff.NET's nuspec has only a licence URL, and the package holds no licence file. Its New BSD text was read from that URL (https://bitmiracle.github.io/libtiff.net/help/articles/license.html), through the web-fetch agent.
+  - StbImageWriteSharp's nuspec has no licence, and the repository has no licence file (`gh api`: 404 on the licence and on raw LICENSE). Its README says "Public Domain".
+
+  Both readings are from the projects' own published statements, not guesses. This deviates from D29's "nuspec and licence file" wording.
+- **The Glamourer block** reproduces Glamourer's root `LICENSE` text (Apache-2.0), copied with `cat` from `Glamourer/LICENSE`, a LICENSE file the clean side may read.
+- **The inventory** is in `Proteus.Tests/Fixtures/package-inventory.tsv`. All 21 entries of the rebuilt `latest.zip` are in it, `LICENSE.txt` included. The two embedded `Resources/*.png` slices are carved out, and `Meshes/**` is classed as own, as the owner confirmed.
+- **Proof:** the Records filter plus `LicencePublicationTests` and `SupplyChainTests` gave 143 passed, 0 failed.
+
+### C3 (proof)
+
+- **`git diff ef7aa083 4f535282 --name-only`** lists exactly the Phase C set: AGENTS.md, LICENSE, the test files and fixtures, `PenumbraApiTypes.cs`, `IpcProvider.cs`, `Proteus.csproj`, `THIRD_PARTY_NOTICES.txt`, and the XivLiveMesh files.
+- **Phase C blame at `4f535282`:**
+  - `-w -M -C`: contributor non-trivial 0, no per-file change.
+  - `-w -M -C -C`: contributor non-trivial 0. The one new change since the Phase B tip is `XivLiveMesh/HavokSkeleton.cs` `using` +1, with the reason "Phase C SPDX": the line-1 edit shifted copy detection onto an existing import.
