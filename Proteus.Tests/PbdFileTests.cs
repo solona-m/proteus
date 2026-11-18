@@ -554,6 +554,7 @@ public class PbdFileTests
         [LocalDataTheory(LocalData.GameData)]
         [Trait("Plan", "AC-pbd-clean-room-6")]
         [MemberData(nameof(Matrices))]
+        [Trait("Suite", "Diagnostic")]
         public void Lists_matches_the_spec(string @case, ushort from, ushort to, string bone, bool lists, float[] m)
         {
             _ = @case;

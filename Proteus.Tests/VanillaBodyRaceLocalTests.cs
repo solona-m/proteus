@@ -16,6 +16,7 @@ public class VanillaBodyRaceLocalTests
     [InlineData("0901")] [InlineData("1001")] [InlineData("1101")] [InlineData("1201")]
     [InlineData("1301")] [InlineData("1401")] [InlineData("1501")] [InlineData("1601")]
     [InlineData("1701")] [InlineData("1801")]
+    [Trait("Suite", "Diagnostic")]
     public void EveryRaceHasAVanillaBodyInEverySlot(string race)
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));

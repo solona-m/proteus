@@ -136,6 +136,7 @@ public class CodeineDressHolesLocalTests(ITestOutputHelper output)
     [LocalDataTheory(Main, Bibo, Neolithe, Rue, Yab, Tre, LavaBod, Muse, Rosaline, LocalData.UvMaps)]
     [MemberData(nameof(Defined))]
     [Trait("Plan", "AC-cut-open-skin-1")]
+    [Trait("Suite", "Diagnostic")]
     public void Codeine_onto_Muse_Defined_legs_has_no_thigh_holes(string legs)
     {
         byte[] bytes = LocalData.PackEntryEndingWith(Main, Dress);
@@ -176,6 +177,7 @@ public class CodeineDressHolesLocalTests(ITestOutputHelper output)
     [MemberData(nameof(Bodies))]
     [Trait("Plan", "AC-cut-open-skin-2")]
     [Trait("Plan", "EDGE-cut-open-skin-14")]
+    [Trait("Suite", "Diagnostic")]
     public void Codeine_onto_other_bodies_is_no_worse(string body)
     {
         byte[] bytes = LocalData.PackEntryEndingWith(Main, Dress);
@@ -208,6 +210,7 @@ public class CodeineDressHolesLocalTests(ITestOutputHelper output)
     [LocalDataTheory(Upscales, Bibo, Neolithe, Rue, Yab, Tre, LavaBod, Muse, Rosaline, LocalData.UvMaps)]
     [MemberData(nameof(UpscaleDresses))]
     [Trait("Plan", "AC-cut-open-skin-2")]
+    [Trait("Suite", "Diagnostic")]
     public void Codeine_upscales_are_no_worse(string pack, string entry)
     {
         byte[] bytes = LocalData.PackEntryEndingWith(Upscales + "/" + pack, entry);

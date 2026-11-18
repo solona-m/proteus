@@ -215,6 +215,7 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-open-patch-authored-12")]
     [Trait("Plan", "EDGE-open-patch-authored-16")]
     [Trait("Plan", "EDGE-open-patch-authored-19")]
+    [Trait("Suite", "Diagnostic")]
     public void Dei_Gratia_onto_Bibo_Nude_M_keeps_the_bust_inside_the_blouse(string path)
     {
         var i = Read(Bibo, NudeM);
@@ -342,6 +343,7 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
     [MemberData(nameof(OtherBodies))]
     [Trait("Plan", "AC-open-patch-authored-7")]
     [Trait("Plan", "EDGE-open-patch-authored-24")]
+    [Trait("Suite", "Diagnostic")]
     public void Dei_Gratia_onto_other_bodies_is_no_worse(string modNeed, string rel, string path)
     {
         var i = Read(modNeed, rel);
@@ -383,6 +385,7 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, Bibo, LocalData.DeiGratiaPack)]
     [Trait("Plan", "AC-open-patch-authored-5")]
     [Trait("Plan", "EDGE-open-patch-authored-9")]
+    [Trait("Suite", "Diagnostic")]
     public void Dei_Gratia_game_gear_and_clear_body_refits_are_unchanged()
     {
         var i = Read(Bibo, NudeM);
@@ -489,6 +492,7 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-seam-weights-2")]
     [Trait("Plan", "AC-seam-weights-7")]
     [Trait("Plan", "EDGE-seam-weights-19")]
+    [Trait("Suite", "Diagnostic")]
     public void Dei_Gratia_keeps_its_seams_weighted_as_one(string modNeed, string rel, string path)
     {
         var i = Read(modNeed, rel);
@@ -561,6 +565,7 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
     [LocalDataTheory(LocalData.GameData, Bibo, LocalData.DeiGratiaPack)]
     [MemberData(nameof(Paths))]
     [Trait("Plan", "AC-seam-weights-3")]
+    [Trait("Suite", "Diagnostic")]
     public void Dei_Gratia_seam_rule_moves_nothing(string path)
     {
         var i = Read(Bibo, NudeM);
@@ -573,6 +578,7 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
     [LocalDataTheory(LocalData.GameData, Bibo, LocalData.DeiGratiaPack)]
     [MemberData(nameof(Paths))]
     [Trait("Plan", "EDGE-seam-weights-20")]
+    [Trait("Suite", "Diagnostic")]
     public void Dei_Gratia_waist_seam_is_outside_the_kept_pieces(string path)
     {
         var i = Read(Bibo, NudeM);

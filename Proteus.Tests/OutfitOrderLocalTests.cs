@@ -111,6 +111,7 @@ public class OutfitOrderLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-outfit-fit-1")]
     [Trait("Plan", "AC-outfit-fit-2")]
     [Trait("Plan", "AC-jacket-refit-12")]
+    [Trait("Suite", "Diagnostic")]
     public void Geometrics_jacket_stays_outside_the_bras_refit_on_Rue()
     {
         string root = LocalData.Path(Geometric);
@@ -276,6 +277,7 @@ public class OutfitOrderLocalTests(ITestOutputHelper output)
 
     [LocalDataFact(Scarlet, Neolithe)]
     [Trait("Plan", "AC-outfit-fit-3")]
+    [Trait("Suite", "Diagnostic")]
     public void Scarlets_bracelet_jacket_stays_outside_its_tops_refit()
     {
         const string xsJacket = "top size/neolithe xs/chara/accessory/a0095/model/c0201a0095_wrs.mdl";
@@ -313,6 +315,7 @@ public class OutfitOrderLocalTests(ITestOutputHelper output)
 
     [LocalDataFact(Heartthrob, Bibo, Neolithe)]
     [Trait("Plan", "AC-outfit-fit-2")]
+    [Trait("Suite", "Diagnostic")]
     public void Heartthrobs_shoe_over_its_pants_moves_only_where_the_pants_came_through()
     {
         // A shoe and the legs piece of the same option, refitted Bibo+ onto Neolithe: where nothing came through,

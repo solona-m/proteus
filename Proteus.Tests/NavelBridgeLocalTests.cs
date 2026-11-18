@@ -284,6 +284,7 @@ public class NavelBridgeLocalTests(ITestOutputHelper o)
     [InlineData("c0901")]
     [InlineData("c1101")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void The_game_bodies_fill_nothing_false(string race)
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));

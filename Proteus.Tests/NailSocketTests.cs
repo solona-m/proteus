@@ -972,6 +972,7 @@ public class NailSocketSweep(ITestOutputHelper o)
     [Trait("Plan", "EDGE-nail-socket-hole-29")]
     [Trait("Plan", "AC-nail-socket-close-4")]
     [Trait("Plan", "AC-nail-socket-close-6")]
+    [Trait("Suite", "Diagnostic")]
     public void Every_installed_hand_closes_or_keeps_its_sockets()
     {
         string root = LocalData.Path(LocalData.Mods);

@@ -152,6 +152,7 @@ public class MultiBodyRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-auto-refit-part-bodies-6")]
     [Trait("Plan", "EDGE-auto-refit-part-bodies-17")]
     [Trait("Plan", "EDGE-auto-refit-part-bodies-18")]
+    [Trait("Suite", "Diagnostic")]
     public void A_dress_whose_chest_goes_to_another_body_and_legs_stay_swaps_both_without_folds()
     {
         var d = Setup();
@@ -189,6 +190,7 @@ public class MultiBodyRefitLocalTests(ITestOutputHelper output)
     [LocalDataFact(Dresses, Bibo, Rue, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-auto-refit-part-bodies-31")]
     [Trait("Plan", "AC-per-part-target-body-3")]
+    [Trait("Suite", "Diagnostic")]
     public void A_dress_kept_on_its_own_body_with_its_legs_sent_elsewhere_is_not_swapped_as_on_one_body()
     {
         var d = Setup();
@@ -207,6 +209,7 @@ public class MultiBodyRefitLocalTests(ITestOutputHelper output)
 
     [LocalDataFact(Dresses, Bibo, Rue, TandF, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-auto-refit-part-bodies-19")]
+    [Trait("Suite", "Diagnostic")]
     public void Parts_on_bodies_of_two_layouts_keep_each_bodys_own_skin()
     {
         var d = Setup();
@@ -245,6 +248,7 @@ public class MultiBodyRefitLocalTests(ITestOutputHelper output)
     [LocalDataFact(Dresses, Bibo, Rue, Yab, LocalData.UvMaps)]
     [Trait("Plan", "AC-per-part-target-body-2")]
     [Trait("Plan", "EDGE-per-part-target-body-13")]
+    [Trait("Suite", "Diagnostic")]
     public void Studio_refit_with_chest_and_legs_on_two_bodies_swaps_both()
     {
         var d = Setup();
@@ -279,6 +283,7 @@ public class MultiBodyRefitLocalTests(ITestOutputHelper output)
     [LocalDataFact(Dresses, Bibo, Rue, Yab, LocalData.UvMaps)]
     [Trait("Plan", "AC-per-part-target-body-2")]
     [Trait("Plan", "AC-per-part-target-body-9")]
+    [Trait("Suite", "Diagnostic")]
     public void Studio_refit_onto_three_bodies_made_for_x_main_y_legs_z()
     {
         var d = Setup();

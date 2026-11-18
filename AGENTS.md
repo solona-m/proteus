@@ -78,8 +78,9 @@ documented by that workflow's own tooling (e.g. its installed plugin).
 
 - `dotnet build Proteus/Proteus.csproj -c Release` — build
 - `dotnet build Proteus.Refit/Proteus.Refit.csproj -c Release` — build the headless refit CLI (the tests build it too, for its `--size-set` tests; still run it whenever `Proteus.Refit/` changes)
-- `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release` — run all tests (the full suite: before a release tag only)
+- `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release --filter "Suite!=Diagnostic" -- RunConfiguration.TreatNoTestsAsError=true` — the full suite: before a release tag only, under 10 min wall (unfiltered, as CI runs it, it also takes the diagnostics)
 - `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release --filter "Speed!=Slow"` — the quick suite: before every push (also `npm test --prefix worker` when `worker/` changes)
+- `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release --filter "Suite=Diagnostic" -- RunConfiguration.TreatNoTestsAsError=true` — the diagnostic tests: on demand only, never before a release (one class: add `&FullyQualifiedName~<Class>` inside the filter)
 - run: bump `Plugin.BuildNumber`, build, copy `Proteus/bin/Release/win-x64/` to `E:\repos\Proteus\Proteus\bin\release\win-x64` — the game dev-loads it (no app URL; verification is in game)
 - stop: none — unload the plugin in game via `/xlplugins`
 - optional, contributors using Claude Code: after a passing review and QA of a non-trivial change, silences the PR recommendation: `sh .claude/hooks/pr-ready.sh "<ran|skipped|blocked>: <reason>"`
@@ -117,8 +118,19 @@ class when all of it is slow; a class fixture's setup counts against its
 class) — unless it is one of the Sensitive Areas writers' own tests or a
 build-enforced rule test (`LocalizationTests`, `SupplyChainTests`), which stay
 in the quick suite. Golden baselines (`GoldenTests`, `GoldenCrossBodyLocalTests`,
-`SkinTuckGoldenTests`) run with the release. The worker has its own `npm test`
-in `worker/`.
+`SkinTuckGoldenTests`) run with the release. The full suite's budget is
+10 minutes wall, build included. Diagnostic tests carry
+`[Trait("Suite", "Diagnostic")]` and keep Slow (`SuiteBudgetTests` checks). A
+full run over budget before a release: report the overrun to the owner and, in a
+reviewed follow-up (never mid-release), move the tests whose slowest row took
+15 s or more in that run (`--logger trx`) — but not a cheap test whose time is
+shared setup moved onto it; a class fixture's setup counts against every test of
+its class, and 7.5 s or more measured idle moves the whole class (tags on the
+class) unless it holds exempt tests. Exempt (listed in `SuiteBudgetTests`): the
+Sensitive Areas writers' own tests and tests that exercise a write/build/save/undo
+of those writers directly (not as setup), write-behaviour tests in a fixture
+class, the build-enforced rule tests, the golden baselines, and a failing test
+until it is fixed. The worker has its own `npm test` in `worker/`.
 
 ## Sensitive Areas — the security surface
 

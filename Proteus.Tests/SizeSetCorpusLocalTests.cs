@@ -52,6 +52,7 @@ public class SizeSetCorpusLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-equinox-legs-slits-6")]
     [Trait("Plan", "EDGE-equinox-legs-slits-22")]
     [Trait("Plan", "EDGE-equinox-legs-slits-25")]
+    [Trait("Suite", "Diagnostic")]
     public void The_size_set_sizes_each_flipped_mod_in_the_group_Penumbra_draws()
     {
         var found = new Dictionary<(string Mod, string Path), string>();

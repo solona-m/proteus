@@ -233,6 +233,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-keep-hand-foot-skin-1")]
     [Trait("Plan", "EDGE-keep-hand-foot-skin-1")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")] // reads NeolitheMedium: every reader of that shared refit moved together
     public void Heartthrob_keeps_its_foot_exactly_when_refitted_to_another_body()
     {
         var done = NeolitheMedium.Value;
@@ -301,6 +302,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-keep-hand-foot-skin-6")]
     [Trait("Plan", "EDGE-keep-hand-foot-skin-4")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Holding_the_foot_adds_no_folds_and_the_ankle_seam_holds()
     {
         foreach (var (name, done) in new[] { ("Neolithe SFW M", NeolitheMedium.Value), ("Bibo+ Large", BiboLarge.Value) })
@@ -326,6 +328,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [LocalDataFact(Heartthrob, Bibo, Neolithe, Rue, Yab)]
     [Trait("Plan", "AC-keep-hand-foot-skin-6")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void KeepEnds_e2e_Heartthrob_detect_plan_save()
     {
         var bodies = Bodies(Bibo, Neolithe, Rue, Yab);
@@ -422,6 +425,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [LocalDataFact(Heartthrob, Bibo, Neolithe, Rue, Yab)]
     [Trait("Plan", "AC-keep-hand-foot-skin-8")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")] // reads NeolitheMedium: every reader of that shared refit moved together
     public void The_kept_foot_is_drawn_with_the_new_bodys_skin()
     {
         // Neither moved nor swapped, the foot's skin is still drawn the way the new body draws its own — the step the
@@ -455,6 +459,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-keep-hand-foot-skin-13")]
     [Trait("Plan", "EDGE-keep-hand-foot-skin-14")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Game_boots_baked_for_a_woman_keep_their_feet_and_read_on_the_game_legs()
     {
         // A man's boots from the game, baked onto a woman as the watcher bakes male-only gear: the ends are found on the
@@ -503,6 +508,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [LocalDataFact(Bibo, Neolithe, Rue, Yab)]
     [Trait("Plan", "AC-keep-hand-foot-skin-3")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Installed_long_gloves_are_read_on_their_arms()
     {
         // Every chest size of a body has the same arms, so a glove's forearm might tie between them and read as unsure.
@@ -541,6 +547,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [LocalDataFact(SheerElegance, Bibo, Neolithe)]
     [Trait("Plan", "AC-keep-hand-foot-skin-3")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void A_glove_is_never_lifted_like_a_breast()
     {
         // The underbust lift is for tops. A Bibo+ corset refitted onto Neolithe's chest is where it acts: worn as a top,
@@ -647,6 +654,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-keep-ends-studio-1")]
     [Trait("Plan", "EDGE-keep-ends-studio-20")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Studio_Shift_YAB_WC_onto_LavaBod_keeps_the_heeled_foot_and_refits_the_stocking()   // [AC-keep-ends-studio-1] [EDGE-keep-ends-studio-20]
     {
         var bytes = LocalData.PackEntryEndingWith(LocalData.ShiftPack, ShiftShoe);
@@ -719,6 +727,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.ShiftPack, Yab, LavaBod)]
     [Trait("Plan", "EDGE-keep-ends-studio-7")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Studio_unticked_foot_skin_keeps_the_stocking_beside_it_unfolded()   // [EDGE-keep-ends-studio-7]
     {
         // ND-7 (a): the parts unticked join the hold. Beside held skin there is no gap correction, so the stocking there
@@ -751,6 +760,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [LocalDataFact(Heartthrob, Bibo, Neolithe, Rue, Yab)]
     [Trait("Plan", "AC-keep-ends-studio-1")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")] // reads NeolitheMedium: every reader of that shared refit moved together
     public void Studio_path_equals_the_automatic_refit_when_options_match()   // [AC-keep-ends-studio-1]
     {
         // The Studio's plan with the automatic refit's settings — new skin only across body mods, nothing cleared, no
@@ -774,6 +784,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [LocalDataFact(SeenGloves, Rue, Yab)]
     [Trait("Plan", "AC-keep-ends-studio-2")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Studio_gloves_keep_their_hands_onto_another_body()   // [AC-keep-ends-studio-2]
     {
         // Rue+ to YAB+: one family's two bodies, whose arms correspond. (Neolithe to Bibo+ arms are refused outright.)
@@ -820,6 +831,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [LocalDataFact(HellForLeather, Bibo, Neolithe)]
     [Trait("Plan", "EDGE-keep-ends-studio-27")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Studio_skinless_boot_with_legs_picked_by_hand_keeps_its_foot()   // [EDGE-keep-ends-studio-27]
     {
         // Leather from toe to thigh: nothing to read a body off (NoSkin), so the user picks the legs by hand. The refit
@@ -851,6 +863,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "EDGE-keep-ends-studio-10")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Studio_game_boots_route_as_the_automatic_refit_does()   // [EDGE-keep-ends-studio-10]
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
@@ -876,6 +889,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, Bibo)]
     [Trait("Plan", "EDGE-keep-ends-studio-11")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Studio_baked_boots_keep_their_feet()   // [EDGE-keep-ends-studio-11]
     {
         // A man's game boots baked onto a woman, as the panel bakes them, then refitted with the foot kept and drawn with

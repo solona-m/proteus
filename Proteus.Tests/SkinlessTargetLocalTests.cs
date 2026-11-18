@@ -157,6 +157,7 @@ public class SkinlessTargetLocalTests(ITestOutputHelper output)
     [LocalDataFact(Laurel, Neolithe, LocalData.MusePack)]
     [Trait("Plan", "EDGE-skinless-target-33")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Materials_survive_the_refit_s_finishing_passes()
     {
         var plan = RefitBottoms("Defined - SFW Flat", auto: false, out _);
@@ -182,6 +183,7 @@ public class SkinlessTargetLocalTests(ITestOutputHelper output)
     [LocalDataFact(Laurel, Neolithe, LocalData.MusePack)]
     [Trait("Plan", "EDGE-skinless-target-22")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Without_the_underwear_material_the_bottoms_keep_their_own_skin()
     {
         // The body mod's material cannot be read: the legs keep the garment's own skin, whole, and nothing is published.
@@ -226,6 +228,7 @@ public class SkinlessTargetLocalTests(ITestOutputHelper output)
     [InlineData(true)]
     [Trait("Plan", "AC-skinless-target-8")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Laurel_bottoms_onto_Muse_SFW_Flat_draw_Muse_s_boxers(bool auto)
     {
         var plan = RefitBottoms("Defined - SFW Flat", auto, out _);
@@ -268,6 +271,7 @@ public class SkinlessTargetLocalTests(ITestOutputHelper output)
     [LocalDataFact(Laurel, Neolithe, LocalData.MusePack)]
     [Trait("Plan", "AC-skinless-target-9")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Hip_cloth_takes_the_worn_body_s_weights()
     {
         var plan = RefitBottoms("Defined - SFW Flat", auto: false, out _);
@@ -336,6 +340,7 @@ public class SkinlessTargetLocalTests(ITestOutputHelper output)
     [LocalDataFact(Laurel, Neolithe, LocalData.MusePack)]
     [Trait("Plan", "AC-skinless-target-9")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void A_long_top_s_hem_stays_outside_Muse_s_boxers()
     {
         var bodies = new[] { Neolithe }

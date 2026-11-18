@@ -170,6 +170,7 @@ public class LiveMeshTests(ITestOutputHelper o)
     /// </summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void TheGamesRacialDeformerParsesAndChains()
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
