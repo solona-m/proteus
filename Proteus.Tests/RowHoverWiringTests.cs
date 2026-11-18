@@ -111,6 +111,8 @@ public class RowHoverWiringTests
         // The Colors window's own tables always land on a row; only the Matcaps picker allows none.
         Assert.DoesNotContain("allowNone: true", Method(Editor, "public static void DrawRows("));
         Assert.Contains("allowNone: true", Method(Editor, "public static bool DrawRowPicker("));
+        // A Row A/B toggle for a column the index never uses isn't drawn, so it must not count.
+        Assert.Contains("RowPickerView.Usable(", Method(Editor, "public static bool DrawRowPicker("));
     }
 
     [Fact]
