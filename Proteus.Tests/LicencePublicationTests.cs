@@ -526,8 +526,10 @@ public class LicencePublicationTests
         var e = Collapse(Part1('E'));
         foreach (var phrase in new[]
                  {
-                     "THIRD_PARTY_NOTICES.txt", "NOTICE.md", "Proteus/Interop/Ipc/GlamourerApiTypes.cs",
-                     "Apache License, version 2.0", "Glamourer (Apache License, version 2.0",
+                     "THIRD_PARTY_NOTICES.txt", "NOTICE.md",
+                     // The Glamourer Apache exception, tied to its file.
+                     "Proteus/Interop/Ipc/GlamourerApiTypes.cs, which stay under the Apache License, version 2.0",
+                     "Glamourer (Apache License, version 2.0",
                      "Luna (GNU Affero General Public License, version 3",
                      "Penumbra.Api (which publishes no licence file, and stays under its author's terms)",
                      "never shipped with the plugin", "only the interface facts", "SQUARE ENIX",

@@ -48,8 +48,7 @@ public sealed class ReadmeTermsTests
     [Fact]
     [Trait("Plan", "AC-readme-tos-5")]
     [Trait("Plan", "EDGE-readme-tos-7")]
-    [Trait("Plan", "EDGE-proteus-licence-2-17")]
-    public void Terms_file_is_the_owners_text()   // [EDGE-proteus-licence-2-17]
+    public void Terms_file_is_the_owners_text()
     {
         var text = Read("TERMS.md");
         Assert.Equal("# Terms of Service — Solona's mods and plugins", text.Split('\n')[0].TrimEnd());
@@ -128,7 +127,7 @@ public sealed class ReadmeTermsTests
     [Trait("Plan", "EDGE-contrib-clean-room-22")]
     [Trait("Plan", "AC-proteus-licence-2-1")]
     [Trait("Plan", "EDGE-proteus-licence-2-1")]
-    public void Licence_is_the_Proteus_Licence_2_0()   // [AC-proteus-licence-2-1] [EDGE-proteus-licence-2-1]
+    public void Licence_is_the_Proteus_Licence_2_0()   // [AC-contrib-clean-room-11] [EDGE-contrib-clean-room-21] [EDGE-contrib-clean-room-22] [AC-proteus-licence-2-1] [EDGE-proteus-licence-2-1]
     {
         // AC-contrib-clean-room-11 was the 1.0 criterion ("Version 1.0 — in force"); AC-proteus-licence-2-1 supersedes
         // it. 1.0 itself stays in git history only (61c8c7b6:LICENSE).
