@@ -128,8 +128,14 @@ public sealed class RowHoverDwell
 }
 
 /// <summary>What one hovered row button offers: the table it belongs to and where its highlight would go.</summary>
+/// <param name="Mask">Gear only: the game rows to light (0: both sub-rows of <paramref name="Row"/>) — a sub-row button
+/// lights its one sub-row.</param>
 public sealed record RowHoverOffer(string Scope, int Row, HighlightRoute Route,
-    IReadOnlyList<string>? ShellLeaves, IReadOnlyList<Proteus.Interop.SkinGlowTarget>? SkinTargets);
+    IReadOnlyList<string>? ShellLeaves, IReadOnlyList<Proteus.Interop.SkinGlowTarget>? SkinTargets, uint Mask = 0)
+{
+    /// <summary>The gear rows this offer lights.</summary>
+    public uint GearMask => Mask != 0 ? Mask : ColorRowMask.Pair(Row);
+}
 
 /// <summary>This frame's hover offer. Several tables can draw in one frame; only one can be under the pointer, so the
 /// first offer wins and a later table that isn't hovered never clears it.</summary>

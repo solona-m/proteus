@@ -6527,10 +6527,6 @@
     "message": "Quien reciba este mod también necesita {0} ({1}), con el mismo matcap elegido. Sus texturas nunca se copian a tu mod.",
     "description": ""
   },
-  "Parts.Matcap.SiblingsSkipped.Fmt": {
-    "message": "No se aplicó a estas otras opciones de cuerpo, cuyas partes son distintas: {0}.",
-    "description": ""
-  },
   "Parts.Matcap.SkinTip": {
     "message": "La piel no puede llevar un matcap.",
     "description": ""
@@ -6755,8 +6751,20 @@
     "message": "la entrada {1} de «{0}»",
     "description": ""
   },
-  "Parts.Matcap.RowOnly": {
-    "message": "Solo en una fila de color",
+  "Parts.Matcap.PickHint": {
+    "message": "Elige una parte o una fila del colorset.",
+    "description": ""
+  },
+  "Parts.Matcap.RowA": {
+    "message": "Fila A",
+    "description": ""
+  },
+  "Parts.Matcap.RowB": {
+    "message": "Fila B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubTip": {
+    "message": "Elige una o ambas. Al señalarla, se ilumina en tu personaje.",
     "description": ""
   },
   "Parts.Matcap.RowOnlyTip": {
@@ -6769,26 +6777,6 @@
   },
   "Parts.Matcap.RowNoRows": {
     "message": "El material de esta pieza no tiene filas de color para elegir.",
-    "description": ""
-  },
-  "Parts.Matcap.RowSub": {
-    "message": "Subfila",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubBoth": {
-    "message": "A y B",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubA": {
-    "message": "Solo A",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubB": {
-    "message": "Solo B",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubOnly.Fmt": {
-    "message": "Este material solo usa la subfila {0}.",
     "description": ""
   },
   "Parts.Matcap.RowMaterial": {
@@ -6805,6 +6793,26 @@
   },
   "Parts.Matcap.RowHolesWarn": {
     "message": "Algunos huecos recortados de esta pieza están dentro de los triángulos de la fila, así que mostrarán el matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Applied.Fmt": {
+    "message": "Matcap aplicado a {0} archivo(s) de modelo.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Holes": {
+    "message": "Algunos huecos transparentes de esta fila mostrarán el matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Edges": {
+    "message": "Revisa los bordes transparentes en el juego.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Skipped.Fmt": {
+    "message": "No se aplicó a {0}: sus partes son distintas.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.More.Fmt": {
+    "message": "y {0} más",
     "description": ""
   },
   "Parts.Matcap.RowStale": {

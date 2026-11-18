@@ -114,6 +114,26 @@ public class MatcapRowUnitTests
     }
 
     [Fact]
+    public void Garbage_uvs_near_float_max_finish_and_touch_nothing()
+    {
+        // Farfalla's wrist piece carries hidden triangles with UVs at ±3.4e38: the texel span overflowed and the scan never
+        // ended (Apply and the click preview hung). Such a triangle samples nothing real: it touches no row and holds no
+        // hole, like a non-finite one. Run with a deadline so a regression fails rather than hangs the suite.
+        var big = 3.4028233E+38f;
+        var garbage = Tri(0.5f, -big, 0.5f, 0.9f, big, 0.9f);
+        var every = Bake((_, _) => true, w: 2048, h: 2048);
+        var holes = Bake((x, _) => x < 8, zero: false, threshold: 0.5f, w: 2048, h: 2048, blue: (_, _) => 0);
+        var run = System.Threading.Tasks.Task.Run(() => (MatcapRowCut.Touches(garbage, [every]), MatcapRowCut.HoleInside(garbage, [holes]),
+            MatcapRowCut.Touches(Tri(1e20f, 0.1f, 1e20f, 0.2f, 1e20f, 0.15f), [every])));
+        Assert.True(run.Wait(TimeSpan.FromSeconds(5)), "the footprint scan did not finish");
+        Assert.Equal((false, false, false), run.Result);
+        // Within the bound, a span a texture wide or more is the whole width, and a far tile still wraps.
+        Assert.True(MatcapRowCut.Touches(Tri(-3f, 0.1f, 2f, 0.1f, 0f, 0.15f), [Bake((x, y) => x == 15 && y == 1)]));
+        Assert.True(MatcapRowCut.Touches(Tri(9000.1f, 0.1f, 9000.15f, 0.1f, 9000.1f, 0.15f), [Bake((x, y) => x == 1 && y == 1)]));
+        Assert.False(MatcapRowCut.Touches(Tri(9000.1f, 0.1f, 9000.15f, 0.1f, 9000.1f, 0.15f), [Bake((x, y) => x == 8 && y == 1)]));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-matcap-row-40")]
     public void Union_mask_keeps_triangles_whose_row_is_only_in_another_options_index()
     {
@@ -353,8 +373,25 @@ public class MatcapRowUnitTests
         Assert.DoesNotContain("prototype", panel, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("PROTOTYPE", Source("Services/Matcap/MatcapStudio.cs"));
         Assert.DoesNotContain("PROTOTYPE", Source("Services/ModelMaterialWriter.cs"));
-        Assert.Contains("s.RowOnly", panel);
+        Assert.Contains("s.RowMaterial", panel);
+        Assert.Contains("Strings.Matcap.PickHint", Source("Gui/PartsPanel.cs"));
         Assert.DoesNotContain("\"Reading the colour rows", panel);
+    }
+
+    [Fact]
+    public void A_row_picked_elsewhere_is_cleared_wherever_the_rows_cant_be_shown()
+    {
+        // No checkbox: the row buttons are the only way to unpick a row, so every early return that draws none — no model,
+        // the game's own gear (no mod root), a material without colour rows — clears it. The "Reading…" frame keeps it.
+        var panel = Source("Gui/PartsPanel.Matcaps.cs");
+        var picker = panel[panel.IndexOf("private void DrawMatcapRowPicker()", StringComparison.Ordinal)..];
+        picker = picker[..picker.IndexOf("ColorTableEditor.DrawRowPicker(", StringComparison.Ordinal)];
+        Assert.Contains("if (parts == null) { ClearMatcapRow(); return; }", picker);
+        Assert.Contains("|| root == null || modelIndex < 0 || modelIndex >= models.Count) { ClearMatcapRow(); return; }", picker);
+        int noRows = picker.IndexOf("if (task.Result is not { } info)", StringComparison.Ordinal);
+        Assert.True(noRows > 0 && picker.IndexOf("ClearMatcapRow();", noRows, StringComparison.Ordinal) > noRows);
+        Assert.Contains("{ ImGui.TextDisabled(s.RowReading); return; }", picker);
+        Assert.Contains("SetMatcapRow(0, SubRowPick.Both);", panel[panel.IndexOf("private void ClearMatcapRow()", StringComparison.Ordinal)..]);
     }
 
     [Fact]

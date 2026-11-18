@@ -6527,10 +6527,6 @@
     "message": "이 모드를 공유받는 사람도 같은 매트캡으로 설정한 {0}({1})이(가) 필요합니다. 그 텍스처는 절대 내 모드에 복사되지 않습니다.",
     "description": ""
   },
-  "Parts.Matcap.SiblingsSkipped.Fmt": {
-    "message": "파츠가 달라 다음 다른 체형 옵션에는 적용하지 않았습니다: {0}.",
-    "description": ""
-  },
   "Parts.Matcap.SkinTip": {
     "message": "피부에는 매트캡을 적용할 수 없습니다.",
     "description": ""
@@ -6755,8 +6751,20 @@
     "message": "\"{0}\"의 항목 {1}",
     "description": ""
   },
-  "Parts.Matcap.RowOnly": {
-    "message": "한 색상 행에만",
+  "Parts.Matcap.PickHint": {
+    "message": "파츠나 컬러셋 행을 고르세요.",
+    "description": ""
+  },
+  "Parts.Matcap.RowA": {
+    "message": "행 A",
+    "description": ""
+  },
+  "Parts.Matcap.RowB": {
+    "message": "행 B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubTip": {
+    "message": "하나 또는 둘 다 고르세요. 가리키면 캐릭터에서 빛납니다.",
     "description": ""
   },
   "Parts.Matcap.RowOnlyTip": {
@@ -6769,26 +6777,6 @@
   },
   "Parts.Matcap.RowNoRows": {
     "message": "이 부위의 머티리얼에는 고를 색상 행이 없습니다.",
-    "description": ""
-  },
-  "Parts.Matcap.RowSub": {
-    "message": "하위 행",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubBoth": {
-    "message": "A와 B",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubA": {
-    "message": "A만",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubB": {
-    "message": "B만",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubOnly.Fmt": {
-    "message": "이 머티리얼은 하위 행 {0}만 씁니다.",
     "description": ""
   },
   "Parts.Matcap.RowMaterial": {
@@ -6805,6 +6793,26 @@
   },
   "Parts.Matcap.RowHolesWarn": {
     "message": "이 부위의 잘라낸 구멍 일부가 행의 삼각형 안에 있어 매트캡이 보입니다.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Applied.Fmt": {
+    "message": "모델 파일 {0}개에 매트캡을 적용했습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Holes": {
+    "message": "이 행의 비치는 구멍 일부에 매트캡이 보입니다.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Edges": {
+    "message": "비치는 가장자리를 게임에서 확인하세요.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Skipped.Fmt": {
+    "message": "{0}에는 적용하지 않았습니다: 파츠가 다릅니다.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.More.Fmt": {
+    "message": "외 {0}개",
     "description": ""
   },
   "Parts.Matcap.RowStale": {

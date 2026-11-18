@@ -6527,10 +6527,6 @@
     "message": "Anyone you share this mod with needs {0} too ({1}), set to the same matcap. Its textures are never copied into your mod.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
-  "Parts.Matcap.SiblingsSkipped.Fmt": {
-    "message": "Not applied to these other body options, whose parts differ: {0}.",
-    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
-  },
   "Parts.Matcap.SkinTip": {
     "message": "Skin can't take a matcap.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
@@ -6755,8 +6751,20 @@
     "message": "entry {1} of \"{0}\"",
     "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
   },
-  "Parts.Matcap.RowOnly": {
-    "message": "Only on one colour row",
+  "Parts.Matcap.PickHint": {
+    "message": "Pick a part or colorset row.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowA": {
+    "message": "Row A",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowB": {
+    "message": "Row B",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowSubTip": {
+    "message": "Pick one or both. Pointing at it lights it on your character.",
     "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
   },
   "Parts.Matcap.RowOnlyTip": {
@@ -6769,26 +6777,6 @@
   },
   "Parts.Matcap.RowNoRows": {
     "message": "This part's material has no colour rows to pick from.",
-    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
-  },
-  "Parts.Matcap.RowSub": {
-    "message": "Sub-row",
-    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
-  },
-  "Parts.Matcap.RowSubBoth": {
-    "message": "A and B",
-    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
-  },
-  "Parts.Matcap.RowSubA": {
-    "message": "A only",
-    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
-  },
-  "Parts.Matcap.RowSubB": {
-    "message": "B only",
-    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
-  },
-  "Parts.Matcap.RowSubOnly.Fmt": {
-    "message": "This material only uses sub-row {0}.",
     "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
   },
   "Parts.Matcap.RowMaterial": {
@@ -6806,6 +6794,26 @@
   "Parts.Matcap.RowHolesWarn": {
     "message": "Some cut-out holes in this part sit inside the row's triangles, so they will show the matcap.",
     "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.Chat.Applied.Fmt": {
+    "message": "Matcap applied to {0} model file(s).",
+    "description": "Studio Matcaps tool, a finished matcap Apply said in game chat, short."
+  },
+  "Parts.Matcap.Chat.Holes": {
+    "message": "Some see-through holes on this row will show the matcap.",
+    "description": "Studio Matcaps tool, a finished matcap Apply said in game chat, short."
+  },
+  "Parts.Matcap.Chat.Edges": {
+    "message": "Check see-through edges in game.",
+    "description": "Studio Matcaps tool, a finished matcap Apply said in game chat, short."
+  },
+  "Parts.Matcap.Chat.Skipped.Fmt": {
+    "message": "Not applied to {0}: their parts differ.",
+    "description": "Studio Matcaps tool, a finished matcap Apply said in game chat, short."
+  },
+  "Parts.Matcap.Chat.More.Fmt": {
+    "message": "and {0} more",
+    "description": "Studio Matcaps tool, a finished matcap Apply said in game chat, short."
   },
   "Parts.Matcap.RowStale": {
     "message": "The author's material changed since this row matcap was made. Undo it and apply it again.",

@@ -6527,10 +6527,6 @@
     "message": "Alle, mit denen du diesen Mod teilst, brauchen auch {0} ({1}), auf dieselbe Matcap gestellt. Ihre Texturen werden nie in deinen Mod kopiert.",
     "description": ""
   },
-  "Parts.Matcap.SiblingsSkipped.Fmt": {
-    "message": "Nicht auf diese anderen Körperoptionen angewendet, deren Teile sich unterscheiden: {0}.",
-    "description": ""
-  },
   "Parts.Matcap.SkinTip": {
     "message": "Haut kann keine Matcap bekommen.",
     "description": ""
@@ -6755,8 +6751,20 @@
     "message": "Eintrag {1} von „{0}“",
     "description": ""
   },
-  "Parts.Matcap.RowOnly": {
-    "message": "Nur auf einer Farbzeile",
+  "Parts.Matcap.PickHint": {
+    "message": "Wähle ein Teil oder eine Colorset-Zeile.",
+    "description": ""
+  },
+  "Parts.Matcap.RowA": {
+    "message": "Zeile A",
+    "description": ""
+  },
+  "Parts.Matcap.RowB": {
+    "message": "Zeile B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubTip": {
+    "message": "Wähle eine oder beide. Zeigst du darauf, leuchtet sie an deinem Charakter auf.",
     "description": ""
   },
   "Parts.Matcap.RowOnlyTip": {
@@ -6769,26 +6777,6 @@
   },
   "Parts.Matcap.RowNoRows": {
     "message": "Das Material dieses Teils hat keine Farbzeilen zur Auswahl.",
-    "description": ""
-  },
-  "Parts.Matcap.RowSub": {
-    "message": "Unterzeile",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubBoth": {
-    "message": "A und B",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubA": {
-    "message": "Nur A",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubB": {
-    "message": "Nur B",
-    "description": ""
-  },
-  "Parts.Matcap.RowSubOnly.Fmt": {
-    "message": "Dieses Material nutzt nur die Unterzeile {0}.",
     "description": ""
   },
   "Parts.Matcap.RowMaterial": {
@@ -6805,6 +6793,26 @@
   },
   "Parts.Matcap.RowHolesWarn": {
     "message": "Einige ausgeschnittene Löcher dieses Teils liegen in den Dreiecken der Zeile und zeigen daher die Matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Applied.Fmt": {
+    "message": "Matcap auf {0} Modelldatei(en) angewendet.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Holes": {
+    "message": "Einige durchsichtige Löcher in dieser Zeile zeigen die Matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Edges": {
+    "message": "Prüfe durchsichtige Kanten im Spiel.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Skipped.Fmt": {
+    "message": "Nicht angewendet auf {0}: Ihre Teile unterscheiden sich.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.More.Fmt": {
+    "message": "und {0} weitere",
     "description": ""
   },
   "Parts.Matcap.RowStale": {

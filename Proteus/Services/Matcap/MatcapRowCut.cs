@@ -582,19 +582,35 @@ internal static class MatcapRowCut
 
     private static bool Covered(ModelMaterialWriter.TriangleUv t, int w, int h, Func<int, int, bool> hit)
     {
-        float minU = Math.Min(t.U0, Math.Min(t.U1, t.U2)), maxU = Math.Max(t.U0, Math.Max(t.U1, t.U2));
-        float minV = Math.Min(t.V0, Math.Min(t.V1, t.V2)), maxV = Math.Max(t.V0, Math.Max(t.V1, t.V2));
-        if (!float.IsFinite(minU) || !float.IsFinite(maxU) || !float.IsFinite(minV) || !float.IsFinite(maxV)) return false;
-        long x0 = (long)MathF.Floor(minU * w), x1 = (long)MathF.Floor(maxU * w);
-        long y0 = (long)MathF.Floor(minV * h), y1 = (long)MathF.Floor(maxV * h);
-        if (x1 - x0 >= w) { x0 = 0; x1 = w - 1; }
-        if (y1 - y0 >= h) { y0 = 0; y1 = h - 1; }
-        for (long y = y0; y <= y1; y++)
+        if (w <= 0 || h <= 0) return false;
+        double minU = Math.Min(t.U0, Math.Min(t.U1, t.U2)), maxU = Math.Max(t.U0, Math.Max(t.U1, t.U2));
+        double minV = Math.Min(t.V0, Math.Min(t.V1, t.V2)), maxV = Math.Max(t.V0, Math.Max(t.V1, t.V2));
+        // A garbage UV (±3.4e38, which some exports carry on hidden triangles) or a non-finite one samples nothing real:
+        // such a triangle touches nothing, so it neither joins the row nor reports a hole.
+        if (!Sane(minU) || !Sane(maxU) || !Sane(minV) || !Sane(maxV)) return false;
+        // In doubles, so no texel index overflows: a footprint a texture wide or more is the whole width, anything else wraps.
+        var (x0, xs) = Footprint(minU, maxU, w);
+        var (y0, ys) = Footprint(minV, maxV, h);
+        for (int j = 0; j < ys; j++)
         {
-            int wy = (int)(((y % h) + h) % h);
-            for (long x = x0; x <= x1; x++)
-                if (hit((int)(((x % w) + w) % w), wy)) return true;
+            int wy = (y0 + j) % h;
+            for (int i = 0; i < xs; i++)
+                if (hit((x0 + i) % w, wy)) return true;
         }
         return false;
+    }
+
+    /// <summary>UVs beyond this many tiles from the origin are garbage, not a texture repeat.</summary>
+    public const double MaxUvTiles = 1e4;
+
+    private static bool Sane(double v) => double.IsFinite(v) && Math.Abs(v) <= MaxUvTiles;
+
+    /// <summary>The first wrapped texel and the texel count (at most <paramref name="size"/>) a UV span covers.</summary>
+    private static (int Start, int Count) Footprint(double min, double max, int size)
+    {
+        double f0 = Math.Floor(min * size), f1 = Math.Floor(max * size);
+        if (f1 - f0 >= size - 1) return (0, size);
+        int start = (int)(((f0 % size) + size) % size);
+        return (start, (int)(f1 - f0) + 1);
     }
 }

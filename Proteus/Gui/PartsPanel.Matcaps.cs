@@ -85,6 +85,12 @@ public sealed partial class PartsPanel
         public bool IsChange { get; init; }
         /// <summary>An Apply: only then is the drawn file checked (Change and Forget write no model).</summary>
         public bool IsApply { get; init; }
+        /// <summary>An Apply: the model files written.</summary>
+        public int ModelCount { get; init; }
+        /// <summary>A row Apply over cut-out holes inside the row's triangles (they show the matcap).</summary>
+        public bool RowHoles { get; init; }
+        /// <summary>An Apply wrote one of Proteus's hair ports, which is kept as it is while it has a matcap.</summary>
+        public bool PortKept { get; init; }
     }
 
     private string? MatcapImageFolder()
@@ -105,8 +111,8 @@ public sealed partial class PartsPanel
     private int matcapRowOnly;
     private SubRowPick matcapRowSub = SubRowPick.Both;
 
-    /// <summary>The last row picked, kept while the row is switched off so switching it on comes back to it.</summary>
-    private int matcapRowPick;
+    /// <summary>The Row A / Row B toggles (neither or both: both sub-rows).</summary>
+    private bool matcapSubA, matcapSubB;
 
     /// <summary>The material picked for a row matcap with nothing ticked, when the model has more than one (null: the first).</summary>
     private string? matcapRowMaterial;
@@ -115,9 +121,18 @@ public sealed partial class PartsPanel
     internal void SetMatcapRow(int row, SubRowPick sub)
     {
         matcapRowOnly = Math.Clamp(row, 0, 16);
-        if (matcapRowOnly > 0) matcapRowPick = matcapRowOnly;
         matcapRowSub = sub;
+        // The toggles show what the sub-row is: a harness "both" clears them, as the panel's own both-or-neither does.
+        if (RowPickerView.Sub(matcapSubA, matcapSubB) != sub) (matcapSubA, matcapSubB) = (sub == SubRowPick.A, sub == SubRowPick.B);
         PumpMatcapPreview();
+    }
+
+    /// <summary>No row picked (and the Row A / Row B toggles off): the matcap goes on the ticked parts, whole.</summary>
+    private void ClearMatcapRow()
+    {
+        if (matcapRowOnly == 0 && !matcapSubA && !matcapSubB) return;
+        (matcapSubA, matcapSubB) = (false, false);
+        SetMatcapRow(0, SubRowPick.Both);
     }
 
     /// <summary>
@@ -147,8 +162,6 @@ public sealed partial class PartsPanel
         return all.FirstOrDefault(m => string.Equals(m, matcapRowMaterial, StringComparison.OrdinalIgnoreCase)) ?? all.FirstOrDefault();
     }
 
-    private string[] MatcapSubLabels() => [Strings.Matcap.RowSubBoth, Strings.Matcap.RowSubA, Strings.Matcap.RowSubB];
-
     /// <summary>The picker's rows for one material, read off the framework thread, by (mod, model, material).</summary>
     private string? matcapRowInfoKey;
     private Task<MatcapStudio.RowInfo?>? matcapRowInfo;
@@ -157,17 +170,16 @@ public sealed partial class PartsPanel
     private (string Key, bool Warn)? matcapRowFollow;
 
     /// <summary>
-    /// "Only on one colour row", the material list (nothing ticked, several materials), then the Colors window's own row
-    /// picker for the material — swatches, only the rows its index map uses, Glow, and hovering a row lights it.
+    /// The material list (nothing ticked, several materials), then the Colors window's own row picker for the material —
+    /// swatches, only the rows its index map uses, hovering a row lights it. Always shown: picking a row is what puts the
+    /// matcap on that row only (no row: the ticked parts, whole); clicking it again unpicks it. Row A / Row B narrow it.
     /// </summary>
     private void DrawMatcapRowPicker()
     {
         var s = Strings.Matcap;
-        bool on = matcapRowOnly > 0;
-        if (ImGui.Checkbox($"{s.RowOnly}##matcapRowOn", ref on))
-            SetMatcapRow(on ? Math.Max(1, matcapRowPick) : 0, matcapRowSub);
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.RowOnlyTip);
-        if (!on || parts == null) return;
+        // Wherever the rows can't be shown (no model, the game's own gear, a material without colour rows), no row is
+        // picked: a pick made on another model must not linger where nothing can show or clear it.
+        if (parts == null) { ClearMatcapRow(); return; }
 
         // Several materials and nothing ticked: pick which one the row is on.
         bool anyTicked = parts.Parts.Any(p => ticked.Contains(p.Label));
@@ -188,7 +200,7 @@ public sealed partial class PartsPanel
 
         // The rows of the material, read once per (mod, model, material) on a worker.
         var root = ModRoot();
-        if (mat == null || root == null || modelIndex < 0 || modelIndex >= models.Count) return;
+        if (mat == null || root == null || modelIndex < 0 || modelIndex >= models.Count) { ClearMatcapRow(); return; }
         var model = models[modelIndex];
         var key = $"{root}|{model.File}|{mat}";
         if (key != matcapRowInfoKey)
@@ -205,25 +217,19 @@ public sealed partial class PartsPanel
         if (matcapRowInfo is not { IsCompleted: true } task) { ImGui.TextDisabled(s.RowReading); return; }
         if (task.Result is not { } info)
         {
+            ClearMatcapRow();
             ProteusStyle.DisabledWrapped(s.RowNoRows);
             return;
         }
 
         int pick = matcapRowOnly;
-        if (ColorTableEditor.DrawRowPicker($"matcaprow_{key}", info.Rows, info.UsedRows, [info.Leaf], ref pick, info.UsedSubRow)
+        bool a = matcapSubA, b = matcapSubB;
+        if (ColorTableEditor.DrawRowPicker($"matcaprow_{key}", info.Rows, info.UsedRows, [info.Leaf], ref pick, ref a, ref b, info.UsedSubRow)
             || pick != matcapRowOnly)
         {
-            matcapRowPick = pick;
-            SetMatcapRow(pick, matcapRowSub);
+            (matcapSubA, matcapSubB) = (a, b);
+            SetMatcapRow(pick, RowPickerView.Sub(a, b));
         }
-
-        ImGui.SetNextItemWidth(110 * ImGuiHelpers.GlobalScale);
-        int sub = matcapRowSub switch { SubRowPick.A => 1, SubRowPick.B => 2, _ => 0 };
-        var subLabels = MatcapSubLabels();
-        if (ImGui.Combo($"{s.RowSub}##matcapRowSub", ref sub, subLabels, subLabels.Length))
-            SetMatcapRow(matcapRowOnly, sub switch { 1 => SubRowPick.A, 2 => SubRowPick.B, _ => SubRowPick.Both });
-        if (info.UsedSubRow != null && matcapRowSub != SubRowPick.Both && matcapRowSub.ToString() != info.UsedSubRow)
-            ImGui.TextColored(ProteusStyle.Warn, string.Format(s.RowSubOnlyFmt, info.UsedSubRow));
     }
 
     /// <summary>
@@ -657,9 +663,10 @@ public sealed partial class PartsPanel
             var outcome = prepared.Ok ? MatcapWriter.Apply(root, prepared.Request!)
                                       : MatcapWriter.Outcome.Refuse(prepared.Code, prepared.Message);
             // A row matcap over cut-out holes inside the row's triangles: said with the result, since they show the matcap.
-            if (outcome.Ok && prepared.RowHoles) outcome = outcome with { Message = outcome.Message + " " + Strings.Matcap.RowHolesWarn };
             return new MatcapJobResult(root, outcome, outcome.Ok && choice.IsLibrary ? choice : null, confirmEnable,
-                                       prepared.SiblingsSkipped, prepared.Lod0Cut, prepared.AlphaTested, model.GamePath) { IsApply = true };
+                                       prepared.SiblingsSkipped, prepared.Lod0Cut, prepared.AlphaTested, model.GamePath)
+                { IsApply = true, ModelCount = prepared.Request?.Models.Count ?? 0, RowHoles = prepared.RowHoles,
+                  PortKept = outcome.Ok && MatcapWriter.WritesHairPort(root, prepared.Request) };
         });
     }
 
@@ -760,7 +767,9 @@ public sealed partial class PartsPanel
             MatcapRecord.Write(c.Root, rec);
         }
         Finish(new MatcapJobResult(c.Root, outcome, outcome.Ok && original.IsLibrary ? original : null, confirm,
-                                   prepared?.SiblingsSkipped ?? [], prepared?.Lod0Cut ?? false, prepared?.AlphaTested ?? false, piece.GamePath) { IsApply = true });
+                                   prepared?.SiblingsSkipped ?? [], prepared?.Lod0Cut ?? false, prepared?.AlphaTested ?? false, piece.GamePath)
+            { IsApply = true, ModelCount = prepared?.Request?.Models.Count ?? 0, RowHoles = prepared?.RowHoles ?? false,
+              PortKept = outcome.Ok && MatcapWriter.WritesHairPort(c.Root, prepared?.Request) });
     }
 
     private void Finish(MatcapJobResult r)
@@ -777,18 +786,15 @@ public sealed partial class PartsPanel
         }
         matcapRedrawOwed = false;   // AfterModChange below reloads and redraws
 
-        var lines = new List<string> { r.Outcome.Message };
+        var extra = new List<string>();
         if (r.Select is { Library: { } lib, Option: { } option })
         {
             var sel = MatcapSelection.Select(new PenumbraMatcapAdapter(penumbra), lib, option, r.ConfirmEnable);
-            if (!sel.Ok) lines.Add(sel.Message);
-            else if (!sel.Winning && sel.WinningFile != null) lines.Add(string.Format(s.NotWinningFmt, sel.WinningFile));
+            if (!sel.Ok) extra.Add(sel.Message);
+            else if (!sel.Winning && sel.WinningFile != null) extra.Add(string.Format(s.NotWinningFmt, sel.WinningFile));
             matcapPanel.InvalidateStatus();
         }
-        if (r.Lod0Cut) lines.Add(s.Lod0Cut);
-        if (r.SiblingsSkipped.Count > 0) lines.Add(string.Format(s.SiblingsSkippedFmt, string.Join(", ", r.SiblingsSkipped)));
-        if (r.AlphaTested) lines.Add(s.AlphaWarn);
-        if (r.IsApply && r.GamePath != null && DrawnElsewhere(r.Root, r.GamePath, r.Outcome.Files) is { } drawn) lines.Add(drawn);
+        if (r.IsApply && r.GamePath != null && DrawnElsewhere(r.Root, r.GamePath, r.Outcome.Files) is { } drawn) extra.Add(drawn);
         // A face file the face overlay rewrites must be read again, not from its remembered copy (before the recomposite).
         // Only when a face model was written (Apply, Undo, Forget — a Change rewrites no model), for every face game path
         // the written files are published at (another race's path included).
@@ -805,11 +811,17 @@ public sealed partial class PartsPanel
                     compositor.ForgetFaceUpstream(red.GamePath, Path.Combine(r.Root, red.File.Replace('\\', Path.DirectorySeparatorChar)));
         }
 
-        status = string.Join("\n", lines.Where(l => l.Length > 0));
+        // The panel keeps one short line; the details go to chat, short; the log keeps the full message and file names.
+        var (_, panel, chat) = MatcapPanelModel.Report(new MatcapPanelModel.JobReport(r.Outcome.Message, r.IsApply, r.ModelCount, r.RowHoles,
+                                                                                      r.SiblingsSkipped, r.AlphaTested, r.Lod0Cut, extra, r.PortKept));
+        status = panel;
         statusIsError = false;
         matcapError = null;
         ticked.Clear();
-        log.Information("[Proteus] matcap: {0}", status.Replace('\n', ' '));
+        foreach (var line in chat) Plugin.ChatGui.Print("[Proteus] " + line);
+        log.Information("[Proteus] matcap: {0}{1}{2}", r.Outcome.Message,
+            r.SiblingsSkipped.Count > 0 ? " Skipped: " + string.Join(", ", r.SiblingsSkipped) + "." : "",
+            extra.Count > 0 ? " " + string.Join(" ", extra) : "");
         AfterModChange(r.Root, r.Outcome.Files.Where(f => f.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)).ToList());
     }
 

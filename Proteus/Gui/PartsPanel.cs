@@ -593,6 +593,12 @@ public sealed partial class PartsPanel
         {
             if (side)
             {
+                // Matcaps: a part or a colour row is what the matcap goes on (the row picker sits in the pane below).
+                if (tool == Tool.Matcap)
+                {
+                    ProteusStyle.DisabledWrapped(Strings.Matcap.PickHint);
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip(Strings.Matcap.RowOnlyTip);
+                }
                 if (DrawPartHeader(parts))
                 {
                     drawerOpen = !drawerOpen;

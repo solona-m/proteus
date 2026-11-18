@@ -45,6 +45,53 @@ internal static class MatcapPanelModel
         return line;
     }
 
+    /// <summary>What a finished matcap job says, short: an Apply's facts and warnings.</summary>
+    /// <param name="PortKept">An Apply wrote one of Proteus's hair ports (kept as it is while it has a matcap).</param>
+    /// <param name="Extra">Lines to act on (the library slot wasn't switched or is outranked, the character draws another
+    /// file): kept in the panel too.</param>
+    public sealed record JobReport(string Message, bool IsApply, int ModelCount, bool RowHoles, IReadOnlyList<string> SiblingsSkipped,
+                                   bool AlphaTested, bool Lod0Cut, IReadOnlyList<string> Extra, bool PortKept = false);
+
+    /// <summary>At most this many skipped options are named; the rest are counted.</summary>
+    public const int SkippedNamed = 6;
+
+    /// <summary>
+    /// A finished job, said briefly: the panel's status (one headline, plus any <see cref="JobReport.Extra"/> line to act on)
+    /// and the chat lines (headline first). An Apply's own message names materials and is long; its headline is just the
+    /// model count, and each warning is one short line. Change, Undo and Forget keep their message.
+    /// </summary>
+    public static (string Headline, string Status, List<string> Chat) Report(JobReport r)
+    {
+        var s = Strings.Matcap;
+        string headline = r.IsApply ? string.Format(s.ChatAppliedFmt, r.ModelCount) : r.Message;
+        var extra = r.Extra.Where(l => l.Length > 0).ToList();
+        var chat = new List<string> { headline };
+        if (r.IsApply && r.PortKept) chat.Add(MatcapWriter.PortKeptText);
+        if (r.RowHoles) chat.Add(s.ChatHoles);
+        else if (r.AlphaTested) chat.Add(s.ChatEdges);
+        if (r.SiblingsSkipped.Count > 0)
+        {
+            var names = r.SiblingsSkipped.Select(OptionName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var shown = string.Join(", ", names.Take(SkippedNamed));
+            if (names.Count > SkippedNamed) shown += " " + string.Format(s.ChatMoreFmt, names.Count - SkippedNamed);
+            chat.Add(string.Format(s.ChatSkippedFmt, shown));
+        }
+        if (r.Lod0Cut) chat.Add(s.Lod0Cut);
+        chat.AddRange(extra);
+        return (headline, string.Join("\n", extra.Prepend(headline)), chat);
+    }
+
+    /// <summary>
+    /// A mod file named by its option: the folder before <c>chara/</c> (<c>body retarget/rosaline m/chara/…</c> →
+    /// <c>rosaline m</c>), else the file name.
+    /// </summary>
+    public static string OptionName(string file)
+    {
+        var parts = file.Split('/', '\\');
+        int at = Array.FindIndex(parts, p => string.Equals(p, "chara", StringComparison.OrdinalIgnoreCase));
+        return at > 0 ? parts[at - 1] : System.IO.Path.GetFileNameWithoutExtension(file);
+    }
+
     /// <summary>A file of the managed mod the face overlay's rewrite published (<c>facelr_*.mdl</c>).</summary>
     public static bool IsManagedFaceRewrite(string file) =>
         System.IO.Path.GetFileName(file).StartsWith("facelr_", StringComparison.OrdinalIgnoreCase);

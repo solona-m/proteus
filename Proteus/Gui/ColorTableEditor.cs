@@ -395,7 +395,7 @@ public static partial class ColorTableEditor
     private static void DrawRowButtons(
         string idScope, List<ColorTableRowPreset> rows, HashSet<int>? usedRows, RenderMode mode,
         IReadOnlyList<string>? shellMaterialLeaves, IReadOnlyList<Proteus.Interop.SkinGlowTarget>? skinGlowTargets,
-        ref int selectedRow, bool mirrorUnsetSubRows, bool onlyA, bool onlyB)
+        ref int selectedRow, bool mirrorUnsetSubRows, bool onlyA, bool onlyB, bool allowNone = false)
     {
         // Rows the index texture never selects are hidden (below), or DIMMED under "Show all rows" — never disabled: the
         // reading can be wrong, and must not block editing.
@@ -405,7 +405,7 @@ public static partial class ColorTableEditor
         // lands on a visible row when nothing is chosen yet or it is hidden; under Show all a dimmed row can be picked on
         // purpose and stays picked.
         var visible = RowPickerView.Visible(usedRows, _showAllRows);
-        selectedRow = RowPickerView.Land(selectedRow, visible, _showAllRows, InUse);
+        selectedRow = RowPickerView.Land(selectedRow, visible, _showAllRows, InUse, allowNone);
 
         // ── row picker ───────────────────────────────────────────────────────
         // Each button previews its row: diffuse, specular, glow columns, each split top = A, bottom = B.
@@ -430,7 +430,7 @@ public static partial class ColorTableEditor
             using (ProteusStyle.Selected(row == selectedRow))
             {
                 if (ImGui.Button($"#{row:D2}##row_{idScope}_{row}", btn))
-                    selectedRow = row;
+                    selectedRow = RowPickerView.Click(selectedRow, row, allowNone);
             }
             // Pointing at a row lights it on the character (CommitRowHover, once per frame) — dimmed rows too, since
             // the index reading can be wrong.
@@ -450,35 +450,47 @@ public static partial class ColorTableEditor
 
     /// <summary>
     /// The row picker without the editing panels, for choosing a row of a material Proteus doesn't edit here (the
-    /// Matcaps tool's row): the same buttons as <see cref="DrawRows"/>, plus "Show all rows" when it would matter.
-    /// Returns true when the selection changed.
+    /// Matcaps tool's row): the same buttons as <see cref="DrawRows"/>, where no row is a choice too (clicking the picked
+    /// row unpicks it), then Row A / Row B toggles for the picked row (hovering one lights that sub-row), and "Show all
+    /// rows" when it would matter. Returns true when the row or the sub-rows changed.
     /// </summary>
     /// <param name="materialLeaves">The material's file name(s) as the game loads them, for hover lighting.</param>
+    /// <param name="subA">Row A is picked (neither or both picked = both sub-rows, <see cref="RowPickerView.Sub"/>).</param>
     public static bool DrawRowPicker(string idScope, List<ColorTableRowPreset> rows, HashSet<int>? usedRows,
-                                     IReadOnlyList<string> materialLeaves, ref int selectedRow, string? usedSubRow = null)
+                                     IReadOnlyList<string> materialLeaves, ref int selectedRow, ref bool subA, ref bool subB,
+                                     string? usedSubRow = null)
     {
-        _pickerDrew = true;   // the Colors window's per-frame step keeps this picker's hover and pin alive
+        _pickerDrew = true;   // the Colors window's per-frame step keeps this picker's hover alive
         int before = selectedRow;
+        bool beforeA = subA, beforeB = subB;
         bool onlyA = string.Equals(usedSubRow, "A", StringComparison.Ordinal);
         bool onlyB = string.Equals(usedSubRow, "B", StringComparison.Ordinal);
+        // A toggle left on from another material, for a column this index never uses, isn't drawn: it must not count.
+        (subA, subB) = RowPickerView.Usable(subA, subB, usedSubRow);
         var mode = RenderModeInference.ModeOf(OverlayLayer.Gear, OverlayDescriptor.DefaultGearShader);
-        DrawRowButtons(idScope, rows, usedRows, mode, materialLeaves, null, ref selectedRow, false, onlyA, onlyB);
+        DrawRowButtons(idScope, rows, usedRows, mode, materialLeaves, null, ref selectedRow, false, onlyA, onlyB, allowNone: true);
 
         var cs = Strings.Colors;
-        // Glow: pin the selected row lit on the character, per sub-row, as the Colors window's sub-row panels do.
-        if (Highlighter != null && materialLeaves.Count > 0)
-            foreach (var (isA, label) in new[] { (true, "A"), (false, "B") })
+        // Row A / Row B: toggles for the picked row. A column the index never lands in has nothing to pick, so it isn't
+        // offered. Hovering one lights just that sub-row on the character.
+        if (selectedRow > 0)
+            foreach (var (isA, label) in new[] { (true, Strings.Matcap.RowA), (false, Strings.Matcap.RowB) })
             {
-                if (isA ? onlyB : onlyA) continue;   // a column the index never lands in has nothing to light
-                int gameRow = (selectedRow - 1) * 2 + (isA ? 0 : 1);
-                bool active = Highlighter.IsTarget(materialLeaves, gameRow);
-                using (ProteusStyle.Selected(active))
-                    if (ImGui.SmallButton($"{(active ? cs.Glowing : cs.Glow)} {label}##glow_{idScope}_{label}"))
+                if (isA ? onlyB : onlyA) continue;
+                bool on = isA ? subA : subB;
+                using (ProteusStyle.Selected(on))
+                    if (ImGui.SmallButton($"{label}##sub_{idScope}_{(isA ? "A" : "B")}"))
                     {
-                        if (active) Highlighter.Clear();
-                        else Highlighter.SetTarget(materialLeaves, gameRow);
+                        if (isA) subA = !subA;
+                        else subB = !subB;
                     }
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip(cs.GlowGearTip);
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip(Strings.Matcap.RowSubTip);
+                    _hoverFrame.Offer(new RowHoverOffer($"{idScope}_sub{(isA ? "A" : "B")}", selectedRow,
+                        RowHighlightRoute.Pick(mode, Highlighter != null, materialLeaves.Count, false, 0),
+                        materialLeaves, null, ColorRowMask.Sub(selectedRow, isA)));
+                }
                 ImGui.SameLine();
             }
         if (RowPickerView.ToggleRelevant(usedRows))
@@ -487,10 +499,10 @@ public static partial class ColorTableEditor
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(cs.ShowAllRowsTip);
         }
         else ImGui.NewLine();
-        return selectedRow != before;
+        return selectedRow != before || subA != beforeA || subB != beforeB;
     }
 
-    /// <summary>A <see cref="DrawRowPicker"/> drew since the last call: its hover and Glow pin must be kept, not cleared,
+    /// <summary>A <see cref="DrawRowPicker"/> drew since the last call: its hover must be kept, not cleared,
     /// even while the Colors window is closed. Reading it resets it, once per frame.</summary>
     internal static bool TakePickerDrew()
     {
@@ -550,7 +562,7 @@ public static partial class ColorTableEditor
         switch (RowHoverCommit.Decide(pluginEnabled, a?.Route, compositeBusy, skinNeedsBuild))
         {
             case HoverAction.Gear:
-                Highlighter?.SetPreview(a!.ShellLeaves!, ColorRowMask.Pair(a.Row));
+                Highlighter?.SetPreview(a!.ShellLeaves!, a.GearMask);
                 SkinGlow?.EndPreview();
                 break;
             case HoverAction.Skin:
