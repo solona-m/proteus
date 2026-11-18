@@ -314,7 +314,6 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
     /// <summary>Without the body maps nothing is matched across the sexes, and nothing is saved.</summary>
     [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Stormblessed, CrossSexRefitLocalTests.Tbse)]
     [Trait("Plan", "EDGE-hands-feet-port-11")]
-    [Trait("Suite", "Diagnostic")]
     public void No_maps_no_save() // [EDGE-hands-feet-port-11]
     {
         var tbse = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.Tbse));

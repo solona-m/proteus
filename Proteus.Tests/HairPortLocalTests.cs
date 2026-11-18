@@ -445,7 +445,6 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-hair-skeleton-infer-7")]
     [Trait("Plan", "EDGE-hair-skeleton-infer-20")]
     [Trait("Plan", "EDGE-hair-skeleton-infer-25")]
-    [Trait("Suite", "Diagnostic")]
     public void The_reported_hairstyle_8_ports_with_the_skeleton_each_race_loads()
     {
         var game = Load();

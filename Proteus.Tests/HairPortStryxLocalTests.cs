@@ -149,7 +149,6 @@ public sealed class HairPortStryxLocalTests(ITestOutputHelper o) : IDisposable
     [Trait("Plan", "AC-hair-material-scalp-fit-1")]
     [Trait("Plan", "AC-hair-material-scalp-fit-2")]
     [Trait("Plan", "AC-hair-material-scalp-fit-10")]
-    [Trait("Suite", "Diagnostic")]
     public void Stryx_ports_to_midlander_man_alone()
     {
         var game = HairPortLocalTests.Load();

@@ -124,7 +124,8 @@ a full run also gets `[Trait("Suite", "Diagnostic")]` (it keeps Slow;
 `SuiteBudgetTests` checks); a class fixture's setup counts against every test of
 its class, and 7.5 s or more measured idle moves the whole class (tags on the
 class) unless it holds exempt tests. Exempt (listed in `SuiteBudgetTests`): the
-Sensitive Areas writers' own tests and tests that call those writers directly,
+Sensitive Areas writers' own tests and tests that exercise a write/build/save/undo of
+those writers directly (not as setup),
 write-behaviour tests in a fixture class, the build-enforced rule tests, the
 golden baselines, and a failing test until it is fixed. A full run over budget
 before a release: report the overrun to the owner (slowest tests via

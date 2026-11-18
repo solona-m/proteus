@@ -85,7 +85,6 @@ public class CrossSexEndsLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Stormblessed)]
     [Trait("Plan", "AC-mens-ends-crotch-3")]
     [Trait("Plan", "EDGE-mens-ends-crotch-1")]
-    [Trait("Suite", "Diagnostic")]
     public void Stormblessed_packed_mens_ends_are_the_games_own() // [AC-mens-ends-crotch-3] [EDGE-mens-ends-crotch-1]
     {
         var pieces = SizeSetRefit.PiecesOf(LocalData.Path(SizeSetCrossSexLocalTests.Stormblessed), Game, includeEnds: true);

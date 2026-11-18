@@ -164,7 +164,6 @@ public sealed class AuthorsMensFallbackLocalTests(ITestOutputHelper o) : IDispos
     [LocalDataFact(LocalData.GameData, LaVieEnRose)]
     [Trait("Plan", "AC-42-43-tbsex-legs-cross-1")]
     [Trait("Plan", "EDGE-42-43-tbsex-legs-cross-17")]
-    [Trait("Suite", "Diagnostic")]
     public void La_vie_en_rose_glove_repro() // [AC-42-43-tbsex-legs-cross-1] [EDGE-42-43-tbsex-legs-cross-17]
     {
         string root = LocalData.Path(LaVieEnRose);

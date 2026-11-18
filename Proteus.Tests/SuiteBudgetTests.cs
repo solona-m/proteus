@@ -58,12 +58,18 @@ public class SuiteBudgetTests
         "MatcapTailLocalTests.Real_tail_models_take_matcap_published_beside_the_games_material",
         "MatcapDownstreamLocalTests.Refit_sizeset_hatcompat_lod0geometry_brush_no_nan_boundary_coincident",
         "MatcapVieraEarLocalTests.Real_viera_ear_model_takes_matcap",
+        // Direct HairPortWriter.Save / SecondSkinWriter.Build calls. (Size-set tests that call PenumbraModMeta.MigrateWorkCopy
+        // only to prepare a temp copy do not count: Work_copy_conversion_matches_Penumbras above checks it directly.)
+        "HairPortLocalTests.The_reported_hairstyle_8_ports_with_the_skeleton_each_race_loads",
+        "HairPortStryxLocalTests.Stryx_ports_to_midlander_man_alone",
+        "FaceShellUnmirrorTests.A_face_shell_with_its_shapes_baked_in_keeps_its_sides",
     };
 
     /// <summary>Failing tests stay in the release run so the failure stays visible. Drop an entry once it is fixed.</summary>
     internal static readonly string[] KnownFailures =
     {
         "MirrorMoveLocalTests.Neolithe_body_skin_mirrors",
+        "SkinMoveLocalTests.ThisOldThingRueAndNeolitheTopsSculpt",
     };
 
     /// <summary>Backstop: a test class named like a Sensitive Areas writer or a rule test is never Diagnostic.</summary>
@@ -105,8 +111,9 @@ public class SuiteBudgetTests
 
     // ---------------------------------------------------------------- the tests
 
-    /// <summary>Keeps the <c>Suite</c> property present in every discovery, so the full filter never names a property no
-    /// test has (vstest would refuse it), and gives the diagnostic command something cheap to prove itself on.</summary>
+    /// <summary>Keeps the <c>Suite</c> property present in every discovery and gives the diagnostic command a cheap target.
+    /// (The xunit adapter accepts a filter naming a property no test has — <c>!=</c> then matches everything — so the guard
+    /// against an empty selection is <c>TreatNoTestsAsError</c> in the documented commands.)</summary>
     [Fact]
     [Trait("Speed", "Slow")]
     [Trait("Suite", "Diagnostic")]
@@ -354,8 +361,10 @@ public class SuiteBudgetTests
     }
 }
 
-/// <summary>Reads xunit <see cref="TraitAttribute"/>s the way vstest and the xunit adapter compare them: keys and values
-/// case-insensitively, from the method, its reflected test class and that class's base types.</summary>
+/// <summary>Reads xunit <see cref="TraitAttribute"/>s from the method, its reflected test class and that class's base
+/// types, comparing keys and values case-insensitively. Values match the adapter (measured: <c>Suite=diagnostic</c>
+/// selects a <c>Diagnostic</c> test); keys are stricter than it (<c>suite=…</c> selects nothing there, so a wrong-case key
+/// stays in the full run), and here such a tag still counts as Diagnostic and must carry Slow.</summary>
 internal static class TestTraits
 {
     public static IEnumerable<(string Key, string Value)> OfType(Type type)
