@@ -267,7 +267,7 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
     /// Equip <paramref name="sentId"/> in <paramref name="slot"/> (a canonical slot name) once <see cref="Gate"/> passed,
     /// recording the slot's first original and what is worn after (read back in the same tick).
     /// </summary>
-    public ChangeResult Equip(string slot, ulong sentId, (int Set, int Variant)? requested)
+    public ChangeResult Equip(string slot, ulong sentId, (int Set, int Variant)? requested, byte dye1 = 0, byte dye2 = 0)
     {
         if (!game.PlayerPresent()) return ChangeResult.Fail(409, "not-logged-in", "there is no character to equip");
         if (game.GearNow() is not { } before)
@@ -278,13 +278,13 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         // A slot the state leaves out is unknown, not Nothing: putting back item 0 would unequip the real piece.
         if (!before.TryGetValue(slot, out var prev))
             return ChangeResult.Fail(503, "glamourer-unavailable", $"Glamourer's state has no readable {slot} slot");
-        var ec = game.SetGear(slot, sentId, 0, 0);
+        var ec = game.SetGear(slot, sentId, dye1, dye2);
         if (ec == "ItemInvalid") return ChangeResult.Fail(400, "item-invalid", $"Glamourer cannot put {sentId} in {slot}");
         if (ec != null) return ChangeResult.Fail(409, "glamourer-refused", $"Glamourer refused the equip: {ec}");
 
         Worn? readBack = game.GearNow() is { } after && after.TryGetValue(slot, out var worn) ? worn : null;
         bool verified = readBack != null;
-        var applied = readBack ?? new Worn(sentId, 0, 0);
+        var applied = readBack ?? new Worn(sentId, dye1, dye2);
         var original = gear.TryGetValue(slot, out var existing) ? existing.Original : prev;
         gear[slot] = new GearRecord(slot, original, applied, requested, verified, DateTime.UtcNow);
         log?.Information("[Proteus] test harness: equipped {0}: sent {1}, worn {2}, was {3}", slot, sentId, applied.Item, prev.Item);

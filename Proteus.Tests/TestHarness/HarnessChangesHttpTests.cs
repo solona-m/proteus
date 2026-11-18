@@ -52,6 +52,26 @@ public class HarnessChangesHttpTests : IDisposable
         Assert.Single(state.GetProperty("harnessChanges").GetProperty("gear").EnumerateArray());
     }
 
+    // QA (row-matcap-glass): a dyed check needs stains; put-back restores the original's.
+    [Fact]
+    [Trait("Plan", "AC-row-matcap-glass-1")]
+    public async Task Equip_with_dyes_wears_them_and_put_back_restores_the_original()
+    {
+        Game.Gear["Wrists"] = new Worn(222, 5, 6);
+        var (status, body) = await fx.Post("/actions/equip", """{"slot":"wrists","item":39507,"dyes":[17,0]}""");
+        Assert.Equal(200, status);
+        Assert.Equal("[17,0]", body.GetProperty("dyes").GetRawText());
+        Assert.Equal(new Worn(39507, 17, 0), Game.Gear["Wrists"]);
+
+        var (bad, err) = await fx.Post("/actions/equip", """{"slot":"wrists","item":39507,"dyes":[300,0]}""");
+        Assert.Equal((400, "invalid-field"), (bad, Code(err)));
+        (bad, err) = await fx.Post("/actions/equip", """{"slot":"wrists","item":39507,"dyes":[1]}""");
+        Assert.Equal((400, "invalid-field"), (bad, Code(err)));
+
+        await fx.Post("/actions/put-back", "{}");
+        Assert.Equal(new Worn(222, 5, 6), Game.Gear["Wrists"]);
+    }
+
     // [AC-harness-equip-1] [EDGE-harness-equip-3] [EDGE-harness-equip-4]
     [Fact]
     public async Task Equip_ItemInvalid_400_NoRecord()
