@@ -314,7 +314,14 @@ internal static class MatcapStudio
             try
             {
                 mtrl = MatcapMaterial.Build(template, normal!, MatcapWriter.MaskGamePath(token), matcapPath, alpha);
-                if (env.RowOnly > 0) mtrl = TextureLoader.EnsureConstantValues(mtrl, MatcapMaterial.ConstAlphaThreshold, RowAlphaThreshold).data;
+                if (env.RowOnly > 0)
+                {
+                    mtrl = TextureLoader.EnsureConstantValues(mtrl, MatcapMaterial.ConstAlphaThreshold, RowAlphaThreshold).data;
+                    // The cut itself: the depth passes discard where normal blue < this (our bake zeroes blue off the row).
+                    var (withCut, ok) = TextureLoader.EnsureConstantValues(mtrl, MatcapMaterial.ConstShadowAlphaThreshold, RowAlphaThreshold);
+                    if (!ok) return Prepared.Refuse("row-cut", "Row matcap (prototype): the cut-out threshold could not be added to the material.");
+                    mtrl = withCut;
+                }
             }
             catch (InvalidDataException ex)
             {

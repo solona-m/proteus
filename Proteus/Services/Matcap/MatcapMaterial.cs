@@ -29,6 +29,13 @@ internal static class MatcapMaterial
     /// <summary><c>g_AlphaThreshold</c>: below it the normal map's alpha cuts the surface away.</summary>
     public const uint ConstAlphaThreshold = 0x29AC0223;
 
+    /// <summary>
+    /// <c>g_ShadowAlphaThreshold</c> (cb0[1].w): what characterreflection's DEPTH passes actually cut by — the normal
+    /// map's BLUE times vertex alpha, below it discarded. <see cref="ConstAlphaThreshold"/> only sets the colour pass's
+    /// whole-material opacity (saturate(1 / it)). Measured from the shader's disassembly (row matcap prototype).
+    /// </summary>
+    public const uint ConstShadowAlphaThreshold = 0xD925FF32;
+
     /// <summary>A material's shader, textures (in table order), sampler bindings, constants and colour-table size.</summary>
     public sealed record Header(
         string Shader, IReadOnlyList<string> Textures, IReadOnlyList<(uint Id, int Texture)> Samplers,
