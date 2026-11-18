@@ -193,4 +193,26 @@ public partial class BulgeLocalTests
         output.WriteLine($"without the bulge {plain} ms, with it {with} ms");
         Assert.True(with - plain <= 3000, $"the bulge added {with - plain} ms");
     }
+
+    /// <summary>
+    /// Women's bodies with a penis never take the TBSE bulge (path B is a later increment): each is left as it is — the
+    /// bounds gate passes it by, or the swap finds no piece the bulge plugs.
+    /// </summary>
+    [LocalDataFact(LocalData.Mods)]
+    [Trait("Plan", "EDGE-featureless-bulge-39")]
+    public void Womens_bodies_with_a_penis_never_take_the_tbse_bulge()
+    {
+        int read = 0;
+        foreach (var (name, need, penis, _) in BulgeSpikeLocalTests.Bodies.Where(b => b.Penis && b.Need.Contains("c0201", StringComparison.Ordinal)))
+        {
+            if (LocalData.Missing([need]) is { } miss) { output.WriteLine($"{name}: skipped ({miss})"); continue; }
+            read++;
+            var bytes = File.ReadAllBytes(LocalData.Path(need));
+            bool gate = BodyRetarget.MayTakeBulge(ModelPartReader.Read(bytes)!);
+            var swapped = BulgeSwap.Featureless(bytes, TbseBulge.Shared!, out var why);
+            output.WriteLine($"{name}: gate {gate}, swap {(swapped == null ? "refused — " + why : "MADE")}");
+            Assert.Null(swapped);
+        }
+        Assert.True(read > 0, "no women's body with a penis is installed here");
+    }
 }
