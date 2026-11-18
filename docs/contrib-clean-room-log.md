@@ -799,8 +799,8 @@ Opened:
 - Read docs/ipc-contract.md
 - Read Proteus/Interop/IpcProvider.cs
 - Read Proteus/Interop/Ipc/IpcGates.cs
-- Grep C:/Users/solon/.claude/projects/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/bn50preb8.txt
-- Read C:/Users/solon/.claude/projects/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/bn50preb8.txt
+- Grep <claude-projects>/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/bn50preb8.txt
+- Read <claude-projects>/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/bn50preb8.txt
 - Read Proteus/Interop/Ipc/PenumbraGates.cs
 - Read Proteus/Interop/Ipc/PenumbraApiTypes.cs
 - Grep E:/orca/workspaces/Proteus/licence-clean-room
@@ -826,16 +826,16 @@ Start commit: `4fafbc7c`. Extracted from its transcript by agent ID (extract_con
 Clean security review (run 2) of the D8 clean diffs at the merged tip: NO FINDINGS. Spec section 12 rows S1-S10 all confirmed (S1 equality-only lookups; S2 typed System.Text.Json, no polymorphism; S3 master switch on SetColorTable only; S4 no constructor null checks, deferred lambdas; S5 caller's thread, writeGate-locked save; S6 OpenToMod no hop; S7 thread-static echo filter; S8 guards as specified, refresh parse cannot throw; S9 no path from caller input; S10 R8 dispose order). Its targeted dotnet test could not compile because the code-critic was building the same worktree at the same time (file lock), so this review is static. The extraction script's allowlist for the pre-removal diff was missing the three mixed files added at 1b; fixed before this count.
 
 Opened:
-- Grep C:/Users/solon/.claude/projects/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/bbyo44ung.txt
+- Grep <claude-projects>/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/bbyo44ung.txt
 - Grep docs/contrib-clean-room-spec.md
-- Read C:/Users/solon/.claude/projects/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/bbyo44ung.txt
+- Read <claude-projects>/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/bbyo44ung.txt
 - Read docs/contrib-clean-room-spec.md
 - Grep docs/ipc-contract.md
 - Read docs/ipc-contract.md
 - Grep Proteus
 - Grep Proteus/Proteus.csproj
 - Grep Directory.Build.props
-- Grep C:/Users/solon/.claude/projects/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/bse9snm0n.txt
+- Grep <claude-projects>/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/bse9snm0n.txt
 - Grep Proteus/Gui/StatusWindow.cs
 - Grep Proteus/Services
 Shell commands:
@@ -875,3 +875,9 @@ forbidden locations in listing/search results: 0
   5. **AC-8 and AC-10 in game** are verified by the process: the step-10 sequence, and QA where it can run. The in-game part is UNVERIFIED.
   6. **Local paths in the committed docs** are redacted: `<session-scratch>`, `%APPDATA%`, `<claude-projects>`, `%USERPROFILE%`.
 - **The licence date.** The date changed to 2026-11-18, so `LICENSE` line 3 now says "in force from 2026-11-18". `XivLiveMesh/LICENSE` was re-copied.
+- **Code-critic, round 2** (`021053f8`): every round-1 FAIL item passed, except ND-6. The two security-review sections, appended after the redaction, still held `<claude-projects>`-style local paths. Fix:
+  - those 5 paths are redacted;
+  - a new `ContribCleanRoomRecordTests.Record_docs_carry_no_local_user_paths` keeps the four record docs free of `X:\Users\` paths.
+- **Its NEEDS_DECISION** (P9 and P6 argument order still unpinned): option (a), the cheap one, was taken. `Gates_pass_the_contracts_argument_order_and_defaults` now also pins P9's (inherit, enabled, priority, options) tuple and P6's (ignoreInheritance, ignoreTemporary) order.
+- **Its open question** (EDGE-18 on two tests): rev 10's EDGE-18 is the closure removing Solona's own lines, which matches `Body_shape_signature_follows_the_spec`. The tag on `Harness_gates_match_the_API` is removed; it keeps AC-10.
+- **Tests at this fix:** `IpcGatesTests`, `IpcContractTests` and `ContribCleanRoomRecordTests` (minus the participant test) gave 27 passed, 0 failed.

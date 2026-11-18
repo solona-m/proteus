@@ -209,8 +209,7 @@ public class IpcContractTests
 
     [Fact]
     [Trait("Plan", Plan10)]
-    [Trait("Plan", "EDGE-contrib-clean-room-18")]
-    public void Harness_gates_match_the_API()   // [AC-contrib-clean-room-10] [EDGE-contrib-clean-room-18]
+    public void Harness_gates_match_the_API()   // [AC-contrib-clean-room-10]
     {
         // §6: compiled only into local harness builds (ADR 0002); on a CI build there is nothing to check.
         var rows = ContractRows("## 6.");

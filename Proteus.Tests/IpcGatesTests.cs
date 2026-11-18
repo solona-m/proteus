@@ -208,6 +208,16 @@ public class IpcGatesTests : IDisposable
         new PenumbraOpenMainWindow(pi).Invoke(TabType.Mods, "dir");                // P24: tab as int, then dir, then modName
         Assert.Equal(new object?[] { (int)TabType.Mods, "dir", "" }, OnlyCall(proxy, PenumbraOpenMainWindow.Label));
 
+        var options = new Dictionary<string, IReadOnlyList<string>>();
+        new PenumbraSetTemporaryModSettings(pi).Invoke(coll, "dir", inherit: false, enabled: true, priority: 5, options, "src", 3);
+        // P9: modName third, then one (inherit, enabled, priority, options) tuple, then source and key.
+        Assert.Equal(new object?[] { coll, "dir", "", (false, true, 5, (IReadOnlyDictionary<string, IReadOnlyList<string>>)options), "src", 3 },
+                     OnlyCall(proxy, PenumbraSetTemporaryModSettings.Label));
+
+        new PenumbraGetCurrentModSettingsWithTemp(pi).Invoke(coll, "dir", ignoreInheritance: true, ignoreTemporary: false);
+        // P6: (collection, dir, modName, ignoreInheritance, ignoreTemporary, key).
+        Assert.Equal(new object?[] { coll, "dir", "", true, false, 0 }, OnlyCall(proxy, PenumbraGetCurrentModSettingsWithTemp.Label));
+
         new GlamourerSetBonusItem(pi).Invoke(0, ApiBonusSlot.Glasses, 4242UL, 9u, ApplyFlag.Once);   // G5: itemId before key, flags last
         Assert.Equal(new object?[] { 0, (byte)ApiBonusSlot.Glasses, 4242UL, 9u, (ulong)ApplyFlag.Once },
                      OnlyCall(proxy, GlamourerSetBonusItem.Label));

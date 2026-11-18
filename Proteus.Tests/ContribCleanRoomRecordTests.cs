@@ -177,6 +177,14 @@ public sealed class ContribCleanRoomRecordTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-contrib-clean-room-5")]
+    public void Record_docs_carry_no_local_user_paths()   // [AC-contrib-clean-room-5]
+    {
+        foreach (var doc in new[] { "docs/contrib-clean-room-log.md", "docs/contrib-clean-room-plan.md", "docs/contrib-clean-room-spec.md", "docs/ipc-contract.md" })
+            Assert.False(Regex.IsMatch(Read(doc), @"[A-Za-z]:[\\/]Users[\\/]", RegexOptions.IgnoreCase), $"{doc} holds a local user path");
+    }
+
+    [Fact]
     [Trait("Plan", "AC-contrib-clean-room-4")]
     [Trait("Plan", "EDGE-contrib-clean-room-4")]
     public void Similarity_check_reports_no_expressive_hits()   // [AC-contrib-clean-room-4] [EDGE-contrib-clean-room-4]
