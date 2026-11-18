@@ -1,0 +1,66 @@
+{
+  "FormatVersion": 1,
+  "Name": "Example Multi Group Overlay Mod",
+  "Author": "YourNameHere",
+  "Overlays": null,
+  "OptionGroups": [
+    {
+      "PenumbraGroupName": "Overlays",
+      "Options": [
+        {
+          "Name": "Left",
+          "Overlays": [
+            {
+              "MaterialGamePath": [
+                "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
+                "chara/human/c1401/obj/body/b0101/material/v0001/mt_c1401b0101_bibo.mtrl"
+              ],
+              "Diffuse": "overlays/left_d.png",
+              "Normal": null,
+              "Mask": null,
+              "Index": null
+            }
+          ],
+          "ColorTableRows": [
+            {
+              "Row": 16,
+              "SubRowA": {
+                "Diffuse": "#FF0000",
+                "Emissive": 0,
+                "Opacity": 0
+              },
+              "SubRowB": null
+            }
+          ]
+        },
+        {
+          "Name": "Right",
+          "Overlays": [
+            {
+              "MaterialGamePath": [
+                "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
+                "chara/human/c1401/obj/body/b0101/material/v0001/mt_c1401b0101_bibo.mtrl"
+              ],
+              "Diffuse": "overlays/right_d.png",
+              "Normal": null,
+              "Mask": null,
+              "Index": null
+            }
+          ],
+          "ColorTableRows": [
+            {
+              "Row": 16,
+              "SubRowA": {
+                "Diffuse": "#FF0000",
+                "Emissive": 0,
+                "Opacity": 0
+              },
+              "SubRowB": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "ColorTableRows": null
+}

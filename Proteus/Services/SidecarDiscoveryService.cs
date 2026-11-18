@@ -57,9 +57,9 @@ public record ResolvedOverlay(
     string? OptionGroup,
     string? Option,
     /// <summary>
-    /// Where the owning group sits in the mod's <c>meta.json</c> group list, numbered as Penumbra numbers it. Lower
-    /// outranks higher: the compositor hides an outranked group's overlays beneath wherever an outranking group draws.
-    /// Overlays that belong to no group carry <see cref="int.MaxValue"/>.
+    /// Penumbra's own group ordinal (its index in meta.json's Groups array). LOWER = higher priority, and a higher
+    /// group wins wherever it is visible: the compositor suppresses lower groups underneath it.
+    /// int.MaxValue for top-level overlays, which belong to no group.
     /// </summary>
     int GroupOrder = int.MaxValue
 );
@@ -526,8 +526,6 @@ public partial class SidecarDiscoveryService
             else
             {
                 if (known || groupOrder.Count == 0) emptyGroups.Add(group.PenumbraGroupName);
-                // Nothing selected (or Penumbra's settings unreadable): the group adds nothing, single- or
-                // multi-select alike. No first-option fallback.
                 continue;
             }
 

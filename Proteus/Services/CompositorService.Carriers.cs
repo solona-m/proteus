@@ -320,14 +320,14 @@ public partial class CompositorService
                 // Refused only by the cooldown: schedule a retry, since fast callers would otherwise leave the shell hostless.
                 ScheduleCarrierRetry((int)(GlassesInjectCooldownMs - sinceInject), "glasses");
 
-            if (MetSnapshotKnown && !AnyMetWorn()
-                && sinceInject > GlassesInjectCooldownMs)
+            if (MetSnapshotKnown && !AnyMetWorn() && sinceInject > GlassesInjectCooldownMs)
             {
-                bool equipped = SetGlassesOnFramework(g.ItemId);
-                // The cooldown runs from the attempt, not from a success: a slot another plugin has locked refuses
-                // every equip, and must not be asked again on every redraw.
+                // Charge the cooldown on the attempt, not the success, or a locked slot retries on every redraw.
+                var equipped = SetGlassesOnFramework(g.ItemId);
                 _lastGlassesInjectTick = Environment.TickCount64;
-                if (!equipped) return;
+                if (!equipped)
+                    return;
+
                 _injectedGlasses = true;
                 if (alreadyHosted)
                 {
@@ -506,8 +506,7 @@ public partial class CompositorService
 
             // Equip. Counted atomically first: two reconciles can race on one slot.
             if (!_carrierAsks.TryBeginAsk(ringSlot, epoch, CarrierDecisions.AskCap, now)) return;
-            // The cooldown starts at the attempt, whatever it returns: a slot another plugin has locked refuses every
-            // equip, and is then asked at most once per window instead of on every redraw.
+            // Charge the cooldown on the attempt, not the success (see the glasses).
             _carrierCooldowns.Charge(ringSlot, now);
             if (SetAccessoryOnFramework(r.ItemId, ringSlot))
             {

@@ -236,7 +236,7 @@ public sealed class PbdCleanRoomRecordTests
     {
         var source = Read("XivLiveMesh/PbdFile.cs");
         var lines = source.Split('\n');
-        Assert.Equal("// SPDX-License-Identifier: LicenseRef-Proteus", lines[0].TrimEnd());
+        Assert.Equal("// SPDX-License-Identifier: AGPL-3.0-or-later", lines[0].TrimEnd());
         Assert.Equal("// Copyright (c) Solona", lines[1].TrimEnd());
         Assert.Contains(lines.Take(5), l => l.Contains("docs/pbd-format-spec.md", StringComparison.Ordinal));
         Assert.DoesNotContain("ported from", source, StringComparison.OrdinalIgnoreCase);

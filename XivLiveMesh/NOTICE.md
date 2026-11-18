@@ -3,8 +3,7 @@
 Poses a worn model's vertices onto the live FFXIV character on the CPU, so a plugin can draw over it or
 pick a point on it.
 
-Licensed under the Proteus Licence with the rest of Proteus; see `LICENSE` (a copy of the repository's root
-`LICENSE`). Copies received earlier under the GNU AGPL v3.0 stay under that licence.
+Licensed under the GNU Affero General Public License v3.0 or later — see `LICENSE`.
 
 ## Third-party sources
 
@@ -16,4 +15,4 @@ copy and not redistributed.
 
 Research references consulted for which game structures exist, with no code copied: Ktisis and Brio
 (GPL-3.0), DragAndDropTexturing (AGPL-3.0). Proteus's own code moved here (the .mdl skin reading pattern,
-brush geometry helpers) is by the same author and is under the Proteus Licence with the rest of Proteus.
+brush geometry helpers) is by the same author and relicensed under AGPL-3.0 with the rest of Proteus.

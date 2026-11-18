@@ -63,9 +63,8 @@ Proteus is a Dalamud plugin for FFXIV (C# 14, .NET 10, x64, ImGui via Dalamud
 bindings) that composites overlay textures onto a character's skin and gear at
 runtime, draws "second skin" shells as gear, and edits the models of any
 installed Penumbra mod (reshape, refit to another body, part toggles, hat
-compatibility). It talks to Penumbra and Glamourer over IPC through its own call
-gates (`Proteus/Interop/Ipc/`, checked against `docs/ipc-contract.md`; the API repos
-are git submodules used only by the tests, never shipped), ships a native BCn compression shim, and a headless refit
+compatibility). It talks to Penumbra and Glamourer over IPC (both API repos
+are git submodules), ships a native BCn compression shim, and a headless refit
 CLI. Release assets are served through a Cloudflare worker (`dl.solona.info`).
 User-facing docs: `README.md` (translated under `docs/`), `For Creators.md`.
 
@@ -101,7 +100,7 @@ Proteus.Refit/           headless refit CLI (bodies by file path; --size-set siz
 Proteus.Tests/           xunit tests; user data only via LocalData + [LocalDataFact]
 XivLiveMesh/             CPU skinning / picking for the live brush
 worker/                  Cloudflare worker that edge-caches release assets
-Glamourer/, Penumbra.Api/  git submodules: the IPC APIs, read by IpcContractTests only (not shipped)
+Glamourer/, Penumbra.Api/  git submodules (IPC APIs)
 ```
 
 ## Testing

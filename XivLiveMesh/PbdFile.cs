@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LicenseRef-Proteus
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (c) Solona
 // Written from docs/pbd-format-spec.md (clean-room implementation).
 

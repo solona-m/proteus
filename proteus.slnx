@@ -1,8 +1,10 @@
 <Solution>
-  <Folder Name="/Glamourer/">
-    <Project Path="Glamourer/Glamourer.Api/Glamourer.Api.csproj" />
-  </Folder>
-  <Project Path="Penumbra.Api/Penumbra.Api.csproj" />
+  <Project Path="Glamourer/Glamourer.Api/Glamourer.Api.csproj">
+    <Platform Project="x64" />
+  </Project>
+  <Project Path="Penumbra.Api/Penumbra.Api.csproj">
+    <Platform Project="x64" />
+  </Project>
   <Project Path="Proteus/Proteus.csproj" />
   <Project Path="XivLiveMesh/XivLiveMesh.csproj" />
 </Solution>

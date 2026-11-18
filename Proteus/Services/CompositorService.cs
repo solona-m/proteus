@@ -736,11 +736,9 @@ public partial class CompositorService : IDisposable
     /// </remarks>
     private static string BodyShapeSignature(IReadOnlyDictionary<string, HashSet<string>>? shapes)
     {
-        if (shapes == null || shapes.Count == 0) return string.Empty;
-        // Keys are not part of it: each set's names in ordinal order, then the sets themselves in ordinal order.
-        var sets = shapes.Values
-            .Select(set => string.Join(",", set.OrderBy(s => s, StringComparer.Ordinal)))
-            .OrderBy(s => s, StringComparer.Ordinal);
-        return string.Join("|", sets);
+        if (shapes == null || shapes.Count == 0) return "";
+        return string.Join("|", shapes.Values
+            .Select(v => string.Join(",", v.OrderBy(x => x, StringComparer.Ordinal)))
+            .OrderBy(x => x, StringComparer.Ordinal));
     }
 }

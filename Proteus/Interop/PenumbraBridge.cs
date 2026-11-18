@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Threading;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using Luna;
 using Penumbra.Api.Enums;
-using Proteus.Interop.Ipc;
+using Penumbra.Api.IpcSubscribers;
 
 namespace Proteus.Interop;
 
@@ -13,51 +14,51 @@ public class PenumbraBridge : IDisposable
     private readonly IPluginLog log;
     private readonly IDalamudPluginInterface pluginInterface;
 
-    private readonly PenumbraApiVersion apiVersion;
-    private readonly PenumbraGetModList getModList;
-    private readonly PenumbraGetModDirectory getModDirectory;
-    private readonly PenumbraGetCollectionForObject getCollectionForObject;
-    private readonly PenumbraGetCollections getCollections;
-    private readonly PenumbraGetCurrentModSettingsWithTemp getCurrentModSettings;
-    private readonly PenumbraGetAllModSettings getAllModSettings;
-    private readonly PenumbraRemoveTemporaryModSettings removeTemporaryModSettings;
-    private readonly PenumbraSetTemporaryModSettings setTemporaryModSettings;
-    private readonly PenumbraRemoveAllTemporaryModSettings removeAllTemporaryModSettings;
-    private readonly PenumbraQueryTemporaryModSettings queryTemporaryModSettings;
-    private readonly PenumbraResolvePlayerPath resolvePlayerPath;
-    private readonly PenumbraResolvePlayerPaths resolvePlayerPaths;
-    private readonly PenumbraAddMod addMod;
-    private readonly PenumbraReloadMod reloadMod;
-    private readonly PenumbraDeleteMod deleteMod;
-    private readonly PenumbraSetModPath setModPath;
-    private readonly PenumbraTrySetMod trySetMod;
-    private readonly PenumbraTrySetModPriority trySetModPriority;
-    private readonly PenumbraTryInheritMod tryInheritMod;
-    private readonly PenumbraTrySetModSetting trySetModSetting;
-    private readonly PenumbraTrySetModSettings trySetModSettings;
-    private readonly PenumbraRedrawObject redrawObject;
-    private readonly PenumbraOpenMainWindow openMainWindow;
-    private readonly PenumbraGetGameObjectResourcePaths getGameObjectResourcePaths;
-    private readonly PenumbraAddTemporaryMod addTemporaryMod;
-    private readonly PenumbraRemoveTemporaryMod removeTemporaryMod;
-    private readonly PenumbraGetPlayerMetaManipulations getPlayerMetaManipulations;
+    private readonly ApiVersion apiVersion;
+    private readonly GetModList getModList;
+    private readonly GetModDirectory getModDirectory;
+    private readonly GetCollectionForObject getCollectionForObject;
+    private readonly GetCollections getCollections;
+    private readonly GetCurrentModSettingsWithTemp getCurrentModSettings;
+    private readonly GetAllModSettings getAllModSettings;
+    private readonly RemoveTemporaryModSettings removeTemporaryModSettings;
+    private readonly SetTemporaryModSettings setTemporaryModSettings;
+    private readonly RemoveAllTemporaryModSettings removeAllTemporaryModSettings;
+    private readonly QueryTemporaryModSettings queryTemporaryModSettings;
+    private readonly ResolvePlayerPath resolvePlayerPath;
+    private readonly ResolvePlayerPaths resolvePlayerPaths;
+    private readonly AddMod addMod;
+    private readonly ReloadMod reloadMod;
+    private readonly DeleteMod deleteMod;
+    private readonly SetModPath setModPath;
+    private readonly TrySetMod trySetMod;
+    private readonly TrySetModPriority trySetModPriority;
+    private readonly TryInheritMod tryInheritMod;
+    private readonly TrySetModSetting trySetModSetting;
+    private readonly TrySetModSettings trySetModSettings;
+    private readonly RedrawObject redrawObject;
+    private readonly OpenMainWindow openMainWindow;
+    private readonly GetGameObjectResourcePaths getGameObjectResourcePaths;
+    private readonly AddTemporaryMod addTemporaryMod;
+    private readonly RemoveTemporaryMod removeTemporaryMod;
+    private readonly GetPlayerMetaManipulations getPlayerMetaManipulations;
 
     /// <summary>When this bridge last changed a temporary mod, so Penumbra's echo of it can be dropped.</summary>
     private long lastOwnTemporaryModTick;
 
-    private readonly PenumbraModSettingChanged modSettingChangedSub;
-    private readonly PenumbraModAdded modAddedSub;
-    private readonly PenumbraModDeleted modDeletedSub;
-    private readonly PenumbraModMoved modMovedSub;
-    private readonly PenumbraGameObjectRedrawn gameObjectRedrawnSub;
+    private readonly EventSubscriber<ModSettingChange, Guid, string, bool> modSettingChangedSub;
+    private readonly EventSubscriber<string> modAddedSub;
+    private readonly EventSubscriber<string> modDeletedSub;
+    private readonly EventSubscriber<string, string> modMovedSub;
+    private readonly EventSubscriber<nint, int> gameObjectRedrawnSub;
 
     /// <summary>Renames Penumbra reported that <see cref="ModMoved"/> has not yet been raised for (see <see cref="MovePending"/>).</summary>
     private int pendingMoves;
 
     /// <summary>Cancels the deferred <see cref="ModMoved"/> raises still queued when the plugin unloads.</summary>
     private readonly CancellationTokenSource disposing = new();
-    private readonly PenumbraInitialized initializedSub;
-    private readonly PenumbraDisposed disposedSub;
+    private readonly EventSubscriber initializedSub;
+    private readonly EventSubscriber disposedSub;
 
     // Last collection GUID seen for the local player (object 0). Penumbra has no
     // "collection changed" event, so we detect reassignment on the player's redraw.
@@ -106,36 +107,36 @@ public class PenumbraBridge : IDisposable
         this.log = log;
         this.pluginInterface = pluginInterface;
 
-        apiVersion = new PenumbraApiVersion(pluginInterface);
-        getModList = new PenumbraGetModList(pluginInterface);
-        getModDirectory = new PenumbraGetModDirectory(pluginInterface);
-        getCollectionForObject = new PenumbraGetCollectionForObject(pluginInterface);
-        getCollections = new PenumbraGetCollections(pluginInterface);
-        getCurrentModSettings = new PenumbraGetCurrentModSettingsWithTemp(pluginInterface);
-        getAllModSettings = new PenumbraGetAllModSettings(pluginInterface);
-        removeTemporaryModSettings = new PenumbraRemoveTemporaryModSettings(pluginInterface);
-        setTemporaryModSettings = new PenumbraSetTemporaryModSettings(pluginInterface);
-        removeAllTemporaryModSettings = new PenumbraRemoveAllTemporaryModSettings(pluginInterface);
-        queryTemporaryModSettings = new PenumbraQueryTemporaryModSettings(pluginInterface);
-        resolvePlayerPath = new PenumbraResolvePlayerPath(pluginInterface);
-        resolvePlayerPaths = new PenumbraResolvePlayerPaths(pluginInterface);
-        addMod = new PenumbraAddMod(pluginInterface);
-        reloadMod = new PenumbraReloadMod(pluginInterface);
-        deleteMod = new PenumbraDeleteMod(pluginInterface);
-        setModPath = new PenumbraSetModPath(pluginInterface);
-        trySetMod = new PenumbraTrySetMod(pluginInterface);
-        trySetModPriority = new PenumbraTrySetModPriority(pluginInterface);
-        tryInheritMod = new PenumbraTryInheritMod(pluginInterface);
-        trySetModSetting = new PenumbraTrySetModSetting(pluginInterface);
-        trySetModSettings = new PenumbraTrySetModSettings(pluginInterface);
-        redrawObject = new PenumbraRedrawObject(pluginInterface);
-        openMainWindow = new PenumbraOpenMainWindow(pluginInterface);
-        getGameObjectResourcePaths = new PenumbraGetGameObjectResourcePaths(pluginInterface);
-        addTemporaryMod = new PenumbraAddTemporaryMod(pluginInterface);
-        removeTemporaryMod = new PenumbraRemoveTemporaryMod(pluginInterface);
-        getPlayerMetaManipulations = new PenumbraGetPlayerMetaManipulations(pluginInterface);
+        apiVersion = new ApiVersion(pluginInterface);
+        getModList = new GetModList(pluginInterface);
+        getModDirectory = new GetModDirectory(pluginInterface);
+        getCollectionForObject = new GetCollectionForObject(pluginInterface);
+        getCollections = new GetCollections(pluginInterface);
+        getCurrentModSettings = new GetCurrentModSettingsWithTemp(pluginInterface);
+        getAllModSettings = new GetAllModSettings(pluginInterface);
+        removeTemporaryModSettings = new RemoveTemporaryModSettings(pluginInterface);
+        setTemporaryModSettings = new SetTemporaryModSettings(pluginInterface);
+        removeAllTemporaryModSettings = new RemoveAllTemporaryModSettings(pluginInterface);
+        queryTemporaryModSettings = new QueryTemporaryModSettings(pluginInterface);
+        resolvePlayerPath = new ResolvePlayerPath(pluginInterface);
+        resolvePlayerPaths = new ResolvePlayerPaths(pluginInterface);
+        addMod = new AddMod(pluginInterface);
+        reloadMod = new ReloadMod(pluginInterface);
+        deleteMod = new DeleteMod(pluginInterface);
+        setModPath = new SetModPath(pluginInterface);
+        trySetMod = new TrySetMod(pluginInterface);
+        trySetModPriority = new TrySetModPriority(pluginInterface);
+        tryInheritMod = new TryInheritMod(pluginInterface);
+        trySetModSetting = new TrySetModSetting(pluginInterface);
+        trySetModSettings = new TrySetModSettings(pluginInterface);
+        redrawObject = new RedrawObject(pluginInterface);
+        openMainWindow = new OpenMainWindow(pluginInterface);
+        getGameObjectResourcePaths = new GetGameObjectResourcePaths(pluginInterface);
+        addTemporaryMod = new AddTemporaryMod(pluginInterface);
+        removeTemporaryMod = new RemoveTemporaryMod(pluginInterface);
+        getPlayerMetaManipulations = new GetPlayerMetaManipulations(pluginInterface);
 
-        modSettingChangedSub = new PenumbraModSettingChanged(pluginInterface,
+        modSettingChangedSub = Penumbra.Api.IpcSubscribers.ModSettingChanged.Subscriber(pluginInterface,
             (change, collId, modDir, inherited) =>
             {
                 // Our own temporary-mod change coming back. The live brush swaps its preview several times a
@@ -146,14 +147,14 @@ public class PenumbraBridge : IDisposable
                     return;
                 ModSettingChanged?.Invoke(change, collId, modDir, inherited);
             });
-        modAddedSub = new PenumbraModAdded(pluginInterface,
+        modAddedSub = Penumbra.Api.IpcSubscribers.ModAdded.Subscriber(pluginInterface,
             modDir => ModAdded?.Invoke(modDir));
-        modDeletedSub = new PenumbraModDeleted(pluginInterface,
+        modDeletedSub = Penumbra.Api.IpcSubscribers.ModDeleted.Subscriber(pluginInterface,
             modDir => ModDeleted?.Invoke(modDir));
-        modMovedSub = new PenumbraModMoved(pluginInterface, OnModMoved);
-        gameObjectRedrawnSub = new PenumbraGameObjectRedrawn(pluginInterface, OnGameObjectRedrawn);
-        initializedSub = new PenumbraInitialized(pluginInterface, OnPenumbraInitialized);
-        disposedSub    = new PenumbraDisposed(pluginInterface, OnPenumbraDisposed);
+        modMovedSub = Penumbra.Api.IpcSubscribers.ModMoved.Subscriber(pluginInterface, OnModMoved);
+        gameObjectRedrawnSub = Penumbra.Api.IpcSubscribers.GameObjectRedrawn.Subscriber(pluginInterface, OnGameObjectRedrawn);
+        initializedSub = Penumbra.Api.IpcSubscribers.Initialized.Subscriber(pluginInterface, OnPenumbraInitialized);
+        disposedSub    = Penumbra.Api.IpcSubscribers.Disposed.Subscriber(pluginInterface, OnPenumbraDisposed);
 
         CheckAvailability();
     }
@@ -847,15 +848,11 @@ public class PenumbraBridge : IDisposable
         catch (Exception ex) { log.Error(ex, "RedrawObject failed"); return false; }
     }
 
-    /// <summary>
-    /// Bring up Penumbra's window on its Mods tab with <paramref name="modDirectory"/> selected. Runs on the caller's
-    /// thread; Penumbra's answer is not checked, and an unknown folder is Penumbra's to handle. Never throws.
-    /// </summary>
     public void OpenToMod(string modDirectory)
     {
         if (!IsAvailable) return;
         try { openMainWindow.Invoke(TabType.Mods, modDirectory); }
-        catch (Exception ex) { log.Error(ex, "[Proteus] Penumbra's OpenMainWindow call failed"); }
+        catch (Exception ex) { log.Error(ex, "OpenMainWindow failed"); }
     }
 
     public void Dispose()

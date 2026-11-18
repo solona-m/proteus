@@ -37,12 +37,11 @@ public class HarnessBindingsWiringTests
     {
         var apply = Member(Adapter(), "public string? ApplyDesign(Guid id)");
         Assert.Contains("applyDesign.Invoke(id, 0, 0, ApplyFlagEx.DesignDefault)", apply);
-        // The harness's own Glamourer gates (plan D24), created only in the harness.
-        Assert.Contains("new GlamourerApplyDesign(pluginInterface)", Adapter());
+        Assert.Contains("new Glamourer.Api.IpcSubscribers.ApplyDesign(pluginInterface)", Adapter());
         // Never in the shipped bridge.
         var bridge = Read("Proteus", "Interop", "GlamourerBridge.cs");
-        Assert.DoesNotContain("GlamourerApplyDesign", bridge);
-        Assert.DoesNotContain("GlamourerApplyState", bridge);
+        Assert.DoesNotContain("IpcSubscribers.ApplyDesign", bridge);
+        Assert.DoesNotContain("IpcSubscribers.ApplyState", bridge);
     }
 
     [Fact]

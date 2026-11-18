@@ -5,8 +5,9 @@ using System.Threading;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Glamourer.Api.Enums;
+using Glamourer.Api.IpcSubscribers;
+using Luna;
 using Newtonsoft.Json.Linq;
-using Proteus.Interop.Ipc;
 
 namespace Proteus.Interop;
 
@@ -16,8 +17,8 @@ public class GlamourerBridge : IDisposable
     private readonly IObjectTable objectTable;
     private readonly IDalamudPluginInterface pluginInterface;
 
-    private readonly GlamourerStateChangedWithType? stateChangedSub;
-    private readonly GlamourerStateFinalized? stateFinalizedSub;
+    private readonly EventSubscriber<nint, StateChangeType>? stateChangedSub;
+    private readonly EventSubscriber<nint, StateFinalizationType>? stateFinalizedSub;
 
     // When we last called ReapplyPlayerState, so its own finalization echo can be filtered out. The window
     // only has to cover Glamourer raising the event for a call we just made, not any real user action.
@@ -27,12 +28,12 @@ public class GlamourerBridge : IDisposable
     // When someone OTHER than us last had Glamourer reapply the local player: with the Gearset finalization
     // after it, the only evidence of an automation design apply (DesignBindingService.IsInferredAutomationApply).
     private long lastForeignReapplyTick;
-    private readonly GlamourerGetDesignList getDesignList;
-    private readonly GlamourerGetDesignJObject getDesignJObject;
-    private readonly GlamourerGetState getState;
-    private readonly GlamourerReapplyState reapplyState;
-    private readonly GlamourerSetBonusItem setBonusItem;
-    private readonly GlamourerSetItem setItem;
+    private readonly GetDesignList getDesignList;
+    private readonly GetDesignJObject getDesignJObject;
+    private readonly GetState getState;
+    private readonly ReapplyState reapplyState;
+    private readonly SetBonusItem setBonusItem;
+    private readonly SetItem setItem;
 
     public bool IsAvailable { get; private set; }
 
@@ -75,19 +76,19 @@ public class GlamourerBridge : IDisposable
         this.objectTable     = objectTable;
         this.pluginInterface = pluginInterface;
 
-        // Creating a gate only asks Dalamud for it (safe even if Glamourer is absent);
+        // FuncSubscriber construction only creates the call gate (safe even if Glamourer is absent);
         // the Invoke() calls below are individually guarded.
-        getDesignList    = new GlamourerGetDesignList(pluginInterface);
-        getDesignJObject = new GlamourerGetDesignJObject(pluginInterface);
-        getState         = new GlamourerGetState(pluginInterface);
-        reapplyState     = new GlamourerReapplyState(pluginInterface);
-        setBonusItem     = new GlamourerSetBonusItem(pluginInterface);
-        setItem          = new GlamourerSetItem(pluginInterface);
+        getDesignList    = new GetDesignList(pluginInterface);
+        getDesignJObject = new GetDesignJObject(pluginInterface);
+        getState         = new GetState(pluginInterface);
+        reapplyState     = new ReapplyState(pluginInterface);
+        setBonusItem     = new SetBonusItem(pluginInterface);
+        setItem          = new SetItem(pluginInterface);
 
         try
         {
-            stateChangedSub   = new GlamourerStateChangedWithType(pluginInterface, OnStateChanged);
-            stateFinalizedSub = new GlamourerStateFinalized(pluginInterface, OnStateFinalized);
+            stateChangedSub   = StateChangedWithType.Subscriber(pluginInterface, OnStateChanged);
+            stateFinalizedSub = StateFinalized.Subscriber(pluginInterface, OnStateFinalized);
             IsAvailable = true;
             log.Information("[Proteus] Glamourer IPC subscribed.");
         }
@@ -195,9 +196,9 @@ public class GlamourerBridge : IDisposable
             var ec = reapplyState.Invoke(0, 0, ApplyFlag.Equipment);
             if (ec != GlamourerApiEc.Success)
             {
-                // InvalidKey here: another plugin holds a lock on the character's state, so Glamourer refuses us.
+                // InvalidKey: another plugin holds a lock on this state.
                 if (ec == GlamourerApiEc.InvalidKey)
-                    log.Warning("[Proteus] Glamourer would not reapply the character: another plugin has locked its state. Using a full redraw instead.");
+                    log.Warning("[Proteus] ReapplyState refused: another plugin holds a Glamourer lock on this character. Falling back to a full redraw.");
                 else
                     log.Debug("[Proteus] ReapplyState -> {0} (falling back to redraw)", ec);
                 return false;
@@ -228,7 +229,7 @@ public class GlamourerBridge : IDisposable
             if (ec != GlamourerApiEc.Success)
             {
                 if (ec == GlamourerApiEc.InvalidKey)
-                    log.Warning("[Proteus] Glamourer refused glasses item {0}: another plugin has locked the Glasses slot.", itemId);
+                    log.Warning("[Proteus] SetBonusItem(Glasses,{0}) refused: another plugin holds a Glamourer lock on the Glasses slot.", itemId);
                 else
                     log.Debug("[Proteus] SetBonusItem(Glasses,{0}) -> {1}", itemId, ec);
                 return false;
@@ -340,7 +341,7 @@ public class GlamourerBridge : IDisposable
             if (ec != GlamourerApiEc.Success)
             {
                 if (ec == GlamourerApiEc.InvalidKey)
-                    log.Warning("[Proteus] Glamourer refused item {1} in the {0} slot: another plugin has locked that slot.", slot, itemId);
+                    log.Warning("[Proteus] SetItem({0},{1}) refused: another plugin holds a Glamourer lock on the {0} slot.", slot, itemId);
                 else
                     log.Debug("[Proteus] SetItem({0},{1}) -> {2}", slot, itemId, ec);
                 return false;
@@ -439,14 +440,13 @@ public class GlamourerBridge : IDisposable
         // An equipped or bonus item moved: BonusItem matters too, since a shell can be hosted on the facewear slot.
         if (changeType is StateChangeType.Equip or StateChangeType.BonusItem)
         {
-            // Our own reapply sends an Equip for every slot; passing those on would set off composite after composite.
-            // The cost: a player's own equip that lands inside that short window waits for the next trigger.
-            // Our own carrier write sends the same signal, on the writing thread, while the call is still running.
-            bool carrierWrite = ownCarrierWriteDepth > 0;
-            if (!GlamourerSignals.RaisesEquipmentChange(changeType, WithinOwnReapplyEcho(), carrierWrite))
+            // Our own ReapplyState raises an Equip per slot, and each one schedules another composite
+            // that reapplies again. Cost: a foreign equip inside the window is dropped until the next trigger.
+            // Our own carrier write raises one too, synchronously inside the call on this thread: not a player change.
+            if (!GlamourerSignals.RaisesEquipmentChange(changeType, WithinOwnReapplyEcho(), ownCarrierWriteDepth > 0))
             {
-                if (carrierWrite)
-                    log.Debug("[Proteus] glamourer signal: {0} came from our own carrier write, skipped", changeType);
+                if (ownCarrierWriteDepth > 0)
+                    log.Debug("[Proteus] glamourer signal: changeType={0} (our own carrier write, ignored)", changeType);
                 return;
             }
 
