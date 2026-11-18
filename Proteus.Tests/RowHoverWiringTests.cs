@@ -266,8 +266,13 @@ public class RowHoverWiringTests
     public void Closing_the_window_clears_both_highlighters_and_the_hover()
     {
         var window = Method(Status, "private void DrawColorWindow(");
-        Assert.Equal(2, Count(window, "ClearColorHighlights(); return;"));
+        // Both closed-window exits clear — unless the Matcaps tool's row picker drew this frame, whose hover and pin live on.
+        Assert.Equal(2, Count(window, "KeepOrClearColorHighlights(pickerDrew); return;"));
+        Assert.Contains("bool pickerDrew = ColorTableEditor.TakePickerDrew();", window);
         Assert.DoesNotContain("ColorTableEditor.Highlighter?.Clear(); return;", window);
+        var keepOrClear = Method(Status, "private void KeepOrClearColorHighlights(");
+        Assert.Contains("if (!pickerDrew) { ClearColorHighlights(); return; }", keepOrClear);
+        Assert.Contains("ColorTableEditor.CommitRowHover(", keepOrClear);
 
         // Closing the main window hides the Colors window (drawn from its PostDraw), so it clears them too.
         Assert.Contains("ClearColorHighlights();", Method(Status, "public override void OnClose("));

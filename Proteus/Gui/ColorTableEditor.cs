@@ -457,19 +457,49 @@ public static partial class ColorTableEditor
     public static bool DrawRowPicker(string idScope, List<ColorTableRowPreset> rows, HashSet<int>? usedRows,
                                      IReadOnlyList<string> materialLeaves, ref int selectedRow, string? usedSubRow = null)
     {
+        _pickerDrew = true;   // the Colors window's per-frame step keeps this picker's hover and pin alive
         int before = selectedRow;
         bool onlyA = string.Equals(usedSubRow, "A", StringComparison.Ordinal);
         bool onlyB = string.Equals(usedSubRow, "B", StringComparison.Ordinal);
         var mode = RenderModeInference.ModeOf(OverlayLayer.Gear, OverlayDescriptor.DefaultGearShader);
         DrawRowButtons(idScope, rows, usedRows, mode, materialLeaves, null, ref selectedRow, false, onlyA, onlyB);
+
+        var cs = Strings.Colors;
+        // Glow: pin the selected row lit on the character, per sub-row, as the Colors window's sub-row panels do.
+        if (Highlighter != null && materialLeaves.Count > 0)
+            foreach (var (isA, label) in new[] { (true, "A"), (false, "B") })
+            {
+                if (isA ? onlyB : onlyA) continue;   // a column the index never lands in has nothing to light
+                int gameRow = (selectedRow - 1) * 2 + (isA ? 0 : 1);
+                bool active = Highlighter.IsTarget(materialLeaves, gameRow);
+                using (ProteusStyle.Selected(active))
+                    if (ImGui.SmallButton($"{(active ? cs.Glowing : cs.Glow)} {label}##glow_{idScope}_{label}"))
+                    {
+                        if (active) Highlighter.Clear();
+                        else Highlighter.SetTarget(materialLeaves, gameRow);
+                    }
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip(cs.GlowGearTip);
+                ImGui.SameLine();
+            }
         if (RowPickerView.ToggleRelevant(usedRows))
         {
-            var cs = Strings.Colors;
             ImGui.Checkbox($"{cs.ShowAllRows}##showallrows_{idScope}", ref _showAllRows);
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(cs.ShowAllRowsTip);
         }
+        else ImGui.NewLine();
         return selectedRow != before;
     }
+
+    /// <summary>A <see cref="DrawRowPicker"/> drew since the last call: its hover and Glow pin must be kept, not cleared,
+    /// even while the Colors window is closed. Reading it resets it, once per frame.</summary>
+    internal static bool TakePickerDrew()
+    {
+        bool drew = _pickerDrew;
+        _pickerDrew = false;
+        return drew;
+    }
+
+    private static bool _pickerDrew;
 
     /// <summary>Thumbnails for the sphere-map picker. Set once at startup; null just means no previews.</summary>
     public static SphereMapPreview? Spheres { get; set; }

@@ -386,20 +386,52 @@ internal static class MatcapStudio
             if (!string.IsNullOrEmpty(idPath))
             {
                 if (LoadTex(modRoot, redirects, env, idPath) is { } id)
-                {
-                    var scan = ContentIndexTexture.Read(id.Rgba);
-                    if (scan.Rows.Count > 0) { used = scan.Rows; sub = scan.SubRow; }
-                }
+                    (used, sub) = UsedRows(id.Rgba, p => p[0], p => p[1] > 127);
             }
             else if (LoadTex(modRoot, redirects, env, sh.TextureOf(MatcapMaterial.SamplerNormal)) is { } n)
-            {
                 // No index map: the normal's alpha picks the row (legacy materials), one column only.
-                var rowsUsed = new HashSet<int>();
-                for (int i = 3; i < n.Rgba.Length; i += 4) rowsUsed.Add(ContentIndexTexture.RowOf(n.Rgba[i]));
-                if (rowsUsed.Count > 0) used = rowsUsed;
-            }
+                (used, _) = UsedRows(n.Rgba, p => p[3], null);
         }
         return new RowInfo(rows, used, sub, leaf);
+    }
+
+    /// <summary>A row (or sub-row column) needs this share of the texels to count as used.</summary>
+    internal const double RowUseShare = 0.005;
+
+    /// <summary>
+    /// The rows a row map selects, keeping only rows with at least <see cref="RowUseShare"/> of the texels: block
+    /// compression blends neighbouring rows' values along every edge between them, which reads as a sprinkle of rows
+    /// nothing was painted with (a jacket of rows 1 and 16 shows 8 and 12 at 0.1–0.2%). The sub-row is "A" or "B"
+    /// when the used rows' texels all but agree on one column, else null. Null rows when nothing qualifies.
+    /// </summary>
+    internal static (HashSet<int>? Rows, string? SubRow) UsedRows(byte[] rgba, Func<ReadOnlySpan<byte>, byte> rowByte,
+                                                                  Func<ReadOnlySpan<byte>, bool>? isA)
+    {
+        var counts = new long[17];
+        var aCounts = new long[17];
+        long total = 0;
+        for (int i = 0; i + 3 < rgba.Length; i += 4)
+        {
+            var px = rgba.AsSpan(i, 4);
+            int row = ContentIndexTexture.RowOf(rowByte(px));
+            counts[row]++;
+            if (isA != null && isA(px)) aCounts[row]++;
+            total++;
+        }
+        if (total == 0) return (null, null);
+        long need = (long)Math.Ceiling(total * RowUseShare);
+        var rows = new HashSet<int>();
+        long inRows = 0, aInRows = 0;
+        for (int r = 1; r <= 16; r++)
+            if (counts[r] >= need) { rows.Add(r); inRows += counts[r]; aInRows += aCounts[r]; }
+        if (rows.Count == 0) return (null, null);
+        string? sub = null;
+        if (isA != null)
+        {
+            if (aInRows <= inRows * RowUseShare) sub = "B";
+            else if (inRows - aInRows <= inRows * RowUseShare) sub = "A";
+        }
+        return (rows, sub);
     }
 
     private static string? BakeRowNormal(string modRoot, List<PenumbraModMeta.Redirect> redirects, Environment env,
