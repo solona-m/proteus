@@ -83,7 +83,7 @@ public sealed partial class AutoRefitWatcher
         var models = penumbra.GetActivePlayerModelPaths();
         if (!DrawnModelPaths.HasBodySlotModel(models)) return [("-", "", "not-enqueued:blank-models")];
         if (penumbra.GetPlayerCollection() is not { } collection) return [("-", "", "not-enqueued:no-collection")];
-        if (!config.AutoRefitByCollection.TryGetValue(collection.Id.ToString("D"), out var pref) || !pref.HasAnyBody())
+        if (PreferenceOf(collection.Id) is not { } pref || !pref.HasAnyBody())
             return [("-", "", "not-enqueued:no-preferred-body")];
 
         var now = ReadWorn(models, penumbra.GetModDirectory(), out var resolvedOf);

@@ -852,6 +852,11 @@ public sealed partial class AutoRefitWatcher : IDisposable
             WalkSlot(slot, now, resolvedOf, pref, collection.Id, all, tick);
     }
 
+    /// <summary>A collection's auto refit preference, or null: read here so the harness partial never names the
+    /// configuration (it may not write it — ADR 0002).</summary>
+    private AutoRefitPreference? PreferenceOf(Guid collectionId)
+        => config.AutoRefitByCollection.TryGetValue(collectionId.ToString("D"), out var pref) ? pref : null;
+
     /// <summary>
     /// One worn piece through the walk's checks — the just-refitted window, <see cref="AutoRefitDecisions.ShouldRefit"/>,
     /// a refit the player undid — and enqueued when it passes. Shared by <see cref="Walk"/> and the harness's <c>RunNowFor</c>,
