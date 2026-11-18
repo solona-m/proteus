@@ -114,22 +114,23 @@ public class MatcapRowUnitTests
     }
 
     [Fact]
-    public void Garbage_uvs_near_float_max_finish_and_cover_the_whole_texture()
+    public void Garbage_uvs_near_float_max_finish_and_touch_nothing()
     {
         // Farfalla's wrist piece carries hidden triangles with UVs at ±3.4e38: the texel span overflowed and the scan never
-        // ended (Apply and the click preview hung). Now a footprint that wide is the whole texture, scanned once.
+        // ended (Apply and the click preview hung). Such a triangle samples nothing real: it touches no row and holds no
+        // hole, like a non-finite one. Run with a deadline so a regression fails rather than hangs the suite.
         var big = 3.4028233E+38f;
         var garbage = Tri(0.5f, -big, 0.5f, 0.9f, big, 0.9f);
-        var none = Bake((_, _) => false, zero: false, threshold: 0.5f, w: 2048, h: 2048);
-        var corner = Bake((x, y) => x == 2047 && y == 0, w: 2048, h: 2048);
-        var watch = System.Diagnostics.Stopwatch.StartNew();
-        Assert.True(MatcapRowCut.Touches(garbage, [corner]));
-        Assert.False(MatcapRowCut.HoleInside(garbage, [none]));
-        Assert.True(watch.ElapsedMilliseconds < 5000, $"took {watch.ElapsedMilliseconds} ms");
-        // Far from the origin but a narrow span: one wrapped texel column, not a scan from long.MinValue.
-        var far = Tri(1e20f, 0.1f, 1e20f, 0.2f, 1e20f, 0.15f);
-        Assert.False(MatcapRowCut.Touches(far, [Bake((_, y) => y == 15)]));
-        Assert.True(MatcapRowCut.Touches(far, [Bake((_, y) => y == 2)]));
+        var every = Bake((_, _) => true, w: 2048, h: 2048);
+        var holes = Bake((x, _) => x < 8, zero: false, threshold: 0.5f, w: 2048, h: 2048, blue: (_, _) => 0);
+        var run = System.Threading.Tasks.Task.Run(() => (MatcapRowCut.Touches(garbage, [every]), MatcapRowCut.HoleInside(garbage, [holes]),
+            MatcapRowCut.Touches(Tri(1e20f, 0.1f, 1e20f, 0.2f, 1e20f, 0.15f), [every])));
+        Assert.True(run.Wait(TimeSpan.FromSeconds(5)), "the footprint scan did not finish");
+        Assert.Equal((false, false, false), run.Result);
+        // Within the bound, a span a texture wide or more is the whole width, and a far tile still wraps.
+        Assert.True(MatcapRowCut.Touches(Tri(-3f, 0.1f, 2f, 0.1f, 0f, 0.15f), [Bake((x, y) => x == 15 && y == 1)]));
+        Assert.True(MatcapRowCut.Touches(Tri(9000.1f, 0.1f, 9000.15f, 0.1f, 9000.1f, 0.15f), [Bake((x, y) => x == 1 && y == 1)]));
+        Assert.False(MatcapRowCut.Touches(Tri(9000.1f, 0.1f, 9000.15f, 0.1f, 9000.1f, 0.15f), [Bake((x, y) => x == 8 && y == 1)]));
     }
 
     [Fact]

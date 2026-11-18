@@ -136,7 +136,7 @@ public class PartsPanelMatcapTests
     {
         var finish = Method(Wiring(), "private void Finish(MatcapJobResult r)");
         Assert.Contains("MatcapPanelModel.Report(", finish);
-        Assert.Contains("status = headline;", finish);
+        Assert.Contains("status = panel;", finish);
         Assert.Contains("foreach (var line in chat) Plugin.ChatGui.Print(", finish);
     }
 
@@ -150,28 +150,57 @@ public class PartsPanelMatcapTests
             "body retarget/rosaline coconut/chara/equipment/e0041/model/c0201e0041_top.mdl",
         };
         var long1 = "Matcap applied: mt_c0201e0041_top_top_mcapa49a531 on 19 model file(s).";
-        var (headline, chat) = MatcapPanelModel.Report(new MatcapPanelModel.JobReport(long1, true, 19, true, skipped, true, false, []));
+        var (headline, status, chat) = MatcapPanelModel.Report(new MatcapPanelModel.JobReport(long1, true, 19, true, skipped, true, false, []));
         Assert.Equal(string.Format(Strings.Matcap.ChatAppliedFmt, 19), headline);
+        Assert.Equal(headline, status);   // nothing to act on: the panel keeps the one line
         Assert.DoesNotContain("mcap", headline);
         Assert.Equal(headline, chat[0]);
+        Assert.DoesNotContain(MatcapWriter.PortKeptText, chat);
+        Assert.DoesNotContain(Strings.Matcap.Lod0Cut, chat);
         Assert.Contains(Strings.Matcap.ChatHoles, chat);
         Assert.DoesNotContain(Strings.Matcap.ChatEdges, chat);   // the holes line already says it
         Assert.Contains(string.Format(Strings.Matcap.ChatSkippedFmt, "rosaline m, rosaline l, rosaline coconut"), chat);
         Assert.DoesNotContain(chat, l => l.Contains("chara/", StringComparison.Ordinal));
 
         var many = Enumerable.Range(0, 18).Select(i => $"size/jacket/s{i}/chara/accessory/a0111/model/c0201a0111_wrs.mdl").ToList();
-        var (_, chat2) = MatcapPanelModel.Report(new MatcapPanelModel.JobReport(long1, true, 1, false, many, true, false, ["drawn"]));
+        var (head2, status2, chat2) = MatcapPanelModel.Report(new MatcapPanelModel.JobReport(long1, true, 1, false, many, true, true, ["", "drawn"]));
         var skipLine = Assert.Single(chat2, l => l.Contains("s0, s1, s2, s3, s4, s5", StringComparison.Ordinal));
         Assert.Contains(string.Format(Strings.Matcap.ChatMoreFmt, 18 - MatcapPanelModel.SkippedNamed), skipLine);
         Assert.DoesNotContain("s6,", skipLine);
         Assert.Contains(Strings.Matcap.ChatEdges, chat2);
+        Assert.Contains(Strings.Matcap.Lod0Cut, chat2);
         Assert.Equal("drawn", chat2[^1]);
+        Assert.DoesNotContain("", chat2);                    // empty extras are dropped
+        Assert.Equal(head2 + "\n" + "drawn", status2);       // a line to act on stays in the panel too
+
+        // The "more" boundary: six names in full, a seventh is counted.
+        static List<string> Files(int n) => [.. Enumerable.Range(0, n).Select(i => $"g/o{i}/chara/x.mdl")];
+        string Skip(int n) => MatcapPanelModel.Report(new MatcapPanelModel.JobReport("m", true, 1, false, Files(n), false, false, [])).Chat[1];
+        Assert.Equal(string.Format(Strings.Matcap.ChatSkippedFmt, "o0, o1, o2, o3, o4, o5"), Skip(6));
+        Assert.Equal(string.Format(Strings.Matcap.ChatSkippedFmt, "o0, o1, o2, o3, o4, o5 " + string.Format(Strings.Matcap.ChatMoreFmt, 1)), Skip(7));
+        // Two files of one option are named once.
+        var same = MatcapPanelModel.Report(new MatcapPanelModel.JobReport("m", true, 1, false, ["a/m/chara/x.mdl", "a/M/chara/y.mdl"], false, false, []));
+        Assert.Equal(string.Format(Strings.Matcap.ChatSkippedFmt, "m"), same.Chat[1]);
+
+        // A hair port: the kept sentence, from the flag (never by searching the message), on an Apply only.
+        var port = MatcapPanelModel.Report(new MatcapPanelModel.JobReport("m", true, 1, false, [], false, false, [], PortKept: true));
+        Assert.Contains(MatcapWriter.PortKeptText, port.Chat);
+        var portChange = MatcapPanelModel.Report(new MatcapPanelModel.JobReport("changed", false, 0, false, [], false, false, [], PortKept: true));
+        Assert.DoesNotContain(MatcapWriter.PortKeptText, portChange.Chat);
 
         // Change, Undo and Forget keep their own message.
-        var (undoHead, undoChat) = MatcapPanelModel.Report(new MatcapPanelModel.JobReport("Undone.", false, 0, false, [], false, false, []));
+        var (undoHead, _, undoChat) = MatcapPanelModel.Report(new MatcapPanelModel.JobReport("Undone.", false, 0, false, [], false, false, []));
         Assert.Equal("Undone.", undoHead);
         Assert.Single(undoChat);
     }
+
+    [Theory]
+    [InlineData("body retarget/rosaline m/chara/equipment/e0041/model/c0201e0041_top.mdl", "rosaline m")]
+    [InlineData(@"size\jacket\xs\chara\accessory\a0111\model\c0201a0111_wrs.mdl", "xs")]
+    [InlineData("models/top.mdl", "top")]
+    [InlineData("chara/equipment/e0041/model/c0201e0041_top.mdl", "c0201e0041_top")]
+    public void Option_name_is_the_folder_before_chara_else_the_file(string file, string expected) =>
+        Assert.Equal(expected, MatcapPanelModel.OptionName(file));
 
     [Fact]
     [Trait("Plan", "AC-matcaps-5")]

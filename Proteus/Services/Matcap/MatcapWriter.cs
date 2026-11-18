@@ -49,6 +49,10 @@ internal static class MatcapWriter
     public static string PortKeptText => ProteusLoc.Localize("Parts.Matcap.PortKept",
         "That model is one of Proteus's hair ports. While it has a matcap, Proteus keeps it as it is, and doesn't by itself remake the ports of other races that share its material, until you undo the matcap. Porting one of those races by hand in the Studio still remakes it.");
 
+    /// <summary>An Apply of <paramref name="req"/> writes one of Proteus's hair ports (<see cref="PortKeptText"/> then applies).</summary>
+    public static bool WritesHairPort(string modRoot, ApplyRequest? req) =>
+        req != null && req.Models.Any(m => MatcapPlan.Regenerated(modRoot, m.Rel) == MatcapPlan.HairPortKind);
+
     /// <summary>The file stem of a material name: <c>/mt_x_mcapabc1.mtrl</c> → <c>mt_x_mcapabc1</c>.</summary>
     public static string StemOf(string materialName)
     {
@@ -293,8 +297,7 @@ internal static class MatcapWriter
                     string.Join(", ", req.Materials.Select(p => StemOf(p.Name))), req.Models.Count);
                 // A hair port with a matcap is kept as it is (HairPortWriter.EditedBy): say so, since nothing else would
                 // until the hairstyle it was made from changes.
-                if (req.Models.Any(m => MatcapPlan.Regenerated(modRoot, m.Rel) == MatcapPlan.HairPortKind))
-                    applied += " " + PortKeptText;
+                if (WritesHairPort(modRoot, req)) applied += " " + PortKeptText;
                 return Outcome.Done(applied, [.. req.Models.Select(m => m.Rel), .. created]);
             }
             catch (Exception ex)

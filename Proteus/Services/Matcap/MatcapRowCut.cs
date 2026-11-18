@@ -585,9 +585,10 @@ internal static class MatcapRowCut
         if (w <= 0 || h <= 0) return false;
         double minU = Math.Min(t.U0, Math.Min(t.U1, t.U2)), maxU = Math.Max(t.U0, Math.Max(t.U1, t.U2));
         double minV = Math.Min(t.V0, Math.Min(t.V1, t.V2)), maxV = Math.Max(t.V0, Math.Max(t.V1, t.V2));
-        if (!double.IsFinite(minU) || !double.IsFinite(maxU) || !double.IsFinite(minV) || !double.IsFinite(maxV)) return false;
-        // In doubles, so a garbage UV (±3.4e38, which some exports carry on hidden triangles) can't overflow a texel index
-        // into a span that never ends: a footprint a texture wide or more is the whole width, anything else wraps.
+        // A garbage UV (±3.4e38, which some exports carry on hidden triangles) or a non-finite one samples nothing real:
+        // such a triangle touches nothing, so it neither joins the row nor reports a hole.
+        if (!Sane(minU) || !Sane(maxU) || !Sane(minV) || !Sane(maxV)) return false;
+        // In doubles, so no texel index overflows: a footprint a texture wide or more is the whole width, anything else wraps.
         var (x0, xs) = Footprint(minU, maxU, w);
         var (y0, ys) = Footprint(minV, maxV, h);
         for (int j = 0; j < ys; j++)
@@ -598,6 +599,11 @@ internal static class MatcapRowCut
         }
         return false;
     }
+
+    /// <summary>UVs beyond this many tiles from the origin are garbage, not a texture repeat.</summary>
+    public const double MaxUvTiles = 1e4;
+
+    private static bool Sane(double v) => double.IsFinite(v) && Math.Abs(v) <= MaxUvTiles;
 
     /// <summary>The first wrapped texel and the texel count (at most <paramref name="size"/>) a UV span covers.</summary>
     private static (int Start, int Count) Footprint(double min, double max, int size)

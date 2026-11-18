@@ -89,6 +89,8 @@ public sealed partial class PartsPanel
         public int ModelCount { get; init; }
         /// <summary>A row Apply over cut-out holes inside the row's triangles (they show the matcap).</summary>
         public bool RowHoles { get; init; }
+        /// <summary>An Apply wrote one of Proteus's hair ports, which is kept as it is while it has a matcap.</summary>
+        public bool PortKept { get; init; }
     }
 
     private string? MatcapImageFolder()
@@ -663,7 +665,8 @@ public sealed partial class PartsPanel
             // A row matcap over cut-out holes inside the row's triangles: said with the result, since they show the matcap.
             return new MatcapJobResult(root, outcome, outcome.Ok && choice.IsLibrary ? choice : null, confirmEnable,
                                        prepared.SiblingsSkipped, prepared.Lod0Cut, prepared.AlphaTested, model.GamePath)
-                { IsApply = true, ModelCount = prepared.Request?.Models.Count ?? 0, RowHoles = prepared.RowHoles };
+                { IsApply = true, ModelCount = prepared.Request?.Models.Count ?? 0, RowHoles = prepared.RowHoles,
+                  PortKept = outcome.Ok && MatcapWriter.WritesHairPort(root, prepared.Request) };
         });
     }
 
@@ -765,7 +768,8 @@ public sealed partial class PartsPanel
         }
         Finish(new MatcapJobResult(c.Root, outcome, outcome.Ok && original.IsLibrary ? original : null, confirm,
                                    prepared?.SiblingsSkipped ?? [], prepared?.Lod0Cut ?? false, prepared?.AlphaTested ?? false, piece.GamePath)
-            { IsApply = true, ModelCount = prepared?.Request?.Models.Count ?? 0, RowHoles = prepared?.RowHoles ?? false });
+            { IsApply = true, ModelCount = prepared?.Request?.Models.Count ?? 0, RowHoles = prepared?.RowHoles ?? false,
+              PortKept = outcome.Ok && MatcapWriter.WritesHairPort(c.Root, prepared?.Request) });
     }
 
     private void Finish(MatcapJobResult r)
@@ -808,9 +812,9 @@ public sealed partial class PartsPanel
         }
 
         // The panel keeps one short line; the details go to chat, short; the log keeps the full message and file names.
-        var (headline, chat) = MatcapPanelModel.Report(new MatcapPanelModel.JobReport(r.Outcome.Message, r.IsApply, r.ModelCount, r.RowHoles,
-                                                                                      r.SiblingsSkipped, r.AlphaTested, r.Lod0Cut, extra));
-        status = headline;
+        var (_, panel, chat) = MatcapPanelModel.Report(new MatcapPanelModel.JobReport(r.Outcome.Message, r.IsApply, r.ModelCount, r.RowHoles,
+                                                                                      r.SiblingsSkipped, r.AlphaTested, r.Lod0Cut, extra, r.PortKept));
+        status = panel;
         statusIsError = false;
         matcapError = null;
         ticked.Clear();
