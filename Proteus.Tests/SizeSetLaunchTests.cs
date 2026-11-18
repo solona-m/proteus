@@ -28,9 +28,18 @@ public class SizeSetLaunchTests
 
     private static SizeSetLaunch.Prepared Prepare(IReadOnlyList<string> keys, Func<IReadOnlyList<string>, IReadOnlyDictionary<string, string?>?>? resolve = null,
                                                   bool yas = true, bool remake = false, bool ends = false, bool piercings = false,
-                                                  string? madeOn = null, bool keepHiddenSkin = false)
+                                                  string? madeOn = null, bool keepHiddenSkin = false, bool pubes = false)
         => SizeSetLaunch.Prepare(NoMods, @"C:\mods", resolve ?? (_ => null), @"C:\mods\Outfit", keys, yas, remake, ends,
-                                 piercings, keepHiddenSkin, madeOn, _ => null, Log);
+                                 piercings, keepHiddenSkin, madeOn, _ => null, Log, pubes);
+
+    [Fact]
+    [Trait("Plan", "AC-refit-keep-pubes-3")]
+    public void Prepare_carries_pubes()
+    {
+        // [AC-refit-keep-pubes-3] The panel's choice is copied into the request; the default is off.
+        Assert.True(Prepare(["rue"], pubes: true).Request.Pubes);
+        Assert.False(Prepare(["rue"]).Request.Pubes);
+    }
 
     [Fact]
     [Trait("Plan", "AC-size-set-keep-skin-1")]

@@ -13,8 +13,8 @@ internal static partial class BodyRetarget
     /// skin they sit on — <c>_piercings</c>, <c>_neolithe_piercings</c>, <c>_nipplepierce</c>, <c>_neolithe_nails</c>,
     /// <c>_yafinger</c>, <c>_yatoe</c>, Tre's <c>_trenails</c> and <c>_treaccent</c>. A list, not "every body material
     /// that is not skin": the same family names the genitals (<c>_neolithe_penis</c>, <c>_tre_trans</c>) and undies
-    /// (<c>_ckbra</c>, <c>_ckundies</c>), which a garment must never be handed. Pubic hair stays out too: it sits under
-    /// whatever the legs wear.
+    /// (<c>_ckbra</c>, <c>_ckundies</c>), which a garment must never be handed. Pubes stay out too unless asked for (see
+    /// <see cref="IsBodyPubeMaterial"/>): they sit under whatever the legs wear.
     /// </summary>
     internal static bool IsBodyAdornmentMaterial(string material)
         => !SecondSkinWriter.IsBodySkinMaterial(material) && BodyAdornment.IsMatch(material);
@@ -34,6 +34,19 @@ internal static partial class BodyRetarget
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>
+    /// A body's pubes: any material but skin whose file name says "pube", in any case — Bibo+'s <c>_bibopube</c>, Rue+'s
+    /// <c>_betterpube</c> (the crotch mesh plugged into the skin's socket, see <c>BodyBridge.SkinMove</c>) and
+    /// <c>_bibopube</c> (its optional pubic hair). The file name only: a folder named so says nothing about the mesh.
+    /// A refit carries the new body's only when asked (see <see cref="AdornmentsOf"/>).
+    /// </summary>
+    internal static bool IsBodyPubeMaterial(string material)
+    {
+        if (SecondSkinWriter.IsBodySkinMaterial(material)) return false;
+        int slash = material.LastIndexOf('/');
+        return material.AsSpan(slash + 1).Contains("pube", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// How far off the new body an adornment may stand and still be on it (20 mm): a stiletto nail runs well past the
     /// fingertip, a hanging ring well off the nipple. Beyond it a vertex says nothing about the skin it belongs to.
     /// </summary>
@@ -50,6 +63,14 @@ internal static partial class BodyRetarget
     /// it (5 mm): the author drew one there, through sheer cloth or not.
     /// </summary>
     internal const float AdornSame = 0.005f;
+
+    /// <summary>
+    /// Whether a body material is one a swap may carry in: a nail always, a piercing with <paramref name="carryPiercings"/>,
+    /// a pube with <paramref name="carryPubes"/>.
+    /// </summary>
+    internal static bool CarriedMaterial(string material, bool carryPiercings, bool carryPubes)
+        => (IsBodyAdornmentMaterial(material) && (carryPiercings || !IsBodyPiercingMaterial(material)))
+           || (carryPubes && IsBodyPubeMaterial(material));
 
     /// <summary>The new body's nails and piercings a swap carries in, as layers and the cut that goes with them.</summary>
     /// <param name="Materials">One per material the kept islands are drawn with, in the body's own order.</param>
@@ -78,15 +99,17 @@ internal static partial class BodyRetarget
     /// <param name="authored">Where the garment's own nails and piercings were.</param>
     /// <param name="carryPiercings">Carry the body's piercings too (see <see cref="IsBodyPiercingMaterial"/>). Off leaves
     /// them out, as every refit before build 1147 did; nails come in either way.</param>
+    /// <param name="carryPubes">Carry the body's pubes too (see <see cref="IsBodyPubeMaterial"/>). They are judged on
+    /// the drawn skin and the cloth alone: the garment's own pubes never let them in under cloth, since a body's pubes
+    /// left under an author's underwear say nothing about where pubes show. Off, the default, carries none.</param>
     private static Adornments AdornmentsOf(byte[] body, IReadOnlySet<string>? hidden,
                                            Dictionary<int, HashSet<ushort>>? cut, ClothCrossings cloth,
-                                           PointGrid authored, bool carryPiercings)
+                                           PointGrid authored, bool carryPiercings, bool carryPubes = false)
     {
         var none = new Adornments([], [], 0);
         if (ModelPartReader.Read(body) is not { } read) return none;
         var parts = Without(read, hidden);
-        var adorn = parts.Parts.Where(p => p.Island < 0 && IsBodyAdornmentMaterial(p.Material)
-                                           && (carryPiercings || !IsBodyPiercingMaterial(p.Material)))
+        var adorn = parts.Parts.Where(p => p.Island < 0 && CarriedMaterial(p.Material, carryPiercings, carryPubes))
                                .ToList();
         if (adorn.Count == 0) return none;
 
@@ -101,7 +124,10 @@ internal static partial class BodyRetarget
             var own = parts.Parts.Where(p => p.Island >= 0 && p.Mesh == sub.Mesh && p.Submesh == sub.Submesh)
                                  .Select(p => p.Triangles).ToList();
             if (own.Count == 0) own.Add(sub.Triangles);
-            islands.AddRange(own.Select(tris => (sub, tris, Carried(tris))));
+            // Only what the pubes box alone brings in is judged on the skin and the cloth alone: anything the nail or
+            // piercing rule carries (a "_pubepierce" with the piercings box on, a "_pubenails") keeps the author's say-so.
+            bool byAuthor = IsBodyAdornmentMaterial(sub.Material) && (carryPiercings || !IsBodyPiercingMaterial(sub.Material));
+            islands.AddRange(own.Select(tris => (sub, tris, Carried(tris, byAuthor))));
         }
 
         // An island too far off the skin to land anywhere — a chain strung between two nipple rings, 20-30 mm in front of
@@ -138,10 +164,10 @@ internal static partial class BodyRetarget
         return new Adornments(materials, draw, triangles);
 
         // In, out, or null when no part of it is near enough the skin to say.
-        bool? Carried(int[] tris)
+        bool? Carried(int[] tris, bool byAuthor)
         {
             var verts = tris.Distinct().ToList();
-            if (verts.Any(v => authored.Any(At(parts, v), AdornSame))) return true;
+            if (byAuthor && verts.Any(v => authored.Any(At(parts, v), AdornSame))) return true;
             int landed = 0, onDrawn = 0, covered = 0;
             foreach (int v in verts)
             {

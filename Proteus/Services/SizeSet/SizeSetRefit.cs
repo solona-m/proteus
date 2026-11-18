@@ -55,11 +55,13 @@ internal static partial class SizeSetRefit
     /// (<see cref="BodyRetarget.Plan"/>'s cutHidden off — the Studio's "Remove hidden skin" rule, own-sex sizes and men's
     /// versions alike). A slot the piece only reaches onto, and every shoe and glove, are cut whatever this says:
     /// <see cref="Configuration.SizeSetKeepHiddenSkin"/>. Off by default.</param>
+    /// <param name="Pubes">Bring each new body's pubes in with its skin (see <see cref="BodyRetarget.Rebuild"/>):
+    /// <see cref="Configuration.SizeSetPubes"/>. Off by default.</param>
     internal sealed record Request(string ModRoot, IReadOnlyList<string> Keys, bool Yas, bool Remake,
                                    IReadOnlyList<BodyModIndex.Entry> Bodies, Func<string, byte[]?>? ReadGameFile = null,
                                    bool Ends = true, Func<string, BodySizeCatalog?>? GameBody = null,
                                    bool Piercings = false, AcrossInputs? Across = null, string? MadeOn = null,
-                                   bool KeepHiddenSkin = false)
+                                   bool KeepHiddenSkin = false, bool Pubes = false)
     {
         /// <summary>
         /// Whether a mod is one the size table resolves a body to (<see cref="SupportedBodies.Recognised"/>, women's and
@@ -555,6 +557,7 @@ internal static partial class SizeSetRefit
         int made = 0;
         // Said once, so a log export shows the choice the sizes were made with.
         if (request.KeepHiddenSkin) log.Information("[Proteus] size set: hidden skin kept whole");
+        if (request.Pubes) log.Information("[Proteus] size set: the new bodies' pubes kept where their skin shows");
         var (pieces, endsLeftOut, all) = ReadPieces(request.ModRoot, request.ReadGameFile, request.Ends,
             path => log.Debug("[Proteus] size set: {0} is the game's own model or a copy of it, not a piece", path),
             (path, was, now, rivals) => log.Information(
@@ -981,7 +984,7 @@ internal static partial class SizeSetRefit
                                              cutHidden: !request.KeepHiddenSkin,
                                              keepShape: chosen.Shape, log: line => log.Debug("[Proteus] size set: {0}", line),
                                              warn: line => log.Warning("[Proteus] size set: {0}", line),
-                                             carryPiercings: request.Piercings);
+                                             carryPiercings: request.Piercings, carryPubes: request.Pubes);
                 plan = RefitCore.MatchSkinToBody(plan, chosen.SourcePath, targetPath, uvRemap, male, log);
                 // Folds are said, never refused (cross-sex-tops-yas).
                 // The body's skin triangles put in and left out where the author cut theirs (Keep hidden skin).

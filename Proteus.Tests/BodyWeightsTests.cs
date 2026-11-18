@@ -863,6 +863,79 @@ public class BodyWeightsTests
         Assert.Equal(2, PiercingTriangles(within.Model));
     }
 
+    private const string BiboPube = "/mt_c0201b0001_bibopube.mtrl";
+    private const string BetterPube = "/mt_c0201b0001_betterpube.mtrl";
+
+    /// <summary>
+    /// A bare legs piece with its own skin and its own two-triangle pubes of <paramref name="garmentPubes"/>, refitted onto
+    /// a body that rigs genital bones the old one does not and draws one-triangle pubes of <paramref name="bodyPubes"/>.
+    /// </summary>
+    private static (byte[] Garment, BodyRetarget.SlotPair Pair) PubedLegs(string garmentPubes, string bodyPubes)
+    {
+        byte[] garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetY: 50f,
+                                                                  Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(garmentPubes, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, OffsetZ: 0.001f,
+                                                                         Weights: [("j_kosi", 1f)])));
+        byte[] target = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 3,
+                                                                 Weights: [("j_kosi", 0.8f), ("iv_omanko", 0.2f)])),
+            new SyntheticModel.Mesh(bodyPubes, new SyntheticModel.Sub(0, OffsetZ: 0.001f, Weights: [("j_kosi", 1f)])));
+        return (garment, Pair(Body(("j_kosi", 1f)), target));
+    }
+
+    private static int Triangles(byte[] mdl, string material)
+        => ModelPartReader.Read(mdl)!.Parts.Where(p => p.Island < 0 && p.Material == material)
+                                           .Sum(p => p.Triangles.Length / 3);
+
+    [Fact]
+    [Trait("Plan", "AC-refit-keep-pubes-6")]
+    [Trait("Plan", "EDGE-refit-keep-pubes-5")]
+    public void With_pubes_on_the_garment_s_own_give_way_within_one_body()
+    {
+        // [AC-refit-keep-pubes-6] [EDGE-refit-keep-pubes-5] Within one body mod: on, the body's one triangle takes the
+        // place of the author's two, named once; off, the author's stay as they always did.
+        var (garment, pair) = PubedLegs(BiboPube, BiboPube);
+        var parts = ModelPartReader.Read(garment)!;
+        BodyRetarget.Planned Refit(bool pubes)
+            => BodyRetarget.Plan(parts, garment, [pair], "_top", pushOut: false, replaceSkin: true, acrossBodies: false,
+                                 carryPubes: pubes);
+
+        var on = Refit(true);
+        Assert.Equal(1, Triangles(on.Model, BiboPube));
+        Assert.Single(SecondSkinWriter.MaterialNames(on.Model), BiboPube);
+        Assert.Equal(2, Triangles(Refit(false).Model, BiboPube));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-keep-pubes-6")]
+    public void Across_bodies_pubes_follow_the_box_and_the_old_name_leaves()
+    {
+        // [EDGE-refit-keep-pubes-6] Rue+ legs onto Bibo+: the old body's pubes go either way, their name with them; on, the
+        // new body's come in, named once. Every name drawn is in the table.
+        var (garment, pair) = PubedLegs(BetterPube, BiboPube);
+        var parts = ModelPartReader.Read(garment)!;
+        BodyRetarget.Planned Refit(bool pubes)
+            => BodyRetarget.Plan(parts, garment, [pair], "_top", pushOut: false, replaceSkin: true, acrossBodies: true,
+                                 carryPubes: pubes);
+
+        var off = Refit(false);
+        Assert.Equal(0, Triangles(off.Model, BetterPube));
+        Assert.Equal(0, Triangles(off.Model, BiboPube));
+        Assert.DoesNotContain(BetterPube, SecondSkinWriter.MaterialNames(off.Model));
+        Assert.True(off.Report.Swap!.Value.ExtrasDropped >= 2);
+
+        var on = Refit(true);
+        Assert.Equal(1, Triangles(on.Model, BiboPube));
+        Assert.Equal(0, Triangles(on.Model, BetterPube));
+        var table = SecondSkinWriter.MaterialNames(on.Model);
+        Assert.Single(table, BiboPube);
+        Assert.DoesNotContain(BetterPube, table);
+        foreach (var plan in new[] { off, on })
+            Assert.Empty(SecondSkinWriter.DrawnMaterialNames(plan.Model).Except(SecondSkinWriter.MaterialNames(plan.Model)));
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-refit-piercings-option-4")]
     public void Old_piercings_stay_when_no_weights_were_planned()

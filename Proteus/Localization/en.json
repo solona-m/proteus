@@ -155,6 +155,14 @@
     "message": "Off: gear is refitted without your body mod's piercings. Nails always come along.\nGear already refitted keeps what it was made with; undo and refit what you're wearing to change it.",
     "description": "Tooltip on the checkbox for adding the body's piercings to automatically refitted gear."
   },
+  "AutoRefit.Pubes.Label": {
+    "message": "Keep my body's pubes on refitted gear",
+    "description": "Checkbox under the Body refit switch: also bring the body mod's pubes (any body material named \"pube\") into refitted gear. Off by default."
+  },
+  "AutoRefit.Pubes.Tip": {
+    "message": "Off: gear is refitted without your body mod's pubes (its crotch mesh and pubic hair).\nGear already refitted keeps what it was made with; undo and refit what you're wearing to change it.",
+    "description": "Tooltip on the checkbox for keeping the body's pubes on automatically refitted gear."
+  },
   "AutoRefit.Working": {
     "message": "Working...",
     "description": "Shown while a refit is running."
@@ -3987,6 +3995,14 @@
     "message": "On: the new body's piercings come in with its skin where the garment shows that skin.\nNails always come along.",
     "description": "Tooltip on the Body size tool's piercings checkbox."
   },
+  "Parts.Retarget.Pubes": {
+    "message": "Keep the new body's pubes",
+    "description": "Checkbox under \"Use the new body's skin\" in the Body size tool: also bring the new body's pubes in with its skin."
+  },
+  "Parts.Retarget.Pubes.Tip": {
+    "message": "On: the new body's pubes (its crotch mesh and pubic hair) come in with its skin where the garment shows that skin and no cloth covers it.",
+    "description": "Tooltip on the Body size tool's checkbox for keeping the new body's pubes."
+  },
   "Parts.Retarget.CutForcedTip": {
     "message": "Always on while the shoe keeps its own foot or the glove its own hand: otherwise the whole new legs or arms would go in with it.",
     "description": "Tooltip on the greyed-out 'Remove hidden skin' checkbox in Studio > Body size while a shoe keeps its own foot (or a glove its hand)."
@@ -5362,6 +5378,14 @@
   "SizeSet.Piercings.Tip": {
     "message": "On: each body's piercings come in with its skin where the piece shows that skin. Nails always come along.\nSizes already made change only when made again.",
     "description": "Tooltip on the size set's piercings checkbox."
+  },
+  "SizeSet.Pubes": {
+    "message": "Keep the new bodies' pubes",
+    "description": "Size set checkbox: bring each new body's pubes (any body material named \"pube\") in with its skin. Off by default."
+  },
+  "SizeSet.Pubes.Tip": {
+    "message": "On: each body's pubes (its crotch mesh and pubic hair) come in with its skin where the piece shows that skin and no cloth covers it.\nSizes already made change only when made again.",
+    "description": "Tooltip on the size set's checkbox for keeping each new body's pubes."
   },
   "SizeSet.KeepHiddenSkin": {
     "message": "Keep hidden skin",

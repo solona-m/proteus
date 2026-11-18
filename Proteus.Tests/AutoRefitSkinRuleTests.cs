@@ -74,6 +74,47 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
         Assert.True(on.Report.Swap!.Value.Adorned > 0, $"no ring came in: {on.Report.Swap}");
     }
 
+    private const string Pubes = "/mt_c0201b0001_bibopube.mtrl";
+
+    /// <summary><see cref="Chest"/> with pubes on its first island, which <see cref="BareTop"/> draws.</summary>
+    private static byte[] PubedChest(float z) => SyntheticModel.Build([],
+        new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, Islands: 16, TrianglesPerIsland: 1, OffsetZ: z)),
+        new SyntheticModel.Mesh(Pubes, new SyntheticModel.Sub(0, OffsetZ: z + 0.001f)));
+
+    [Theory]
+    [Trait("Plan", "AC-refit-keep-pubes-4")]
+    [Trait("Plan", "EDGE-refit-keep-pubes-15")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Auto_refit_carries_pubes_only_when_asked(bool gameGear)
+    {
+        // [AC-refit-keep-pubes-4] A mod's piece and the game's own alike: the setting decides.
+        var bytes = BareTop();
+        var garment = ModelPartReader.Read(bytes)!;
+        var off = RefitCore.PlanRefit(garment, bytes, [Raised(PubedChest)], "_top", across: true, gameGear, out _);
+        var on = RefitCore.PlanRefit(garment, bytes, [Raised(PubedChest)], "_top", across: true, gameGear, out _,
+                                     carryPubes: true);
+        output.WriteLine($"off {off.Report.Swap}; on {on.Report.Swap}");
+        Assert.Equal(0, off.Report.Swap!.Value.Adorned);
+        Assert.True(on.Report.Swap!.Value.Adorned > 0, $"no pubes came in: {on.Report.Swap}");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-keep-pubes-15")]
+    public void Each_plan_uses_the_pubes_value_it_was_given()
+    {
+        // [EDGE-refit-keep-pubes-15] Nothing is held between refits: on, then off, is the same off as ever.
+        var bytes = BareTop();
+        var garment = ModelPartReader.Read(bytes)!;
+        var on = RefitCore.PlanRefit(garment, bytes, [Raised(PubedChest)], "_top", across: true, gameGear: false, out _,
+                                     carryPubes: true);
+        var off = RefitCore.PlanRefit(garment, bytes, [Raised(PubedChest)], "_top", across: true, gameGear: false, out _,
+                                      carryPubes: false);
+        var fresh = RefitCore.PlanRefit(garment, bytes, [Raised(PubedChest)], "_top", across: true, gameGear: false, out _);
+        Assert.NotEqual(on.Report.Swap!.Value.Adorned, off.Report.Swap!.Value.Adorned);
+        Assert.Equal(fresh.Model, off.Model);
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-refit-piercings-option-9")]
     public void Each_plan_uses_the_value_it_was_given()

@@ -1237,7 +1237,7 @@ internal static partial class BodyRetarget
     /// A body mod's extras that are not skin: piercings and pubic hair, in the body's own material family
     /// (<c>mt_c0201b0001_piercings</c>, <c>_bibopube</c>, <c>_betterpube</c>, <c>_neolithe_piercings</c>). A garment
     /// refitted across bodies drops the ones it carried from its old body — they sit on the old body's shape — and
-    /// takes none from the new one.
+    /// takes none from the new one unless asked (see <see cref="AdornmentsOf"/>).
     /// </summary>
     internal static bool IsBodyExtraMaterial(string material)
         => !SecondSkinWriter.IsBodySkinMaterial(material) && BodyExtra.IsMatch(material);

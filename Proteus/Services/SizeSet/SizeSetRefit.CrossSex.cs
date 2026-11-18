@@ -847,7 +847,7 @@ internal static partial class SizeSetRefit
             var job = CrossSexRefitJob.Run(new CrossSexRefitJob.Inputs(
                 c.Bytes, piece.GamePath, CrossSexRefit.Men, chosen.MadeFor, null, men,
                 o => RefitCore.Normal(o.Rel) == RefitCore.Normal(rel), chosen.Wearer, uvRemap, log,
-                CutHidden: !request.KeepHiddenSkin, CarryPiercings: request.Piercings,
+                CutHidden: !request.KeepHiddenSkin, CarryPiercings: request.Piercings, CarryPubes: request.Pubes,
                 Nude: NudeFor(men.For(piece.Slot), size, log)));
             var made = job.Sizes.FirstOrDefault();
             var (ok, refusal, said) = Judge(piece.Label, option, job, made, chosen.SkeletonFrom);

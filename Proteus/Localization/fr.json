@@ -155,6 +155,14 @@
     "message": "Désactivé : l'équipement est ajusté sans les piercings de ton mod de corps. Les ongles sont toujours inclus.\nL'équipement déjà ajusté garde ce avec quoi il a été fait ; annule puis ajuste à nouveau ce que tu portes pour le changer.",
     "description": ""
   },
+  "AutoRefit.Pubes.Label": {
+    "message": "Garder les poils pubiens de mon corps sur l'équipement réajusté",
+    "description": ""
+  },
+  "AutoRefit.Pubes.Tip": {
+    "message": "Désactivé : l'équipement est réajusté sans les poils pubiens de votre mod de corps (son maillage de l'entrejambe et sa pilosité).\nL'équipement déjà réajusté garde ce avec quoi il a été fait ; annulez et réajustez ce que vous portez pour le changer.",
+    "description": ""
+  },
   "AutoRefit.Working": {
     "message": "En cours…",
     "description": ""
@@ -3987,6 +3995,14 @@
     "message": "Activé : les piercings du nouveau corps arrivent avec sa peau là où le vêtement montre cette peau.\nLes ongles sont toujours inclus.",
     "description": ""
   },
+  "Parts.Retarget.Pubes": {
+    "message": "Garder les poils pubiens du nouveau corps",
+    "description": ""
+  },
+  "Parts.Retarget.Pubes.Tip": {
+    "message": "Activé : les poils pubiens du nouveau corps (son maillage de l'entrejambe et sa pilosité) arrivent avec sa peau là où le vêtement montre cette peau et où aucun tissu ne la couvre.",
+    "description": ""
+  },
   "Parts.Retarget.CutForcedTip": {
     "message": "Toujours actif tant que la chaussure garde son propre pied ou le gant sa propre main : sinon les nouvelles jambes ou les nouveaux bras entiers seraient ajoutés avec.",
     "description": ""
@@ -5361,6 +5377,14 @@
   },
   "SizeSet.Piercings.Tip": {
     "message": "Activé : les piercings de chaque corps arrivent avec sa peau là où la pièce montre cette peau. Les ongles sont toujours inclus.\nLes tailles déjà faites ne changent que si elles sont refaites.",
+    "description": ""
+  },
+  "SizeSet.Pubes": {
+    "message": "Garder les poils pubiens des nouveaux corps",
+    "description": ""
+  },
+  "SizeSet.Pubes.Tip": {
+    "message": "Activé : les poils pubiens de chaque corps (son maillage de l'entrejambe et sa pilosité) arrivent avec sa peau là où la pièce montre cette peau et où aucun tissu ne la couvre.\nLes tailles déjà faites ne changent que lorsqu'elles sont refaites.",
     "description": ""
   },
   "SizeSet.KeepHiddenSkin": {
