@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using Proteus.Services;
+using Dalamud.Plugin.Services;
+using NSubstitute;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -254,5 +256,97 @@ public class BulgeSpikeLocalTests(ITestOutputHelper output)
                          + $"relief error p95 {reliefP95 * 1000f:0.00} mm");
         Assert.True(baseP95 <= 0.002f, $"the base lies {baseP95 * 1000f:0.00} mm (p95) off common/64 — over the 2 mm gate");
         Assert.True(reliefP95 <= 0.0015f, $"the relief is {reliefP95 * 1000f:0.00} mm (p95) off the sculpt — over the 1.5 mm gate");
+    }
+
+    /// <summary>The bulge copy as cloth: lava with its bulge copy's footprint triangles moved onto a cloth material. Its
+    /// skin is then the base (lava's inner copy) and the rest of the copy, coincident with it.</summary>
+    internal static byte[] Patch(Proteus.Services.Bulge.BulgeAsset asset)
+    {
+        var parts = asset.Copy;
+        var keep = new HashSet<ModelMaterialWriter.TriangleKey>();
+        foreach (var part in parts)
+            for (int t = 0; t < part.Triangles.Length / 3; t++)
+                if (Enumerable.Range(0, 3).Any(k => asset.Footprint.Contains(part.Triangles[t * 3 + k])))
+                    keep.Add(new ModelMaterialWriter.TriangleKey(part.Mesh, part.Submesh, part.Ordinals[t]));
+        return ModelMaterialWriter.MoveToMaterial(asset.Bytes, parts, "/mt_c0201e9999_dwn_a.mtrl", keepTriangle: keep.Contains).Model;
+    }
+
+    /// <summary>
+    /// S0.3 (ii): lava's bulge refitted as cloth from lava's base onto each body without its genitals — does the refit
+    /// carry the relief? The bulge's height off the body it lands on, against lava's own off its base: within ±15%.
+    /// </summary>
+    [LocalDataFact(LocalData.TbseUvMaps, LocalData.UvMaps)]
+    public void Transplant_relief()
+    {
+        var asset = Proteus.Services.Bulge.BulgeAsset.Load(null, out var why);
+        Assert.True(asset != null, why);
+        var patch = Patch(asset!);
+        var patchParts = ModelPartReader.Read(patch)!;
+        var cloth = patchParts.Parts.Where(p => p.Island < 0 && p.Material.Contains("e9999", StringComparison.Ordinal)).ToList();
+        var clothVerts = cloth.SelectMany(p => p.Triangles).Distinct().ToArray();
+        output.WriteLine($"patch: {cloth.Count} cloth parts, {clothVerts.Length} vertices; skin parts "
+                         + string.Join(" ", patchParts.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)).Select(p => p.Label)));
+
+        // lava's own relief: each cloth vertex's distance to the base skin (the patch's skin).
+        var patchSkin = new BodySurface(patchParts, 0.01f);
+        static float Off(BodySurface s, Vector3 p) => s.Nearest(p, 0.25f, out var hit) ? hit.Distance : 0.25f;
+        float lavaHeight = clothVerts.Max(v => Off(patchSkin, At(patchParts, v)));
+        output.WriteLine($"lava's bulge stands {lavaHeight * 1000f:0.0} mm off its base");
+
+        var log = Substitute.For<IPluginLog>();
+        var tbseMaps = new UVRemapService(log, LocalData.Path(LocalData.TbseUvMaps));
+        foreach (var (name, need, penis, _) in Bodies.Where(b => b.Penis))
+        {
+            if (LocalData.Missing([need]) is { } miss) { output.WriteLine($"== {name}: SKIPPED ({miss})"); continue; }
+            var bytes = File.ReadAllBytes(LocalData.Path(need));
+            var body = ModelPartReader.Read(bytes)!;
+            var skin = ModelSkinReader.Read(bytes, null, null)!;
+            var reading = Proteus.Services.Bulge.GenitalParts.Read(body, skin)!;
+            // The body without its genitals: whole genital parts out (merged-in triangles stay, for this measurement).
+            var drop = reading.Genitals.Where(g => g.Rule != "b").Select(g => g.Part).ToHashSet();
+            var without = new ModelParts
+            {
+                Positions = body.Positions, Normals = body.Normals, MeshSpans = body.MeshSpans,
+                Parts = body.Parts.Where(p => !drop.Contains(p)).ToList(), AttributeNames = body.AttributeNames,
+                Min = body.Min, Max = body.Max, ShatteredSubmeshes = body.ShatteredSubmeshes,
+            };
+            bool male = body.Parts.Any(p => p.Material.Contains("c0101", StringComparison.Ordinal) || p.Material.Contains("c0301", StringComparison.Ordinal));
+            var maps = male ? tbseMaps : new UVRemapService(log, LocalData.Path(LocalData.UvMaps));
+            if (!BodyCorrespondence.TryBuild(patchParts, BodyRetarget.Uv(patch), without, BodyRetarget.Uv(bytes), name,
+                                             out var corr, out string refusal, out _, maps, false, male))
+            {
+                output.WriteLine($"== {name}: correspondence refused — {refusal}");
+                continue;
+            }
+            var pair = new BodyRetarget.SlotPair("_dwn", corr!, without, bytes, patch);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var planned = BodyRetarget.Plan(patchParts, (byte[])patch.Clone(), [pair], garmentSlot: "_dwn", acrossBodies: true);
+            // The patch's own folds: the in-place solve (RetargetEdit applied to the patch, vertex order kept), its cloth only.
+            var moved = MeshVolumeService.Inflate((byte[])patch.Clone(), planned.Edit).Model;
+            var movedParts = ModelPartReader.Read(moved)!;
+            int patchFolds = 0, patchFaces = 0;
+            foreach (var part in cloth)
+                for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                {
+                    int x = part.Triangles[t], y = part.Triangles[t + 1], z = part.Triangles[t + 2];
+                    var n0 = Vector3.Cross(At(patchParts, y) - At(patchParts, x), At(patchParts, z) - At(patchParts, x));
+                    var n1 = Vector3.Cross(At(movedParts, y) - At(movedParts, x), At(movedParts, z) - At(movedParts, x));
+                    if (n0.LengthSquared() < 1e-14f) continue;
+                    patchFaces++;
+                    if (n1.LengthSquared() < 1e-14f || Vector3.Dot(n0, n1) < 0f) patchFolds++;
+                }
+            output.WriteLine($"   patch cloth folds (in place): {patchFolds} of {patchFaces}");
+            sw.Stop();
+            var outParts = ModelPartReader.Read(planned.Model)!;
+            var outCloth = outParts.Parts.Where(p => p.Island < 0 && p.Material.Contains("e9999", StringComparison.Ordinal))
+                                   .SelectMany(p => p.Triangles).Distinct().ToArray();
+            var onto = new BodySurface(without, 0.01f);
+            float height = outCloth.Length == 0 ? 0f : outCloth.Max(v => Off(onto, At(outParts, v)));
+            var lo = outCloth.Length == 0 ? Vector3.Zero : new Vector3(outCloth.Min(v => At(outParts, v).X), outCloth.Min(v => At(outParts, v).Y), outCloth.Min(v => At(outParts, v).Z));
+            var hi = outCloth.Length == 0 ? Vector3.Zero : new Vector3(outCloth.Max(v => At(outParts, v).X), outCloth.Max(v => At(outParts, v).Y), outCloth.Max(v => At(outParts, v).Z));
+            output.WriteLine($"== {name}: bulge {outCloth.Length} vertices stands {height * 1000f:0.0} mm off the body "
+                             + $"({height / lavaHeight * 100f:0}% of lava's); folded {planned.Report.Folded}, pushed {planned.Report.Pushed}, "
+                             + $"worst move {planned.Report.WorstMove * 1000f:0} mm; extent {lo} .. {hi}; {sw.ElapsedMilliseconds} ms");
+        }
     }
 }
