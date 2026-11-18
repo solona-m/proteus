@@ -34,6 +34,8 @@ public class SuiteBudgetTests
         "VertexColorWriterTests", "MatcapRowWriterTests", "MatcapReadbackLocalTests", "MatcapWriterGuardTests",
         "MatcapFaceHornLocalTests", "ShaderUpgradeOrderingTests", "NailSocketTests", "PrGateTests",
         "LocalizationTests", "SupplyChainTests",
+        // Binary game-file writer guards the owner keeps in the quick suite (with SecondSkinWriterVerbatim, LodTrimmer, VertexColor).
+        "FaceModelWriteTests",
     };
 
     /// <summary>Single methods that are never Diagnostic ("Class.Method"): writes into users' mods checked in a class
@@ -63,6 +65,9 @@ public class SuiteBudgetTests
         "HairPortLocalTests.The_reported_hairstyle_8_ports_with_the_skeleton_each_race_loads",
         "HairPortStryxLocalTests.Stryx_ports_to_midlander_man_alone",
         "FaceShellUnmirrorTests.A_face_shell_with_its_shapes_baked_in_keeps_its_sides",
+        // The racial bake's layout/rename writer guards, kept quick by the owner.
+        "RacialModelBakeTests.The_bake_keeps_the_model_s_layout",
+        "RacialModelBakeTests.Renaming_a_material_moves_every_name_after_it",
     };
 
     /// <summary>Failing tests stay in the release run so the failure stays visible. Drop an entry once it is fixed.</summary>
