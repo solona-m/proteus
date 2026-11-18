@@ -69,10 +69,21 @@ internal static class ModelMaterialWriter
     /// The parts are <see cref="ModelPartReader.Read"/>'s, read from THIS <paramref name="mdl"/>.
     /// </summary>
     /// <exception cref="Refused">The model or the parts can't take it; nothing was changed.</exception>
-    /// <param name="overlayPush">PROTOTYPE (row matcaps): not 0, the parts are COPIED rather than moved — the source
-    /// keeps every triangle, every touched mesh gets a copy (none is rebound whole), and the copy's vertices are pushed
-    /// along their normals by this many metres (negative: inward, under the original) so the two never fight.</param>
-    public static Result MoveToMaterial(byte[] mdl, IReadOnlyList<ModelPart> parts, string materialName, float overlayPush = 0f)
+    /// <summary>A triangle by its part-relative address: mesh, submesh, and its ordinal within the submesh.</summary>
+    public readonly record struct TriangleKey(int Mesh, int Submesh, int Ordinal);
+
+    /// <summary>The cut mesh's vertex alpha can't be written (an element type this writer doesn't encode).</summary>
+    public const string CodeVertexAlpha = "row-vertex-alpha";
+
+    /// <param name="overlayPush">Row matcaps: not 0, the parts are COPIED rather than moved — the source keeps every
+    /// triangle, every touched mesh gets a copy (none is rebound whole), and the copy's vertices are pushed along their
+    /// normals by this many metres (negative: inward, under the original) so the two never fight.</param>
+    /// <param name="keepTriangle">Row matcaps: only the parts' triangles this keeps move (or are copied). Keyed by part-relative
+    /// address, so it survives the level-of-detail cut this call may make first.</param>
+    /// <param name="cutAlphaOne">Row matcaps: every vertex of each mesh that now draws the new material gets vertex-colour
+    /// alpha 1 (usage index 0 only). Only those meshes' vertices change, so the author's material draws as before.</param>
+    public static Result MoveToMaterial(byte[] mdl, IReadOnlyList<ModelPart> parts, string materialName, float overlayPush = 0f,
+                                        Func<TriangleKey, bool>? keepTriangle = null, bool cutAlphaOne = false)
     {
         if (parts.Count == 0) throw new Refused(CodeUnknownPart, "no parts were chosen");
         if (string.IsNullOrEmpty(materialName) || Encoding.ASCII.GetByteCount(materialName) != materialName.Length)
@@ -101,7 +112,7 @@ internal static class ModelMaterialWriter
         List<(int Source, int Drawn)> meshes;
         try
         {
-            (o, meshes) = Emit(s, src, parts, materialName, overlayPush);
+            (o, meshes) = Emit(s, src, parts, materialName, overlayPush, keepTriangle, cutAlphaOne);
         }
         catch (Refused) { throw; }
         catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or IOException or OverflowException)
@@ -126,7 +137,8 @@ internal static class ModelMaterialWriter
     }
 
     private static (byte[] Model, List<(int Source, int Drawn)> Meshes) Emit(
-        byte[] s, SecondSkinWriter.Source src, IReadOnlyList<ModelPart> parts, string materialName, float overlayPush = 0f)
+        byte[] s, SecondSkinWriter.Source src, IReadOnlyList<ModelPart> parts, string materialName, float overlayPush = 0f,
+        Func<TriangleKey, bool>? keepTriangle = null, bool cutAlphaOne = false)
     {
         bool overlay = overlayPush != 0f;   // negative: the copy sits under the surface
         int mh = src.Mh;
@@ -176,9 +188,12 @@ internal static class ModelMaterialWriter
             {
                 if (ord < 0 || (long)ord * 3 + 3 > sc)
                     Unknown($"part {part.Label} names a triangle its submesh does not have");
+                if (keepTriangle != null && !keepTriangle(new TriangleKey(part.Mesh, part.Submesh, ord))) continue;
                 set.Add(so + (long)ord * 3);
             }
         }
+        foreach (var empty in moving.Where(kv => kv.Value.Count == 0).Select(kv => kv.Key).ToList()) moving.Remove(empty);
+        if (moving.Count == 0) Unknown("none of the parts' triangles were kept");
 
         // ── per touched mesh: rebind whole, or copy ──
         var copies = new List<int>();            // source meshes that get a copy, in mesh order
@@ -478,7 +493,121 @@ internal static class ModelMaterialWriter
         var result = new List<(int, int)>();
         foreach (var m in moving.Keys)
             result.Add(wholes.Contains(m) ? (m, m) : (m, meshCount + copies.IndexOf(m)));
+
+        // The cut mesh's vertex alpha to 1: a split copy owns its vertices, and a whole rebind draws only the new material,
+        // so no vertex the author's material draws is touched.
+        if (cutAlphaOne)
+            foreach (var (source, drawn) in result)
+                SetAlphaOne(o, (int)vbOut, meshAt + drawn * MeshSize, source < src.Decls.Length ? src.Decls[source] : []);
         return (o, result);
+    }
+
+    /// <summary>The first vertex-colour element (usage index 0) of a declaration, or null.</summary>
+    private static SecondSkinWriter.VElem? ColorElement(SecondSkinWriter.VElem[] decl)
+    {
+        foreach (var el in decl)
+            if (el.Usage == SecondSkinWriter.UseColor && el.UsageIndex == 0) return el;
+        return null;
+    }
+
+    /// <summary>Vertex-colour alpha 1 on every vertex of the mesh record at <paramref name="mo"/>; nothing without a colour element.</summary>
+    private static void SetAlphaOne(byte[] o, int vb, int mo, SecondSkinWriter.VElem[] decl)
+    {
+        if (ColorElement(decl) is not { } ce) return;   // no colour: alpha already reads as 1
+        if (ce.Type is not (8 or 5 or 14 or 3))
+            throw new Refused(CodeVertexAlpha, $"its vertex colours are stored as type {ce.Type}, which can't be written");
+        ushort vc = U16(o, mo);
+        for (int v = 0; v < vc; v++)
+        {
+            int at = vb + (int)U32(o, mo + 20 + ce.Stream * 4) + v * o[mo + 32 + ce.Stream] + ce.Offset;
+            switch (ce.Type)
+            {
+                case 8: case 5: o[at + 3] = 255; break;                                                    // Ubyte4n / Ubyte4
+                case 14: W16(o, at + 6, BitConverter.HalfToUInt16Bits((Half)1f)); break;                   // Half4
+                case 3: W32(o, at + 12, (uint)BitConverter.SingleToInt32Bits(1f)); break;                  // Float4
+            }
+        }
+    }
+
+    /// <summary>One triangle's first UV set at its three corners, raw (unwrapped), by part-relative address.</summary>
+    public readonly record struct TriangleUv(TriangleKey Key, float U0, float V0, float U1, float V1, float U2, float V2);
+
+    /// <summary>
+    /// Every triangle of <paramref name="parts"/> with its first UV set, read from <paramref name="mdl"/> as given — the
+    /// row triangles are picked from these on the same bytes the next <see cref="MoveToMaterial"/> reads. Triangles of a
+    /// mesh with no UV element are left out.
+    /// </summary>
+    public static List<TriangleUv> TriangleUvs(byte[] mdl, IReadOnlyList<ModelPart> parts)
+    {
+        var src = SecondSkinWriter.Parse(mdl);
+        var s = src.S;
+        var list = new List<TriangleUv>();
+        Span<float> a = stackalloc float[4];
+        foreach (var part in parts)
+        {
+            if (part.Mesh < 0 || part.Mesh >= src.MeshCount) continue;
+            int mo = src.MeshStart + part.Mesh * MeshSize;
+            var decl = part.Mesh < src.Decls.Length ? src.Decls[part.Mesh] : [];
+            SecondSkinWriter.VElem? uvEl = null;
+            foreach (var el in decl) if (el.Usage == SecondSkinWriter.UseUV && el.UsageIndex == 0) { uvEl = el; break; }
+            if (uvEl is not { } ue) continue;
+            ushort subIdx = U16(s, mo + 10), subCnt = U16(s, mo + 12), vc = U16(s, mo);
+            if (part.Submesh < 0 || part.Submesh >= subCnt) continue;
+            int ss = src.SubmeshStart + (subIdx + part.Submesh) * SubmeshSize;
+            uint so = U32(s, ss);
+            int vbo = (int)src.Vb + (int)U32(s, mo + 20 + ue.Stream * 4);
+            byte stride = s[mo + 32 + ue.Stream];
+            foreach (var ord in part.Ordinals)
+            {
+                var uv = new float[6];
+                bool ok = true;
+                for (int k = 0; k < 3 && ok; k++)
+                {
+                    int idx = U16(s, src.Ib + (int)((so + (long)ord * 3 + k) * 2));
+                    if (idx >= vc) { ok = false; break; }
+                    SecondSkinWriter.ReadTyped(s, vbo + idx * stride + ue.Offset, ue.Type, a);
+                    uv[k * 2] = a[0]; uv[k * 2 + 1] = a[1];
+                }
+                if (ok) list.Add(new TriangleUv(new TriangleKey(part.Mesh, part.Submesh, ord), uv[0], uv[1], uv[2], uv[3], uv[4], uv[5]));
+            }
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// The smallest vertex-colour alpha (usage index 0, 0–1) over the corners of the kept triangles of
+    /// <paramref name="parts"/>; 1 when a mesh has no colour element.
+    /// </summary>
+    public static float VertexAlphaMin(byte[] mdl, IReadOnlyList<ModelPart> parts, Func<TriangleKey, bool> keep)
+    {
+        var src = SecondSkinWriter.Parse(mdl);
+        var s = src.S;
+        float min = 1f;
+        Span<float> a = stackalloc float[4];
+        foreach (var part in parts)
+        {
+            if (part.Mesh < 0 || part.Mesh >= src.MeshCount) continue;
+            int mo = src.MeshStart + part.Mesh * MeshSize;
+            if (ColorElement(part.Mesh < src.Decls.Length ? src.Decls[part.Mesh] : []) is not { } ce) continue;
+            ushort subIdx = U16(s, mo + 10), subCnt = U16(s, mo + 12), vc = U16(s, mo);
+            if (part.Submesh < 0 || part.Submesh >= subCnt) continue;
+            uint so = U32(s, src.SubmeshStart + (subIdx + part.Submesh) * SubmeshSize);
+            int vbo = (int)src.Vb + (int)U32(s, mo + 20 + ce.Stream * 4);
+            byte stride = s[mo + 32 + ce.Stream];
+            foreach (var ord in part.Ordinals)
+            {
+                if (!keep(new TriangleKey(part.Mesh, part.Submesh, ord))) continue;
+                for (int k = 0; k < 3; k++)
+                {
+                    int idx = U16(s, src.Ib + (int)((so + (long)ord * 3 + k) * 2));
+                    if (idx >= vc) continue;
+                    SecondSkinWriter.ReadTyped(s, vbo + idx * stride + ce.Offset, ce.Type, a);
+                    float alpha = ce.Type == 5 ? a[3] / 255f : a[3];
+                    if (alpha < min) min = alpha;
+                }
+            }
+        }
+        return min;
     }
 
     /// <summary>Move every vertex of the mesh record at <paramref name="mo"/> by <paramref name="push"/> along its normal.</summary>

@@ -55,10 +55,19 @@ internal static partial class MatcapPlan
     /// <summary>A part drawn with body skin (the toggles' and brush's own test), which a matcap never takes.</summary>
     public static bool IsSkin(ModelPart part) => SecondSkinWriter.SkinMaterialBodyType(part.Material) != null;
 
-    /// <summary>A part already drawn by one of Proteus's matcap materials (an Apply on it changes that matcap).</summary>
-    public static bool IsOnMatcap(ModelPart part) => IsMatcapName(part.Material);
+    /// <summary>
+    /// A part already drawn by one of Proteus's matcap materials, or by a row matcap's cut copy of its own material (an
+    /// Apply on it changes the matcap that owns it).
+    /// </summary>
+    public static bool IsOnMatcap(ModelPart part) => IsMatcapName(part.Material) || IsCutName(part.Material);
 
     public static bool IsMatcapName(string material) => McapRe().IsMatch(material);
+
+    /// <summary>The marker a row matcap's cut copy of the part's own material carries: <c>&lt;stem&gt;_mcut&lt;token&gt;&lt;N&gt;.mtrl</c>.</summary>
+    public const string CutMarker = "_mcut";
+
+    /// <summary>Whether <paramref name="material"/> names a row matcap's cut copy.</summary>
+    public static bool IsCutName(string material) => McutRe().IsMatch(material);
 
     /// <summary>Whether a part may be ticked under the Matcaps tool: anything but skin (a matcap part to change it).</summary>
     public static bool Tickable(ModelPart part) => !IsSkin(part);
@@ -83,9 +92,35 @@ internal static partial class MatcapPlan
         return on == 0 ? ApplyKind.New : on == ticked.Count ? ApplyKind.Change : ApplyKind.Mixed;
     }
 
-    /// <summary>The matcap materials among the ticked parts, each once (case-insensitive), in the order first seen.</summary>
-    public static IReadOnlyList<string> ChangeNames(IReadOnlyList<ModelPart> ticked) =>
-        ticked.Where(IsOnMatcap).Select(p => p.Material).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    /// <summary>
+    /// The matcap materials among the ticked parts, each once (case-insensitive), in the order first seen. A cut part
+    /// names the matcap that owns its cut (<see cref="MatcapRecord.EntryFor"/>, with <paramref name="record"/>); one no
+    /// entry owns is left out.
+    /// </summary>
+    public static IReadOnlyList<string> ChangeNames(IReadOnlyList<ModelPart> ticked, MatcapRecord? record = null)
+    {
+        var names = new List<string>();
+        foreach (var p in ticked.Where(IsOnMatcap))
+        {
+            var name = IsCutName(p.Material) ? record?.EntryFor(p.Material)?.Name : p.Material;
+            if (name != null && !names.Contains(name, StringComparer.OrdinalIgnoreCase)) names.Add(name);
+        }
+        return names;
+    }
+
+    /// <summary>
+    /// The parts a row matcap with nothing ticked covers: every whole submesh drawn with <paramref name="material"/> that
+    /// may be ticked and isn't on a matcap already.
+    /// </summary>
+    public static List<ModelPart> RowPool(IReadOnlyList<ModelPart> parts, Kind? kind, IReadOnlyList<string> attributeNames,
+                                          string material) =>
+        parts.Where(p => p.Island < 0 && Tickable(p, kind, attributeNames) && !IsOnMatcap(p)
+                         && string.Equals(p.Material, material, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    /// <summary>The materials a row matcap can be picked on: those of whole tickable submeshes not on a matcap, first seen first.</summary>
+    public static List<string> RowMaterials(IReadOnlyList<ModelPart> parts, Kind? kind, IReadOnlyList<string> attributeNames) =>
+        parts.Where(p => p.Island < 0 && Tickable(p, kind, attributeNames) && !IsOnMatcap(p) && !string.IsNullOrEmpty(p.Material))
+             .Select(p => p.Material).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
     /// <summary>
     /// <see cref="Tickable(ModelPart)"/>, and on a face model only a horn part (its submesh carries <see cref="HornAttribute"/>,
@@ -120,20 +155,27 @@ internal static partial class MatcapPlan
     /// </summary>
     /// <param name="clashes">A name whose game paths are already taken (another material published there): skipped
     /// too, so two models reading one folder never end up with one material redirect.</param>
-    public static string NewName(string sourceMaterial, string token, IEnumerable<string> taken, Func<string, bool>? clashes = null)
+    public static string NewName(string sourceMaterial, string token, IEnumerable<string> taken, Func<string, bool>? clashes = null,
+                                 string marker = Marker)
     {
         var used = new HashSet<string>(taken.Select(FileNameOf), StringComparer.OrdinalIgnoreCase);
         var src = sourceMaterial.Replace('\\', '/');
-        // A name already carrying a matcap marker takes the stem before it.
-        int mark = src.LastIndexOf(Marker, StringComparison.OrdinalIgnoreCase);
+        // A name already carrying a matcap or cut marker takes the stem before it.
         var stem = src.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase) ? src[..^5] : src;
+        int mark = src.LastIndexOf(Marker, StringComparison.OrdinalIgnoreCase);
         if (mark > 0 && IsMatcapName(src)) stem = src[..mark];
+        int cutMark = src.LastIndexOf(CutMarker, StringComparison.OrdinalIgnoreCase);
+        if (cutMark > 0 && IsCutName(src)) stem = src[..cutMark];
         for (int n = 1; ; n++)
         {
-            var name = $"{stem}{Marker}{token}{n}.mtrl";
+            var name = $"{stem}{marker}{token}{n}.mtrl";
             if (!used.Contains(FileNameOf(name)) && clashes?.Invoke(name) != true) return name;
         }
     }
+
+    /// <summary><see cref="NewName"/> for a row matcap's cut copy of the part's material (<see cref="CutMarker"/>).</summary>
+    public static string NewCutName(string sourceMaterial, string token, IEnumerable<string> taken, Func<string, bool>? clashes = null) =>
+        NewName(sourceMaterial, token, taken, clashes, CutMarker);
 
     private static string FileNameOf(string nameOrPath)
     {
@@ -262,4 +304,7 @@ internal static partial class MatcapPlan
 
     [GeneratedRegex(@"_mcap[0-9a-f]{6}\d+\.mtrl$", RegexOptions.IgnoreCase)]
     private static partial Regex McapRe();
+
+    [GeneratedRegex(@"_mcut[0-9a-f]{6}\d+\.mtrl$", RegexOptions.IgnoreCase)]
+    private static partial Regex McutRe();
 }

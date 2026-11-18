@@ -40,6 +40,33 @@ public class VariantRepointWriterTests
         }
     }
 
+    /// <summary>
+    /// A plan made before a key appeared, written after (a row matcap's pre-published cut, or the author's own): the key the
+    /// container already holds is neither written nor recorded, so Undo can never take out a redirect it did not add.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-row-49")]
+    public void Apply_skips_and_does_not_record_keys_the_container_already_holds()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Colours("Dress", Top);
+        k.Imc(Top, E(2), E(1), E(2), E(3), E(1));
+        var plan = k.Plan([k.Worn(Top, 2, mod)]);
+        // Since the plan: Red gains folder 2's key itself, pointing at a file of its own.
+        EditFiles(mod, f => f[MaterialPath(Top, 2)] = "ours/cut.mtrl", "Colour", "Red");
+
+        foreach (var m in plan.PerMod) VariantRepointWriter.Apply(m.ModRoot, m.Items, () => true);
+        Assert.Equal("ours/cut.mtrl", FilesOf(mod, Red)[MaterialPath(Top, 2)]);         // never replaced
+        Assert.Equal("red/m.mtrl", FilesOf(mod, Red)[MaterialPath(Top, 3)]);            // the rest written
+        var record = File.ReadAllText(RecordPath(mod));
+        Assert.DoesNotContain("ours/cut.mtrl", record);
+        Assert.DoesNotContain("ours\\\\cut.mtrl", record);
+
+        Assert.Equal(VariantRepointWriter.Undone.Removed, VariantRepointWriter.UndoItem(mod, Top, false, out _, out _, out _));
+        Assert.Equal("ours/cut.mtrl", FilesOf(mod, Red)[MaterialPath(Top, 2)]);         // undo leaves it alone
+        Assert.False(FilesOf(mod, Red).ContainsKey(MaterialPath(Top, 3)));
+    }
+
     [Fact]
     [Trait("Plan", "AC-imc-all-variants-1")]
     public void Accessory_item_copies_under_accessory_folder()
