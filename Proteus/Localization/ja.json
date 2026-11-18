@@ -155,6 +155,14 @@
     "message": "オフ: 体型 MOD のピアスなしで装備を調整します。爪は常に含まれます。\n調整済みの装備は作成時のままです。変更するには、着ている装備の調整を元に戻してから調整し直してください。",
     "description": ""
   },
+  "AutoRefit.Pubes.Label": {
+    "message": "リフィットした装備に自分の体の陰毛を残す",
+    "description": ""
+  },
+  "AutoRefit.Pubes.Tip": {
+    "message": "オフ：装備はボディMODの陰毛（股間のメッシュと陰毛）なしでリフィットされます。\nリフィット済みの装備は作成時のままです。変えるには着ているものを元に戻してリフィットし直してください。",
+    "description": ""
+  },
   "AutoRefit.Working": {
     "message": "処理中…",
     "description": ""
@@ -3987,6 +3995,14 @@
     "message": "オン: 衣装がその肌を見せている部分では、新しい体型のピアスが肌と一緒に入ります。\n爪は常に含まれます。",
     "description": ""
   },
+  "Parts.Retarget.Pubes": {
+    "message": "新しい体の陰毛を残す",
+    "description": ""
+  },
+  "Parts.Retarget.Pubes.Tip": {
+    "message": "オン：衣装がその肌を見せていて布が覆っていない所では、新しい体の陰毛（股間のメッシュと陰毛）が肌と一緒に入ります。",
+    "description": ""
+  },
   "Parts.Retarget.CutForcedTip": {
     "message": "靴が自分の足を、手袋が自分の手を残している間は常にオンです。オフにすると新しい脚や腕が丸ごと入ってしまいます。",
     "description": ""
@@ -5361,6 +5377,14 @@
   },
   "SizeSet.Piercings.Tip": {
     "message": "オン: パーツがその肌を見せている部分では、各体型のピアスが肌と一緒に入ります。爪は常に含まれます。\n作成済みのサイズは、作り直したときにだけ変わります。",
+    "description": ""
+  },
+  "SizeSet.Pubes": {
+    "message": "新しい体たちの陰毛を残す",
+    "description": ""
+  },
+  "SizeSet.Pubes.Tip": {
+    "message": "オン：パーツがその肌を見せていて布が覆っていない所では、各体の陰毛（股間のメッシュと陰毛）が肌と一緒に入ります。\n作成済みのサイズは作り直したときだけ変わります。",
     "description": ""
   },
   "SizeSet.KeepHiddenSkin": {

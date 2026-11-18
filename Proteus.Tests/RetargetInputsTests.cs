@@ -272,6 +272,48 @@ public class RetargetInputsTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-refit-keep-pubes-2")]
+    [Trait("Plan", "EDGE-refit-keep-pubes-10")]
+    public void Pubes_take_effect_only_with_the_skin_replaced()
+    {
+        // [AC-refit-keep-pubes-2] [EDGE-refit-keep-pubes-10] The box greys out with "Use the new body's skin".
+        Assert.False(RetargetInputs.CarryPubes(replaceSkin: false, carryPubes: true));
+        Assert.True(RetargetInputs.CarryPubes(replaceSkin: true, carryPubes: true));
+        Assert.False(RetargetInputs.CarryPubes(replaceSkin: true, carryPubes: false));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-refit-keep-pubes-2")]
+    [Trait("Plan", "EDGE-refit-keep-pubes-10")]
+    public void Key_changes_with_pubes()
+    {
+        // [AC-refit-keep-pubes-2] Ticking the box takes a preview down; [EDGE-refit-keep-pubes-10] without the skin
+        // replaced, or on a skin-only redraw, it changes nothing. Independent of the piercings box.
+        var from = new Dictionary<string, BodyOption> { ["_sho"] = FeetM, ["_dwn"] = LegsS };
+        var to = new Dictionary<string, List<BodyOption>> { ["_dwn"] = [LegsM], ["_sho"] = [FeetM] };
+        string Key(KeepEnds.Route? route, bool replaceSkin, bool piercings, bool pubes, Dictionary<string, BodyOption>? f = null)
+        {
+            f ??= from;
+            var slots = RetargetInputs.Slots(Shoe(), CatalogSlots, Two);
+            var inputs = RetargetInputs.Assemble(Shoe(), slots, f, to, route);
+            return RetargetInputs.Key("m", null, inputs, RetargetInputs.Chosen(slots, f, to), f, to, [], [],
+                                      replaceSkin, true, false, piercings, carryPubes: pubes);
+        }
+
+        string off = Key(KeepEnds.Route.Skin, true, false, false);
+        string on = Key(KeepEnds.Route.Skin, true, false, true);
+        Assert.EndsWith("|pubes", on);
+        Assert.DoesNotContain("|pubes", off);
+        Assert.Equal(off, Key(KeepEnds.Route.Skin, true, false, false));
+        Assert.Contains("|pierce", Key(KeepEnds.Route.Skin, true, true, true));
+        Assert.Contains("|pubes", Key(KeepEnds.Route.Skin, true, true, true));
+        Assert.DoesNotContain("|pubes", Key(KeepEnds.Route.Skin, true, true, false));
+        Assert.Equal(Key(KeepEnds.Route.Skin, false, false, false), Key(KeepEnds.Route.Skin, false, false, true));
+        var feet = new Dictionary<string, BodyOption> { ["_sho"] = FeetM };
+        Assert.Equal(Key(KeepEnds.Route.SkinOnly, true, false, false, feet), Key(KeepEnds.Route.SkinOnly, true, false, true, feet));
+    }
+
+    [Fact]
     [Trait("Plan", "AC-studio-game-top-3")]
     [Trait("Plan", "AC-studio-game-top-4")]
     [Trait("Plan", "EDGE-studio-game-top-1")]

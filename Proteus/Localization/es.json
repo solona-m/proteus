@@ -155,6 +155,14 @@
     "message": "Desactivado: el equipo se ajusta sin los piercings de tu mod de cuerpo. Las uñas siempre se incluyen.\nEl equipo ya ajustado conserva lo que tenía; deshaz y vuelve a ajustar lo que llevas puesto para cambiarlo.",
     "description": ""
   },
+  "AutoRefit.Pubes.Label": {
+    "message": "Conservar el vello púbico de mi cuerpo en el equipo reajustado",
+    "description": ""
+  },
+  "AutoRefit.Pubes.Tip": {
+    "message": "Desactivado: el equipo se reajusta sin el vello púbico de tu mod de cuerpo (su malla de la entrepierna y el vello).\nEl equipo ya reajustado conserva aquello con lo que se hizo; deshaz y reajusta lo que llevas puesto para cambiarlo.",
+    "description": ""
+  },
   "AutoRefit.Working": {
     "message": "Trabajando…",
     "description": ""
@@ -3987,6 +3995,14 @@
     "message": "Activado: los piercings del nuevo cuerpo llegan con su piel donde la prenda muestra esa piel.\nLas uñas siempre se incluyen.",
     "description": ""
   },
+  "Parts.Retarget.Pubes": {
+    "message": "Conservar el vello púbico del nuevo cuerpo",
+    "description": ""
+  },
+  "Parts.Retarget.Pubes.Tip": {
+    "message": "Activado: el vello púbico del nuevo cuerpo (su malla de la entrepierna y el vello) llega con su piel donde la prenda muestra esa piel y ninguna tela la cubre.",
+    "description": ""
+  },
   "Parts.Retarget.CutForcedTip": {
     "message": "Siempre activado mientras el zapato conserva su propio pie o el guante su propia mano: si no, entrarían con él las piernas o los brazos nuevos enteros.",
     "description": ""
@@ -5361,6 +5377,14 @@
   },
   "SizeSet.Piercings.Tip": {
     "message": "Activado: los piercings de cada cuerpo llegan con su piel donde la pieza muestra esa piel. Las uñas siempre se incluyen.\nLas tallas ya hechas solo cambian cuando se vuelven a hacer.",
+    "description": ""
+  },
+  "SizeSet.Pubes": {
+    "message": "Conservar el vello púbico de los nuevos cuerpos",
+    "description": ""
+  },
+  "SizeSet.Pubes.Tip": {
+    "message": "Activado: el vello púbico de cada cuerpo (su malla de la entrepierna y el vello) llega con su piel donde la pieza muestra esa piel y ninguna tela la cubre.\nLas tallas ya hechas solo cambian cuando se vuelven a hacer.",
     "description": ""
   },
   "SizeSet.KeepHiddenSkin": {

@@ -249,6 +249,52 @@ public class HarnessJobsTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-refit-keep-pubes-9")]
+    public async Task Refit_pubes_overrides_for_the_run()
+    {
+        // [AC-refit-keep-pubes-9] The override reaches the prepared request and the echoed options; the saved choice is
+        // left as it was.
+        f.AddMod();
+        f.Game.ConfigPubes = false;
+        var job = await Refit("""{"mod":"Outfit","bodies":["rue"],"pubes":true}""");
+        Assert.Equal("done", job.GetProperty("state").GetString());
+        Assert.True(f.Game.LastOptions!.Pubes);
+        Assert.True(f.Game.LastPrepared!.Request.Pubes);
+        Assert.True(job.GetProperty("result").GetProperty("options").GetProperty("pubes").GetBoolean());
+        Assert.False(f.Game.ConfigPubes);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [Trait("Plan", "AC-refit-keep-pubes-9")]
+    [Trait("Plan", "EDGE-refit-keep-pubes-13")]
+    public async Task Refit_without_pubes_uses_the_saved_choice(bool saved)
+    {
+        // [AC-refit-keep-pubes-9] [EDGE-refit-keep-pubes-13]
+        f.AddMod();
+        f.Game.ConfigPubes = saved;
+        var job = await Refit();
+        Assert.Equal(saved, f.Game.LastOptions!.Pubes);
+        Assert.Equal(saved, f.Game.LastPrepared!.Request.Pubes);
+        Assert.Equal(saved, job.GetProperty("result").GetProperty("options").GetProperty("pubes").GetBoolean());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-refit-keep-pubes-9")]
+    public async Task Refit_nothing_to_make_reports_pubes()
+    {
+        // [AC-refit-keep-pubes-9] The override is applied before the early answer.
+        f.AddMod();
+        f.Game.Offered = [];
+        f.Game.ConfigPubes = false;
+        var job = await Refit("""{"mod":"Outfit","bodies":["rue"],"pubes":true}""");
+        var result = job.GetProperty("result");
+        Assert.Equal("nothing-to-make", result.GetProperty("summary").GetString());
+        Assert.True(result.GetProperty("options").GetProperty("pubes").GetBoolean());
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-size-set-keep-skin-13")]
     public async Task Refit_nothing_to_make_reports_keepHiddenSkin()
     {

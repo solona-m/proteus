@@ -605,7 +605,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
 
     private async Task<HarnessResponse> Refit(HarnessRequest request)
     {
-        var (body, bad) = JsonBody(request, "mod", "bodies", "remake", "keepHiddenSkin");
+        var (body, bad) = JsonBody(request, "mod", "bodies", "remake", "keepHiddenSkin", "pubes");
         if (bad != null) return bad;
         string? mod = OptionalString(body, "mod", out bad);
         if (bad != null) return bad;
@@ -628,6 +628,13 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                 return HarnessResponse.Error(400, "invalid-field", "keepHiddenSkin must be true or false");
             keepHiddenSkin = keepValue.GetBoolean();
         }
+        bool? pubes = null;
+        if (body.TryGetProperty("pubes", out var pubesValue))
+        {
+            if (pubesValue.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                return HarnessResponse.Error(400, "invalid-field", "pubes must be true or false");
+            pubes = pubesValue.GetBoolean();
+        }
 
         if (!jobs.TryReserve()) return HarnessResponse.Error(409, "busy", "a job is already running");
         bool started = false;
@@ -637,7 +644,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
             if (error != null) return error;
             if (HairBusy("refit", Path.Combine(mods!.ModsRoot, dir!)) is { } hairBusy) return hairBusy;
             var job = new HarnessJob(HarnessJobs.NewJobId(), "refit", dir!);
-            var args = new RefitJob.Args(dir!, Path.Combine(mods!.ModsRoot, dir!), keys, remake, mods, keepHiddenSkin);
+            var args = new RefitJob.Args(dir!, Path.Combine(mods!.ModsRoot, dir!), keys, remake, mods, keepHiddenSkin, pubes);
             _ = jobs.Start(job, j => RefitJob.Run(jobs, j, args));
             started = true;
             return HarnessResponse.Json(202, new { job = job.Id, modDir = dir, state = "queued" });

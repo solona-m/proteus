@@ -951,6 +951,47 @@ public sealed partial class LocalizationTests
             Assert.Contains("**" + strings[key].Message + "**", readme);
     }
 
+    private static readonly string[] PubesKeys =
+    [
+        "AutoRefit.Pubes.Label", "AutoRefit.Pubes.Tip", "Parts.Retarget.Pubes",
+        "Parts.Retarget.Pubes.Tip", "SizeSet.Pubes", "SizeSet.Pubes.Tip",
+    ];
+
+    /// <summary>The refit's three pubes options are in every language in its own words, line for line.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-refit-keep-pubes-8")]
+    public void RefitPubes_strings_are_translated_not_copied(string lang)
+    {
+        // [AC-refit-keep-pubes-8]
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in PubesKeys)
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+        }
+    }
+
+    /// <summary>Every README names the three pubes options as its own language's checkboxes do.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-refit-keep-pubes-8")]
+    public void Readme_mentions_the_pubes_options(string lang)
+    {
+        // [AC-refit-keep-pubes-8]
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+
+        var strings = Load(lang);
+        foreach (string key in new[] { "AutoRefit.Pubes.Label", "Parts.Retarget.Pubes", "SizeSet.Pubes" })
+            Assert.Contains("**" + strings[key].Message + "**", readme);
+    }
+
     /// <summary>The size set's "Keep hidden skin" box and tooltip are in every language in its own words, line for line.</summary>
     [Theory]
     [MemberData(nameof(Translations))]
