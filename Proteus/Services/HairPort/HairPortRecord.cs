@@ -97,7 +97,7 @@ internal sealed class HairPortRecord
             e.SourceGamePath = (e.SourceGamePath ?? "").Replace('\\', '/');
             e.TargetGamePath = (e.TargetGamePath ?? "").Replace('\\', '/');
             e.Materials = new Dictionary<string, string>(
-                (e.Materials ?? []).ToDictionary(p => p.Key, p => Rel(p.Value)), StringComparer.OrdinalIgnoreCase);
+                (e.Materials ?? []).Where(p => p.Value != null).ToDictionary(p => p.Key, p => Rel(p.Value)), StringComparer.OrdinalIgnoreCase);
         }
 
         // The record ships inside the mod, so its author controls it — and the manifest too, so agreeing with it proves

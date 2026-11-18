@@ -95,6 +95,15 @@ public partial class HairPortWriterTests
         }));
         var entry = Assert.Single(HairPortRecord.Read(kit.ModRoot).Ports);
         Assert.Equal(["Hair Ports/x.mtrl"], entry.Materials.Values.ToList());
+
+        // A shipped record may hold anything: no entry, an entry with no file, a material with no file.
+        var dir = Path.Combine(kit.ModRoot, "Proteus");
+        File.WriteAllText(Path.Combine(dir, HairPortRecord.RecordFile),
+            "{\"Version\":1,\"Ports\":[null,{\"File\":\"\"}," + JsonSerializer.Serialize(PortEntry(file)).TrimEnd('}')
+            + ",\"Materials\":{\"k\":null}}],\"Declined\":[]}");
+        var real = Assert.Single(HairPortRecord.Read(kit.ModRoot).Ports);
+        Assert.Equal(file, real.File);
+        Assert.Empty(real.Materials);
     }
 
     // [AC-mod-path-containment-3] A legitimate port is still remade where it is.
