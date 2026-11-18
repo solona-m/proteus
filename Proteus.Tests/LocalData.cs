@@ -90,6 +90,13 @@ internal static class LocalData
     /// <summary>"Rue+" 2.2.7 (y0f), installed: the body of Sarelle's Rue waist. Only ever read.</summary>
     internal const string RueMod = Mods + ":hs-Rue+-2.2.7-y0f";
 
+    /// <summary>"charmed - by solona", installed: the Enaretos bracelet (a0153 wrs). A Single group "Enaretos Bracelet" /
+    /// "Everything" ships <c>mt_c0201a0153_wrs_a.mtrl</c> (moved to character.shpk by the gear shader upgrade, index/mask
+    /// form, no mask) with its <c>_n</c>/<c>_id</c>/<c>_m</c>, the still-legacy <c>mt_c0101a0153_wrs_a.mtrl</c> and
+    /// <c>mt_c0201a0153_wrs_b.mtrl</c> (characterglass.shpk); the c0201 model comes from the Single group "Body Shape"
+    /// (Bibo+ / Rue+). Tests copy it to a temp folder and never write the original.</summary>
+    internal const string EnaretosMod = Mods + ":charmed - by solona";
+
     /// <summary>
     /// The uv transfer maps, which live in the repository (<c>Proteus/uvmaps</c>) but through Git LFS, so a checkout
     /// may hold only their pointers. Not a variable: found by walking up from the test binaries. <see cref="Path"/> gives

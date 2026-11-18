@@ -34,7 +34,7 @@ internal static class MatcapStudio
     /// <param name="Affordable">Test seam for the BC7 budget guard (<see cref="TextureLoader.CompressionAffordable"/>).</param>
     public sealed record Environment(Func<string, byte[]?> ReadGameFile, TextureLoader Loader, bool Compress, string TempDir,
                                      int? WornFolder = null, int RowOnly = 0, SubRowPick RowSub = SubRowPick.Both,
-                                     Func<bool>? Affordable = null);
+                                     Func<bool>? Affordable = null, bool? GearShadersOn = null);
 
     /// <summary>How far a row matcap's copy sits UNDER the surface it copies, in metres (negative: inward).</summary>
     internal const float RowOverlayPush = -0.0006f;
