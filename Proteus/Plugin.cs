@@ -70,7 +70,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly WindowSystem windowSystem;
     private readonly StatusWindow statusWindow;
     private readonly Gui.WhatsNewWindow whatsNewWindow;
-    private readonly IpcProvider ipcProvider;
+    // CLEAN-ROOM HOLE: spec §3
     private readonly SphereMapPreview spherePreview;
     private readonly TilePreview tilePreview;
     private readonly Gui.PartViewport partViewport;
@@ -180,7 +180,7 @@ public sealed class Plugin : IDalamudPlugin
         designBindings.PresetsSuperseded += presets.ClearAllApplied;
         editRouter = new OverlayEditRouter(presets, designBindings);
 
-        ipcProvider = new IpcProvider(pluginInterface, compositor, discovery, config, log);
+        // CLEAN-ROOM HOLE: spec §3
 
         // Sphere-map thumbnails for the colour table editor.
         spherePreview = new SphereMapPreview(TextureProvider, log);
@@ -549,13 +549,12 @@ public sealed class Plugin : IDalamudPlugin
         // "/proteus refresh [full]": the tab bar's Refresh button, and its shift-click, from a macro.
         if (a.StartsWith("refresh", StringComparison.OrdinalIgnoreCase))
         {
-            string[] refreshArgs = a[7..].Trim().Split(' ');
-            bool full = refreshArgs.ContainsAny(["full", "-full", "all"], StringComparer.OrdinalIgnoreCase);
-            bool silent = refreshArgs.ContainsAny(["silent", "-silent"], StringComparer.OrdinalIgnoreCase);
+            bool full = a[7..].Trim() is "full" or "-full" or "all";
+            // CLEAN-ROOM HOLE: spec §4
             compositor.RefreshAndRecomposite(full);
             // The Studio lists every Penumbra mod, so refresh that too: a recomposite alone would miss a new one.
             partsPanel.Refresh();
-            if (silent) return;
+            // CLEAN-ROOM HOLE: spec §4
             ChatGui.Print("[Proteus] " + (full
                 ? ProteusLoc.Localize("Command.Refreshing.Full", "Rebuilding everything and recompositing. This takes longer than a plain refresh.")
                 : ProteusLoc.Localize("Command.Refreshing", "Recompositing now.")));
@@ -633,7 +632,7 @@ public sealed class Plugin : IDalamudPlugin
 
         partViewport.Dispose();
         fonts.Dispose();
-        ipcProvider.Dispose();
+        // CLEAN-ROOM HOLE: spec §3
         designWatcher.Dispose();
         modMoves.Dispose();   // before every service it calls
         designBindings.PresetsSuperseded -= presets.ClearAllApplied;

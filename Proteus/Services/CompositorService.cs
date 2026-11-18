@@ -736,9 +736,6 @@ public partial class CompositorService : IDisposable
     /// </remarks>
     private static string BodyShapeSignature(IReadOnlyDictionary<string, HashSet<string>>? shapes)
     {
-        if (shapes == null || shapes.Count == 0) return "";
-        return string.Join("|", shapes.Values
-            .Select(v => string.Join(",", v.OrderBy(x => x, StringComparer.Ordinal)))
-            .OrderBy(x => x, StringComparer.Ordinal));
+        // CLEAN-ROOM HOLE: spec §6
     }
 }

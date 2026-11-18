@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+// CLEAN-ROOM HOLE: spec §6
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Textures.TextureWraps;
@@ -159,13 +159,9 @@ internal sealed class ModsTab
                     ImGui.SameLine(0f, ProteusStyle.S(4f));
                 }
 
-                using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled), !active))
-                {
-                    if (ImGui.Selectable($"{entry.ModName}##{entry.ModDirectory}"))
-                    {
-                        penumbra.OpenToMod(entry.ModDirectory);
-                    }
-                }
+                if (active) ImGui.TextUnformatted(entry.ModName);
+                else        ImGui.TextDisabled(entry.ModName);
+                // CLEAN-ROOM HOLE: spec §6
                 // Repeated on the name, which is what people hover, under the mod's own picture when it ships one.
                 if (ImGui.IsItemHovered())
                     DrawNameTooltip(entry, inertTip);
@@ -174,10 +170,9 @@ internal sealed class ModsTab
                 ImGui.TableNextColumn();
                 int pri = _priorityEdits.TryGetValue(entry.ModDirectory, out var pe) ? pe : entry.Priority;
                 ImGui.SetNextItemWidth(ProteusStyle.S(55f));
-                if (ImGui.DragInt($"##pri_{entry.ModDirectory}", ref pri, 0.1f))
-                    _priorityEdits[entry.ModDirectory] = pri;
+                ImGui.DragInt($"##pri_{entry.ModDirectory}", ref pri, 1f);
                 if (ImGui.IsItemDeactivatedAfterEdit())
-                {
+                // CLEAN-ROOM HOLE: spec §6
                     _priorityEdits.Remove(entry.ModDirectory);
                     if (collId.HasValue)
                     {

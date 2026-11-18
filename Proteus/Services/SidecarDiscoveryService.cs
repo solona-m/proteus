@@ -53,15 +53,8 @@ public record OverlayEntry(
 /// </summary>
 public record ResolvedOverlay(
     OverlayDescriptor Descriptor,
-    List<ColorTableRowPreset>? ColorTableRows,
-    string? OptionGroup,
-    string? Option,
-    /// <summary>
-    /// Penumbra's own group ordinal (its index in meta.json's Groups array). LOWER = higher priority, and a higher
-    /// group wins wherever it is visible: the compositor suppresses lower groups underneath it.
-    /// int.MaxValue for top-level overlays, which belong to no group.
-    /// </summary>
-    int GroupOrder = int.MaxValue
+    List<ColorTableRowPreset>? ColorTableRows
+    // CLEAN-ROOM HOLE: spec §5
 );
 
 /// <summary>
@@ -71,8 +64,7 @@ public record ResolvedOverlay(
 /// </summary>
 public record ResolvedContent(
     ContentPiece Piece,
-    List<ColorTableRowPreset>? ColorTableRows,
-    string? OptionGroup,
+    // CLEAN-ROOM HOLE: spec §5
     string? Option,
     int GroupOrder = int.MaxValue,
     /// <summary>
@@ -477,7 +469,8 @@ public partial class SidecarDiscoveryService
         {
             diag = ResolutionDiagnostic.None with { Unconditional = true };
             return entry.Metadata.Overlays
-                .Select(d => new ResolvedOverlay(d, entry.Metadata.ColorTableRows, null, null))
+                .Select(d => new ResolvedOverlay(d, entry.Metadata.ColorTableRows))
+                // CLEAN-ROOM HOLE: spec §5
                 .ToList();
         }
 
@@ -526,14 +519,16 @@ public partial class SidecarDiscoveryService
             else
             {
                 if (known || groupOrder.Count == 0) emptyGroups.Add(group.PenumbraGroupName);
-                continue;
+                active = [group.Options[0]];
+                // CLEAN-ROOM HOLE: spec §5
             }
 
             foreach (var opt in active)
             {
                 var rows = opt.ColorTableRows ?? entry.Metadata.ColorTableRows;
                 foreach (var desc in opt.Overlays)
-                    resolved.Add(new ResolvedOverlay(desc, rows, group.PenumbraGroupName, opt.Name, order));
+                    resolved.Add(new ResolvedOverlay(desc, rows));
+                    // CLEAN-ROOM HOLE: spec §5
             }
         }
 

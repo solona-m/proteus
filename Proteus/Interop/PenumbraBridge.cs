@@ -37,7 +37,7 @@ public class PenumbraBridge : IDisposable
     private readonly TrySetModSetting trySetModSetting;
     private readonly TrySetModSettings trySetModSettings;
     private readonly RedrawObject redrawObject;
-    private readonly OpenMainWindow openMainWindow;
+    // CLEAN-ROOM HOLE: spec §7
     private readonly GetGameObjectResourcePaths getGameObjectResourcePaths;
     private readonly AddTemporaryMod addTemporaryMod;
     private readonly RemoveTemporaryMod removeTemporaryMod;
@@ -130,7 +130,7 @@ public class PenumbraBridge : IDisposable
         trySetModSetting = new TrySetModSetting(pluginInterface);
         trySetModSettings = new TrySetModSettings(pluginInterface);
         redrawObject = new RedrawObject(pluginInterface);
-        openMainWindow = new OpenMainWindow(pluginInterface);
+        // CLEAN-ROOM HOLE: spec §7
         getGameObjectResourcePaths = new GetGameObjectResourcePaths(pluginInterface);
         addTemporaryMod = new AddTemporaryMod(pluginInterface);
         removeTemporaryMod = new RemoveTemporaryMod(pluginInterface);
@@ -848,13 +848,7 @@ public class PenumbraBridge : IDisposable
         catch (Exception ex) { log.Error(ex, "RedrawObject failed"); return false; }
     }
 
-    public void OpenToMod(string modDirectory)
-    {
-        if (!IsAvailable) return;
-        try { openMainWindow.Invoke(TabType.Mods, modDirectory); }
-        catch (Exception ex) { log.Error(ex, "OpenMainWindow failed"); }
-    }
-
+    // CLEAN-ROOM HOLE: spec §7
     public void Dispose()
     {
         modSettingChangedSub.Dispose();

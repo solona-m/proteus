@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
+// CLEAN-ROOM HOLE: spec §8
 using System.Threading;
 using System.Threading.Tasks;
 using Penumbra.Api.Enums;
@@ -320,14 +319,13 @@ public partial class CompositorService
                 // Refused only by the cooldown: schedule a retry, since fast callers would otherwise leave the shell hostless.
                 ScheduleCarrierRetry((int)(GlassesInjectCooldownMs - sinceInject), "glasses");
 
-            if (MetSnapshotKnown && !AnyMetWorn() && sinceInject > GlassesInjectCooldownMs)
+            if (MetSnapshotKnown && !AnyMetWorn()
+                && sinceInject > GlassesInjectCooldownMs
+                && SetGlassesOnFramework(g.ItemId))
             {
-                // Charge the cooldown on the attempt, not the success, or a locked slot retries on every redraw.
-                var equipped = SetGlassesOnFramework(g.ItemId);
+                // CLEAN-ROOM HOLE: spec §8
                 _lastGlassesInjectTick = Environment.TickCount64;
-                if (!equipped)
-                    return;
-
+                // CLEAN-ROOM HOLE: spec §8
                 _injectedGlasses = true;
                 if (alreadyHosted)
                 {
@@ -506,10 +504,8 @@ public partial class CompositorService
 
             // Equip. Counted atomically first: two reconciles can race on one slot.
             if (!_carrierAsks.TryBeginAsk(ringSlot, epoch, CarrierDecisions.AskCap, now)) return;
-            // Charge the cooldown on the attempt, not the success (see the glasses).
-            _carrierCooldowns.Charge(ringSlot, now);
-            if (SetAccessoryOnFramework(r.ItemId, ringSlot))
-            {
+        if (SetAccessoryOnFramework(r.ItemId, ringSlot))
+            // CLEAN-ROOM HOLE: spec §8
                 MarkCarrierInjected(ringSlot);
                 _carrierRemovedAt.TryRemove(ringSlot, out _);
                 // No follow-up recomposite: the shell is already published at the path this piece loads.
