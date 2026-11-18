@@ -556,7 +556,7 @@ The reads of Planner revisions 1–11, Plan-critics 1–6, 8 and 9, and the Plan
 - **Planner (rev 12):** no tool calls at all (no Read, no shell or git commands, no searches, no URLs). The same automatic loads applied.
 - **Plan-critic 11 (on rev 11):**
   - It opened only the rev-11 plan output file, whole, in three reads (lines 1–300, 300–579 and 580–857).
-  - It ran one command, verbatim: `wc -l "C:/Users/solon/.claude/projects/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/toolu_01KxHixBRT3dmmqo79XhBdnq.txt"`.
+  - It ran one command, verbatim: `wc -l "<claude-projects>/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/toolu_01KxHixBRT3dmmqo79XhBdnq.txt"`.
   - It relied on its round-1 reads of `Proteus/Proteus.csproj` and `XivLiveMesh/NOTICE.md`.
   - It read nothing forbidden and started no sub-agents.
 - **Orchestrator facts since rev 10 (P-7):**

@@ -397,8 +397,9 @@ Interoperability (not distributed)
 Proteus talks to Penumbra and Glamourer through Dalamud's inter-plugin IPC. It
 uses their IPC labels, argument and return types, and the names and values of
 the enums that cross those calls (docs/ipc-contract.md), as facts needed to
-interoperate. No code from Penumbra, Penumbra.Api, Glamourer, Glamourer.Api or
-Luna is included in or shipped with Proteus. Penumbra.Api has no licence file;
+interoperate. Apart from the Glamourer.Api enum names and values listed above
+under "Glamourer IPC types", no code from Penumbra, Penumbra.Api, Glamourer,
+Glamourer.Api or Luna is included in or shipped with Proteus. Penumbra.Api has no licence file;
 only the interface facts above are used from it.
 
 -------------------------------------------------------------------------------

@@ -134,10 +134,11 @@ public sealed class ReadmeTermsTests
         Assert.DoesNotContain("DRAFT", licence);
         Assert.DoesNotContain("GNU AFFERO GENERAL PUBLIC LICENSE", licence);
         Assert.False(File.Exists(Repo(Path.Combine("docs", "LICENSE-DRAFT.md"))), "docs/LICENSE-DRAFT.md is still there.");
-        // The published text is the reviewed draft, word for word, apart from the status line.
-        var draft = Read(Path.Combine("Proteus.Tests", "Fixtures", "proteus-licence-1.0-draft.md")).Replace("\r\n", "\n").Split('\n');
-        Assert.Equal("*Version 1.0 — DRAFT, not yet in force*", draft[2]);
-        Assert.Equal(draft.Where((_, i) => i != 2), lines.Where((_, i) => i != 2));
+        // The published text is the reviewed draft (docs/LICENSE-DRAFT.md at 4f535282^), word for word, apart from the
+        // status line: the SHA-256 of every other line, LF-joined, is the draft's.
+        var body = string.Join("\n", lines.Where((_, i) => i != 2));
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(body)));
+        Assert.Equal("397567B1D707395A3778024F6FF23B367C4478BDCD2E0A2CB86D47BFD1CAFA0B", hash);
         // GitHub reads any root LICENSE-* file as a second licence.
         Assert.False(Directory.GetFiles(Root.Value!, "LICENSE*")
                          .Any(f => Path.GetFileName(f).StartsWith("LICENSE-", StringComparison.OrdinalIgnoreCase)),

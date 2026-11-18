@@ -146,8 +146,9 @@ public sealed class ContribCleanRoomRecordTests
     [MemberData(nameof(DeliveredPhases))]
     [Trait("Plan", "AC-contrib-clean-room-3")]
     [Trait("Plan", "AC-contrib-clean-room-6")]
+    [Trait("Plan", "AC-contrib-clean-room-7")]
     [Trait("Plan", "EDGE-contrib-clean-room-53")]
-    public void Log_reports_no_contributor_lines(string phase)   // [AC-contrib-clean-room-3] [AC-contrib-clean-room-6] [EDGE-contrib-clean-room-53]
+    public void Log_reports_no_contributor_lines(string phase)   // [AC-contrib-clean-room-3] [AC-contrib-clean-room-6] [AC-contrib-clean-room-7] [EDGE-contrib-clean-room-53]
     {
         var log = Log();
         switch (phase)
@@ -164,6 +165,8 @@ public sealed class ContribCleanRoomRecordTests
                 Assert.Contains("1901 passed, 0 failed, 0 skipped", log);
                 Assert.Contains("`Test-Path` is False for `Luna.dll`, `Penumbra.Api.dll` and `Glamourer.Api.dll`", log);
                 Assert.Contains("a new file by B2 (named)", log);
+                // AC-7: Phases A and B changed no licence or notice file.
+                Assert.Contains("Phases A and B changed no licence or notice file", log);
                 break;
             case "C":
                 Assert.Contains("Phases delivered: A,B,C", log);
@@ -184,8 +187,10 @@ public sealed class ContribCleanRoomRecordTests
         Assert.Contains("Files at Jaccard >= 0.40: none", d);
     }
 
-    private static readonly string[] CleanAgents = ["Agent B", "Agent B2", "Code-critic", "Security review", "Adversarial QA"];
-    private static readonly string[] DirtyAgents = ["Agent A (self-report)", "Agent C (self-report)", "Agent D (self-report)"];
+    private static readonly string[] CleanAgents =
+        ["Agent B", "Agent B2", "QA-lite smoke agent", "Web-fetch agent", "Code-critic", "Security review", "Adversarial QA"];
+    private static readonly string[] DirtyAgents =
+        ["Agent A (self-report)", "Agent A3 (self-report)", "Agent C (self-report)", "Agent D (self-report)"];
 
     [Fact]
     [Trait("Plan", "AC-contrib-clean-room-5")]

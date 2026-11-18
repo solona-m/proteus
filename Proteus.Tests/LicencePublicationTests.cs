@@ -86,15 +86,15 @@ public class LicencePublicationTests
         "LICENSE", "XivLiveMesh/LICENSE", "XivLiveMesh/NOTICE.md", "THIRD_PARTY_NOTICES.txt",
         "docs/pbd-clean-room.md", "docs/pbd-clean-room-plan.md", "docs/pbd-clean-room-log.md",
         "docs/contrib-clean-room-plan.md", "docs/contrib-clean-room-log.md", "docs/contrib-clean-room-spec.md",
-        "docs/ipc-contract.md", "Proteus.Tests/Fixtures/proteus-licence-1.0-draft.md",
+        "docs/ipc-contract.md",
         "Proteus.Tests/ReadmeTermsTests.cs", "Proteus.Tests/ShippedAssembliesTests.cs",
         "Proteus.Tests/LicencePublicationTests.cs",
     ];
 
     [Fact]
     [Trait("Plan", "AC-contrib-clean-room-12")]
-    [Trait("Plan", "EDGE-contrib-clean-room-23")]
-    public void No_file_claims_AGPL_for_Proteus_code()   // [AC-contrib-clean-room-12] [EDGE-contrib-clean-room-23]
+    [Trait("Plan", "EDGE-contrib-clean-room-50")]
+    public void No_file_claims_AGPL_for_Proteus_code()   // [AC-contrib-clean-room-12] [EDGE-contrib-clean-room-50]
     {
         var skipDirs = new[] { "/.git/", "/bin/", "/obj/", "/node_modules/", "/Glamourer/", "/Luna/", "/Penumbra.Api/" };
         var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".cs", ".csproj", ".md", ".txt", ".json", ".yml", ".props", ".js", ".ts", ".toml" };

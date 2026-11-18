@@ -209,6 +209,44 @@ public class IpcContractTests
 
     [Fact]
     [Trait("Plan", Plan10)]
+    [Trait("Plan", "EDGE-contrib-clean-room-18")]
+    public void Harness_gates_match_the_API()   // [AC-contrib-clean-room-10] [EDGE-contrib-clean-room-18]
+    {
+        // §6: compiled only into local harness builds (ADR 0002); on a CI build there is nothing to check.
+        var rows = ContractRows("## 6.");
+        Assert.Equal(2, rows.Count);
+        var errors = new List<string>();
+        foreach (var r in rows)
+        {
+            var name = r.Label.Split('.')[1];   // Glamourer.ApplyDesign -> ApplyDesign
+            var gate = typeof(Plugin).Assembly.GetType("Proteus.TestHarness.Glamourer" + name);
+            if (gate == null) return;
+            var d = Proteus.Interop.Ipc.IpcContract.Describe(r.Owner, gate);
+            var e = new Entry(d.Owner, d.Label, d.Kind.ToString(), d.Arguments, d.Returns);
+            if (e.Label != r.Label) errors.Add($"{r.Owner} {r.Id}: Label differs");
+            var api = ApiType(r.Owner, r.Label);
+            if (api == null) { errors.Add($"{r.Owner} {r.Id}: no API type with this label"); continue; }
+            errors.AddRange(Compare(r.Id, r.Owner, e, ApiShape(api)));
+            Assert.DoesNotContain(Proteus.Interop.Ipc.IpcContract.Entries, x => x.Label == r.Label);   // never a shipped gate
+        }
+        Assert.True(errors.Count == 0, string.Join("\n", errors));
+    }
+
+    [Fact]
+    [Trait("Plan", Plan10)]
+    public void ApplyFlagEx_constants_match_the_API()   // [AC-contrib-clean-room-10]
+    {
+        var api = Module("Glamourer").Types.First(t => t.FullName == "Glamourer.Api.Enums.ApplyFlagEx");
+        var mine = typeof(Plugin).Assembly.GetType("Glamourer.Api.Enums.ApplyFlagEx");
+        Assert.True(mine != null, "§3 Glamourer.Api.Enums.ApplyFlagEx: no owned type");
+        var apiConsts = api.Fields.Where(f => f.IsStatic && f.HasConstant).ToDictionary(f => f.Name, f => Bits(f.Constant!));
+        var myConsts = mine!.GetFields(BindingFlags.Public | BindingFlags.Static).Where(f => f.IsLiteral)
+                            .ToDictionary(f => f.Name, f => Bits(Convert.ChangeType(f.GetRawConstantValue()!, typeof(ulong))));
+        Assert.Equal(apiConsts.OrderBy(k => k.Key), myConsts.OrderBy(k => k.Key));
+    }
+
+    [Fact]
+    [Trait("Plan", Plan10)]
     public void Shipped_code_reaches_Penumbra_and_Glamourer_only_through_IpcContract_gates()   // [AC-contrib-clean-room-10]
     {
         var root = RepoFile("Proteus");
