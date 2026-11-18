@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LicenseRef-Proteus
+// Only the enum names, member names and values are taken from Penumbra's IPC API, as interoperability facts; no
+// Penumbra.Api code is copied or shipped (see THIRD_PARTY_NOTICES.txt, "Interoperability").
 namespace Penumbra.Api.Enums;
 
 // Proteus's own copies of the enums that cross Penumbra's IPC call gates (docs/ipc-contract.md §3). Names, values and

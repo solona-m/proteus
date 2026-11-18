@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: LicenseRef-Proteus
 // Copyright (c) Solona
 // Written from docs/contrib-clean-room-spec.md (§2, §3, §9.2, §12) as the clean side of a clean-room rewrite.
 

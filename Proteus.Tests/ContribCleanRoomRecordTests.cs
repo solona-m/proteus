@@ -71,7 +71,7 @@ public sealed class ContribCleanRoomRecordTests
     public void IpcProvider_header_is_pinned()   // [AC-contrib-clean-room-5]
     {
         var lines = Read("Proteus/Interop/IpcProvider.cs").Split('\n');
-        Assert.Equal("// SPDX-License-Identifier: AGPL-3.0-or-later", lines[0].TrimEnd());
+        Assert.Equal("// SPDX-License-Identifier: LicenseRef-Proteus", lines[0].TrimEnd());
         Assert.Equal("// Copyright (c) Solona", lines[1].TrimEnd());
         Assert.Contains(lines.Take(5), l => l.Contains("docs/contrib-clean-room-spec.md", StringComparison.Ordinal));
         Assert.DoesNotContain("ported from", string.Join("\n", lines), StringComparison.OrdinalIgnoreCase);

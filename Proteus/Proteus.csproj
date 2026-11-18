@@ -23,7 +23,8 @@
 
   <PropertyGroup>
     <Version>$(ProteusVersion)</Version>
-    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
+    <!-- Licence: the Proteus Licence (LICENSE at the repository root, shipped as LICENSE.txt). It has no SPDX id,
+         and the project is not packable, so no NuGet licence expression is set. -->
     <IsPackable>false</IsPackable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -87,6 +88,10 @@
 
   <ItemGroup>
 <Content Include="..\THIRD_PARTY_NOTICES.txt" Link="THIRD_PARTY_NOTICES.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- The Proteus Licence travels with every copy of the plugin (licence §2.5: mirrors keep it intact). -->
+    <Content Include="..\LICENSE" Link="LICENSE.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <!-- Native SIMD block-compressor (bc7enc + rgbcx, built via native\src\build.bat). Ships next to the
@@ -165,7 +170,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Posing worn models on the live character; shared with other plugins, AGPL-3.0-or-later. -->
+    <!-- Posing worn models on the live character; under the Proteus Licence with the rest of Proteus. -->
     <ProjectReference Include="..\XivLiveMesh\XivLiveMesh.csproj" />
   </ItemGroup>
 
