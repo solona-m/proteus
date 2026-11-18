@@ -473,7 +473,7 @@ Expressive hits: 0 (none)
 
 ## Orchestrator (steps 5-7)
 
-Phases delivered: A
+Phases delivered: A,B
 
 ### Step 5: Agent B
 
@@ -617,3 +617,30 @@ Sub-agents: none
 Grep without line numbers: 0
 Shell commands outside the allowlist: 0
 forbidden locations in listing/search results: 0
+
+## Orchestrator (Phase B)
+
+- **The scope change.** After step 3 the user wrote: "Do the Luna work as well. Keep going until you've pushed that and all the other needed changes." Phases B and C came back through the planner and Plan-critics 11–13: revision 12 with amendments 12a–12c. The toe-cap data was confirmed by the owner ("The toecaps were handmade by me") and is classed as Proteus's own.
+- **The "Phases delivered" line.** The phases line in the steps 5–7 section was written as "A" at `T_A` (`209e5bbc`). It was changed to "A,B" in the commit holding this section, which is `T_B`.
+- **B1:** Agent C's contract, `docs/ipc-contract.md` (`0a3fe30e`).
+- **B2:** the orchestrator's tests, written from the contract (`22502d52`):
+  - `IpcContractTests` (Cecil, following contract §5; failure messages name only the row and the fact);
+  - `ShippedAssembliesTests`;
+  - `BridgeAvailabilityTests`;
+  - the `HarnessBindingsWiringTests` gate names.
+
+  Adding the aliased API references to the test project made it fail to compile until B3. That was the expected red state.
+- **B3:** Agent B2, `dc8f5e4e`. The orchestrator removed the emptied `LunaLog.cs` and its test with `git rm`. `dotnet restore --force-evaluate` left B2's hand-edited lock file unchanged.
+- **B4 proof:**
+  - **WIDE-A plus WIDE-B:** 1901 passed, 0 failed, 0 skipped.
+  - **Blame at `dc8f5e4e`:**
+    - `-w -M -C`: contributor non-trivial 0, with no per-file change since `<R>`.
+    - `-w -M -C -C`: contributor non-trivial 0. The change since `<R>` is `using` +1 in `Proteus/Interop/Ipc/IpcContract.cs`, a new file by B2 (named). `Proteus/Interop/IpcProvider.cs` (+2, B's new file) was already logged at step 6.
+  - **The three DLLs:** after `dotnet clean` and a Release build, `Test-Path` is False for `Luna.dll`, `Penumbra.Api.dll` and `Glamourer.Api.dll` in `Proteus/bin/Release/win-x64`.
+  - **`zip-entries.ps1 latest.zip`** lists none of them. The entries are: BCnEncoder.dll, BitMiracle.LibTiff.NET.dll, CommunityToolkit.HighPerformance.dll, Meshes\toecap.{bibo,neolithe,rue,yab}.{bind,mdl}, Proteus.deps.json, Proteus.dll, Proteus.json, proteus_bcn.dll, StbImageSharp.dll, StbImageWriteSharp.dll, THIRD_PARTY_NOTICES.txt, XivLiveMesh.dll and XivLiveMesh.pdb.
+  - **AC-7:** Phases A and B changed no licence or notice file. `git diff test...dc8f5e4e --name-only` lists none of `LICENSE`, `docs/LICENSE-DRAFT.md`, `THIRD_PARTY_NOTICES.txt` or `XivLiveMesh/LICENSE|NOTICE.md`.
+- **B5, the smoke check in game:**
+  - Build 1474 (`2c384009`, the next number above `test`'s 1473) was copied to `E:\repos\Proteus\Proteus\bin\release\win-x64`, after warning the peer sessions. The `Proteus.dll` timestamp is 10:50:32 PM.
+  - The warning to `matcap-gear-shader-5d` was held by that session and expired undelivered. The other two warnings were delivered.
+  - The QA-lite agent found no harness session file (`test-harness.json` missing): the game wasn't running or the plugin wasn't loaded. Per the QA rules that is a Blocker, so all four smoke items are **UNVERIFIED**, not passes. Nothing was changed in game.
+  - Following the global rule (a QA Blocker is noted and the run finishes without that part), the run continues to Phase C. The in-game check of the new IPC layer is left to step 8's QA, or to the owner.
