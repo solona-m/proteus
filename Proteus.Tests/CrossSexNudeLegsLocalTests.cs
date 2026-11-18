@@ -66,7 +66,7 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
 
     /// <summary>Cloth faces each garment turns over fitted to TBSE's Gen A legs, and cloth points the solve misses
     /// (measured 2026-10-24), guarded against growing.</summary>
-    private const int KnownStormblessedLegsFolds = 69, KnownStormblessedLegsMissed = 0, KnownSheerLegsFolds = 8;
+    private const int KnownStormblessedLegsFolds = 38, KnownStormblessedLegsMissed = 0, KnownSheerLegsFolds = 8;
 
     private (string Name, Misses? Sfw, Misses? GenA) Both(string name, string path)
     {

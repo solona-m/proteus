@@ -37,20 +37,25 @@ internal static partial class BodyRetarget
     /// Every pair it leaves alone says why in the log.
     /// </summary>
     /// <param name="any">Whether any pair was made featureless.</param>
+    /// <param name="garmentSkinCollapsed">Whether any of the garment's own skin triangles were collapsed as genitals.</param>
     internal static IReadOnlyList<SlotPair> FitBulges(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                                       bool replaceSkin, Action<string>? log, out ModelParts fitGarment,
-                                                      out byte[] fitBytes, out bool any)
+                                                      out byte[] fitBytes, out bool any, out bool garmentSkinCollapsed)
     {
         fitGarment = garment;
         fitBytes = garmentBytes;
         any = false;
+        garmentSkinCollapsed = false;
         var result = pairs.ToList();
         var dropParts = new HashSet<ModelPart>();
         var dropTris = new Dictionary<ModelPart, HashSet<int>>();
         for (int i = 0; i < result.Count; i++)
         {
             var pair = result[i];
-            if (pair.Featureless == null) continue;
+            // A pair here for its shape alone is never swapped, so it is never made featureless either; nor a pair whose
+            // two bodies are one file (the garment's own body: nothing to change).
+            if (pair.Featureless == null || pair.ShapeOnly) continue;
+            if (pair.SourceModel != null && pair.TargetModel != null && pair.SourceModel.AsSpan().SequenceEqual(pair.TargetModel)) continue;
             string slot = pair.Slot;
             try
             {
@@ -64,16 +69,20 @@ internal static partial class BodyRetarget
                     continue;
                 }
                 var (fp, why) = pair.Featureless();
-                if (fp is not { } featureless)
+                if (fp is not { } made)
                 {
                     log?.Invoke($"bulge: {slot} left as it is — {why}");
                     continue;
                 }
+                // The caller's pair, onto the featureless body: whatever the caller set on it after BuildPair stays.
+                var featureless = pair with { Correspondence = made.Correspondence, Target = made.Target, TargetModel = made.TargetModel,
+                                              Featureless = null };
 
                 // The garment's own genitals, against the body it was made on.
                 var sourceSkin = pair.SourceModel != null ? ModelSkinReader.Read(pair.SourceModel, null, null) : null;
                 var sourceReading = sourceSkin != null ? GenitalParts.Read(pair.Correspondence.Source, sourceSkin) : null;
                 var (materials, skinTris) = GarmentGenitals(garment, pair.Correspondence.Source, sourceReading);
+                garmentSkinCollapsed |= skinTris.Count > 0;
                 if (skinTris.Count > 0 && !(replaceSkin && pair.Swaps))
                 {
                     log?.Invoke($"bulge: {slot} left as it is — garment carries genitals and this refit keeps its skin");
@@ -94,10 +103,14 @@ internal static partial class BodyRetarget
                 log?.Invoke($"bulge: {slot} left as it is — failed: {e.Message}");
             }
         }
-        if (!any || (dropParts.Count == 0 && dropTris.Count == 0)) return result;
+        if (!any) return result;
 
-        // Collapse the garment's genitals in a copy of its bytes, and leave them out of the parts the refit reads.
+        // A copy of the garment's bytes: its cloth's genital-bone weights to j_kosi (it moves with the hips, as the bulge
+        // does), and its own genitals collapsed and left out of the parts the refit reads.
         fitBytes = (byte[])garmentBytes.Clone();
+        int rehung = Bulge.BulgeSwap.PenisWeightsToKosi(fitBytes);
+        if (rehung > 0) log?.Invoke($"bulge: {rehung} garment points rigged to the penis now follow the hips");
+        if (dropParts.Count == 0 && dropTris.Count == 0) return result;
         var hide = new HashSet<PolygonSelection.Key>();
         foreach (var part in dropParts)
             for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
@@ -193,8 +206,13 @@ internal static partial class BodyRetarget
     internal static (List<ModelPart> Materials, Dictionary<ModelPart, List<int>> SkinTris) GarmentGenitals(
         ModelParts garment, ModelParts sourceBody, GenitalParts.Reading? source)
     {
+        // By name and by place: a body mod's genital material, most of it in the old body's crotch window (a body mod's
+        // overlay layer elsewhere on the legs is not genitals).
         var materials = garment.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material)
-                                                 && BodyModMaterial.IsMatch(p.Material) && !NotGenital.IsMatch(p.Material)).ToList();
+                                                 && BodyModMaterial.IsMatch(p.Material) && !NotGenital.IsMatch(p.Material)
+                                                 && source != null
+                                                 && p.Triangles.Distinct().Count(v => GenitalParts.InWindow(PointOf(garment, v), source.Anchor))
+                                                    * 2 >= p.Triangles.Distinct().Count()).ToList();
         var skinTris = new Dictionary<ModelPart, List<int>>();
         if (source is not { Genitals.Count: > 0 }) return (materials, skinTris);
         var onGenitals = new SpatialSet(source.Genitals.SelectMany(g => g.Triangles.SelectMany(t => new[]

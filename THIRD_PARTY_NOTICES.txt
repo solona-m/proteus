@@ -435,9 +435,11 @@ tbse_bulge — featureless bulge for The Body SE (carved out; not covered by the
 
 Proteus.dll embeds Resources/tbse_bulge.json: a featureless bulge mesh the
 Proteus owner made to fit The Body SE's legs in place of its genital piece,
-with the positions of the 28 points of the hole it fits. The Body SE is its
-author's work, and its own terms stay as they are; its mesh is not included
-and nothing here grants any right to it.
+with the positions of the 28 points of the hole it fits and, for each of its
+points, the texture coordinate of the matching point of The Body SE's genital
+piece (read from The Body SE's texture layout, used only to land garments on
+it). The Body SE is its author's work, and its own terms stay as they are; its
+mesh is not included and nothing here grants any right to it.
 
 The bulge is the Proteus owner's own contribution, shipped by her decision
 (2026-11-18). For that contribution, the owner permits its geometry, as

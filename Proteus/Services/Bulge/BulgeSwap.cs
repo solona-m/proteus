@@ -107,35 +107,11 @@ internal static class BulgeSwap
         }
 
 
-        // Normals: area-weighted over the bulge's triangles, welded by position; the rim's from the body.
         var tris = bulge.Data.triangles;
-        var normal = new Vector3[n];
-        var byPlace = new Dictionary<(long, long, long), List<int>>();
-        for (int i = 0; i < n; i++)
-        {
-            var p = positions[i];
-            var key = ((long)MathF.Round(p.X * 1e5f), (long)MathF.Round(p.Y * 1e5f), (long)MathF.Round(p.Z * 1e5f));
-            (byPlace.TryGetValue(key, out var l) ? l : byPlace[key] = []).Add(i);
-        }
-        var acc = new Vector3[n];
-        for (int t = 0; t < tCount; t++)
-        {
-            var a = positions[tris[t * 3]];
-            var face = Vector3.Cross(positions[tris[t * 3 + 1]] - a, positions[tris[t * 3 + 2]] - a);
-            for (int k = 0; k < 3; k++) acc[tris[t * 3 + k]] += face;
-        }
-        foreach (var group in byPlace.Values)
-        {
-            var sum = group.Aggregate(Vector3.Zero, (s, i) => s + acc[i]);
-            foreach (int i in group) normal[i] = sum.LengthSquared() > 0 ? Vector3.Normalize(sum) : Vector3.UnitZ;
-        }
-        for (int i = 0; i < n; i++)
-            if (bulge.Data.rim[i] >= 0)
-            {
-                int v = bodyAt[bulge.Data.rim[i]];
-                var bn = new Vector3(parts.Normals[v * 3], parts.Normals[v * 3 + 1], parts.Normals[v * 3 + 2]);
-                if (bn.LengthSquared() > 1e-12f) normal[i] = Vector3.Normalize(bn);
-            }
+        var normal = Normals(positions, tris, bulge, parts, bodyAt);
+        if (positions.Any(p => !float.IsFinite(p.X) || !float.IsFinite(p.Y) || !float.IsFinite(p.Z))
+            || normal.Any(v => !float.IsFinite(v.X) || !float.IsFinite(v.Y) || !float.IsFinite(v.Z)))
+        { reason = "self-check: a bulge position or normal is not finite"; return null; }
 
         // The tangent convention: read off the piece's own vertices — the stored dP/dv's sign against the computed one.
         Span<float> tmp = stackalloc float[4];
@@ -187,13 +163,13 @@ internal static class BulgeSwap
                 var nn = normal[i];
                 var bv = dPdv[i] - nn * Vector3.Dot(dPdv[i], nn);
                 var tv = dPdu[i] - nn * Vector3.Dot(dPdu[i], nn);
-                if (bv.LengthSquared() > 1e-16f)
-                {
-                    bv = Vector3.Normalize(bv) * sign;
-                    float h = MathF.Sign(Vector3.Dot(Vector3.Cross(nn, Vector3.Normalize(dPdv[i] - nn * Vector3.Dot(dPdv[i], nn))), tv));
-                    float wv = h * hRef >= 0 ? wRef : -wRef;
-                    WriteFrame(o, Addr(bt, local), bt.Type, bv, wv);
-                }
+                // Where the uv derivative is degenerate, any direction in the tangent plane: never the old vertex's frame.
+                if (bv.LengthSquared() <= 1e-16f)
+                    bv = Vector3.Cross(nn, MathF.Abs(nn.X) < 0.9f ? Vector3.UnitX : Vector3.UnitY);
+                float h = MathF.Sign(Vector3.Dot(Vector3.Cross(nn, Vector3.Normalize(bv)), tv));
+                bv = Vector3.Normalize(bv) * sign;
+                float wv = h * hRef >= 0 ? wRef : -wRef;
+                WriteFrame(o, Addr(bt, local), bt.Type, bv, wv);
             }
         }
 
@@ -215,8 +191,121 @@ internal static class BulgeSwap
             }
         }
 
-        // No penis physics anywhere on the body's skin: a skin vertex's genital-bone share goes to j_kosi, so the skin at the
-        // bulge's rim moves as the rim does (TBSE-X weights its crotch skin a little to the penis).
+        if (!StripPenisWeights(o, parts, skin, piece, span, we.Value, ie.Value, Addr, LocalBone, out string stripWhy))
+        { reason = stripWhy; return null; }
+
+        // Every other genital part of its own material goes (TBSE-X's _dwn_c meshes). Skin triangles outside the piece are
+        // never taken: a body with merged genitals (rule b) has no piece the bulge plugs and never gets here.
+        var hide = new HashSet<PolygonSelection.Key>();
+        foreach (var g in reading.Genitals.Where(g => g.Part != piece && g.Rule == "a"))
+            foreach (int t in g.Triangles)
+                hide.Add(PolygonSelection.Key.Of(g.Part.Triangles[t * 3], g.Part.Triangles[t * 3 + 1], g.Part.Triangles[t * 3 + 2]));
+        collapsed += ModelPartHider.Hide(o, parts.MeshSpans, hide);
+
+        if (SelfCheck(o, parts, piece, bulge, positions, slotOf, bodyAt) is { } failed) { reason = "self-check: " + failed; return null; }
+        return new Result(o, slotOf, collapsed);
+    }
+
+    /// <summary>
+    /// Every vertex of <paramref name="model"/> (in place, length- and index-neutral) with its genital-bone share moved to
+    /// <c>j_kosi</c>: a garment going onto a featureless body, whose cloth an author may have rigged to the penis's physics,
+    /// moves with the hips as the bulge does. A mesh whose bone table has no <c>j_kosi</c> is left as it is. How many
+    /// vertices changed.
+    /// </summary>
+    internal static int PenisWeightsToKosi(byte[] model)
+    {
+        var src = SecondSkinWriter.Parse(model);
+        var parts = ModelPartReader.Read(model);
+        var skin = ModelSkinReader.Read(model, null, null);
+        if (parts == null || skin == null) return 0;
+        int changed = 0;
+        foreach (var span in parts.MeshSpans)
+        {
+            int mo = src.MeshStart + span.Mesh * 36;
+            var decl = span.Mesh < src.Decls.Length ? src.Decls[span.Mesh] : [];
+            SecondSkinWriter.VElem? we = null, ie = null;
+            foreach (var el in decl)
+            {
+                if (el.Usage == SecondSkinWriter.UseBlendWeight) we ??= el;
+                else if (el.Usage == SecondSkinWriter.UseBlendIndices) ie ??= el;
+            }
+            if (we == null || ie == null) continue;
+            uint[] vbo = [BitConverter.ToUInt32(model, mo + 20), BitConverter.ToUInt32(model, mo + 24), BitConverter.ToUInt32(model, mo + 28)];
+            byte[] stride = [model[mo + 32], model[mo + 33], model[mo + 34]];
+            int Addr(SecondSkinWriter.VElem el, int local) => (int)(src.Vb + vbo[el.Stream]) + local * stride[el.Stream] + el.Offset;
+            ushort tbl = BitConverter.ToUInt16(model, mo + 14);
+            var table = tbl < src.BoneTables.Length ? src.BoneTables[tbl] : [];
+            int Local(string name)
+            {
+                for (int i = 0; i < table.Length; i++)
+                    if (table[i] < src.BoneNames.Length && src.BoneNames[table[i]] == name) return i;
+                return -1;
+            }
+            if (Local("j_kosi") < 0) continue;
+            for (int k = 0; k < span.Count; k++)
+            {
+                int v = span.BaseVertex + k;
+                if (v >= skin.VertexCount) break;
+                var w = new Dictionary<string, float>(StringComparer.Ordinal);
+                bool onPenis = false;
+                for (int q = 0; q < XivLiveMesh.SkinnedMesh.MaxInfluences; q++)
+                {
+                    float x = skin.BoneWeights[v * 8 + q];
+                    if (x <= 0f) continue;
+                    string b = skin.BoneNames[skin.BoneIndices[v * 8 + q]];
+                    if (GenitalParts.IsPenisBone(b)) { onPenis = true; b = "j_kosi"; }
+                    w[b] = w.GetValueOrDefault(b) + x;
+                }
+                if (!onPenis) continue;
+                if (WriteWeights(model, Addr(we.Value, k), we.Value.Type, Addr(ie.Value, k), ie.Value.Type, w, Local, out _)) changed++;
+            }
+        }
+        return changed;
+    }
+
+    /// <summary>Per bulge vertex its normal: area-weighted over the bulge's triangles, welded by position; the rim's the
+    /// body's own at its hole point, so the shading runs on across the seam.</summary>
+    private static Vector3[] Normals(Vector3[] positions, int[] tris, TbseBulge bulge, ModelParts parts, int[] bodyAt)
+    {
+        int n = positions.Length;
+        var normal = new Vector3[n];
+        var byPlace = new Dictionary<(long, long, long), List<int>>();
+        for (int i = 0; i < n; i++)
+        {
+            var p = positions[i];
+            var key = ((long)MathF.Round(p.X * 1e5f), (long)MathF.Round(p.Y * 1e5f), (long)MathF.Round(p.Z * 1e5f));
+            (byPlace.TryGetValue(key, out var l) ? l : byPlace[key] = []).Add(i);
+        }
+        var acc = new Vector3[n];
+        for (int t = 0; t + 2 < tris.Length; t += 3)
+        {
+            var a = positions[tris[t]];
+            var face = Vector3.Cross(positions[tris[t + 1]] - a, positions[tris[t + 2]] - a);
+            for (int k = 0; k < 3; k++) acc[tris[t + k]] += face;
+        }
+        foreach (var group in byPlace.Values)
+        {
+            var sum = group.Aggregate(Vector3.Zero, (s, i) => s + acc[i]);
+            foreach (int i in group) normal[i] = sum.LengthSquared() > 0 ? Vector3.Normalize(sum) : Vector3.UnitZ;
+        }
+        for (int i = 0; i < n; i++)
+            if (bulge.Data.rim[i] >= 0)
+            {
+                int v = bodyAt[bulge.Data.rim[i]];
+                var bn = new Vector3(parts.Normals[v * 3], parts.Normals[v * 3 + 1], parts.Normals[v * 3 + 2]);
+                if (bn.LengthSquared() > 1e-12f) normal[i] = Vector3.Normalize(bn);
+            }
+        return normal;
+    }
+
+    /// <summary>No penis physics anywhere on the body's skin: every skin vertex of the piece's mesh, the piece aside, has its
+    /// genital-bone share moved to <c>j_kosi</c>, so the skin at the bulge's rim moves as the rim does (TBSE-X weights its
+    /// crotch skin a little to the penis).</summary>
+    private static bool StripPenisWeights(byte[] o, ModelParts parts, XivLiveMesh.SkinnedMesh skin, ModelPart piece, MeshSpan span,
+                                          SecondSkinWriter.VElem we, SecondSkinWriter.VElem ie,
+                                          Func<SecondSkinWriter.VElem, int, int> addr, Func<string, int> localBone, out string reason)
+    {
+        reason = "";
         foreach (var part in parts.Parts.Where(p => p.Island < 0 && p.Mesh == piece.Mesh && p != piece && SecondSkinWriter.IsBodySkinMaterial(p.Material)))
             foreach (int v in part.Triangles.Distinct())
             {
@@ -233,17 +322,79 @@ internal static class BulgeSwap
                 }
                 if (!onPenis) continue;
                 int local = v - span.BaseVertex;
-                if (!WriteWeights(o, Addr(we.Value, local), we.Value.Type, Addr(ie.Value, local), ie.Value.Type, w, LocalBone, out string why))
-                { reason = why; return null; }
+                if (!WriteWeights(o, addr(we, local), we.Type, addr(ie, local), ie.Type, w, localBone, out reason)) return false;
             }
+        return true;
+    }
 
-        // Every other genital part goes: TBSE-X's _dwn_c meshes, a merged penis's triangles.
-        var hide = new HashSet<PolygonSelection.Key>();
-        foreach (var g in reading.Genitals.Where(g => g.Part != piece))
-            foreach (int t in g.Triangles)
-                hide.Add(PolygonSelection.Key.Of(g.Part.Triangles[t * 3], g.Part.Triangles[t * 3 + 1], g.Part.Triangles[t * 3 + 2]));
-        collapsed += ModelPartHider.Hide(o, parts.MeshSpans, hide);
-        return new Result(o, slotOf, collapsed);
+    /// <summary>
+    /// The written body, judged before it is used (plan featureless-bulge step 3's self-check, as path A has it); null when
+    /// it passes, else why not. It reads back with the same vertices and the bulge's triangles drawn in the piece; the
+    /// bulge's open edge is exactly the body's hole; no bulge face turned over or collapsed by the warp; and every rim vertex
+    /// carries exactly the body's weights at its hole point, so the seam moves as one in any pose.
+    /// </summary>
+    internal static string? SelfCheck(byte[] model, ModelParts before, ModelPart piece, TbseBulge bulge, Vector3[] positions,
+                                      int[] slotOf, int[] bodyAt)
+    {
+        var after = ModelPartReader.Read(model);
+        var skin = ModelSkinReader.Read(model, null, null);
+        if (after == null || skin == null) return "the written body does not read back";
+        if (after.Positions.Length != before.Positions.Length) return "the written body's vertices changed in number";
+        var drawnPiece = after.Parts.SingleOrDefault(p => p.Island < 0 && p.Mesh == piece.Mesh && p.Submesh == piece.Submesh);
+        if (drawnPiece == null) return "the genital piece is gone from the written body";
+        var tris = new List<(int, int, int)>();
+        for (int t = 0; t + 2 < drawnPiece.Triangles.Length; t += 3)
+        {
+            int a = drawnPiece.Triangles[t], b = drawnPiece.Triangles[t + 1], c = drawnPiece.Triangles[t + 2];
+            if (a != b && b != c && a != c) tris.Add((a, b, c));
+        }
+        if (tris.Count != bulge.Data.triangles.Length / 3) return $"{tris.Count} bulge triangles drawn, not {bulge.Data.triangles.Length / 3}";
+
+        // The open edge, welded by position, is the body's hole point for point.
+        (long, long, long) K(Vector3 p) => ((long)MathF.Round(p.X * 1e5f), (long)MathF.Round(p.Y * 1e5f), (long)MathF.Round(p.Z * 1e5f));
+        var use = new Dictionary<((long, long, long), (long, long, long)), int>();
+        foreach (var (a, b, c) in tris)
+            foreach (var (x, y) in new[] { (a, b), (b, c), (c, a) })
+            {
+                var kx = K(At(after, x));
+                var ky = K(At(after, y));
+                var e = kx.CompareTo(ky) < 0 ? (kx, ky) : (ky, kx);
+                use[e] = use.GetValueOrDefault(e) + 1;
+            }
+        var edge = use.Where(kv => kv.Value == 1).SelectMany(kv => new[] { kv.Key.Item1, kv.Key.Item2 }).Distinct().ToList();
+        var hole = bodyAt.Select(v => K(At(before, v))).ToHashSet();
+        if (edge.Count != hole.Count || !edge.All(hole.Contains)) return "the bulge's open edge is not the body's hole";
+
+        // No face turned over or collapsed by the warp.
+        var bt = bulge.Data.triangles;
+        for (int t = 0; t + 2 < bt.Length; t += 3)
+        {
+            var n0 = Vector3.Cross(bulge.Positions[bt[t + 1]] - bulge.Positions[bt[t]], bulge.Positions[bt[t + 2]] - bulge.Positions[bt[t]]);
+            var n1 = Vector3.Cross(positions[bt[t + 1]] - positions[bt[t]], positions[bt[t + 2]] - positions[bt[t]]);
+            if (n1.LengthSquared() < 1e-16f) return "a bulge face collapsed";
+            if (n0.LengthSquared() > 1e-16f && Vector3.Dot(n0, n1) <= 0f) return "a bulge face turned over";
+        }
+
+        // The rim carries the body's own weights at its hole point (as written, both sides read back).
+        for (int i = 0; i < slotOf.Length; i++)
+        {
+            if (bulge.Data.rim[i] < 0) continue;
+            int r = slotOf[i], b = bodyAt[bulge.Data.rim[i]];
+            float WeightOn(int v, int bone)
+            {
+                float sum = 0f;
+                for (int q = 0; q < XivLiveMesh.SkinnedMesh.MaxInfluences; q++)
+                    if (skin.BoneWeights[v * 8 + q] > 0f && skin.BoneIndices[v * 8 + q] == bone) sum += skin.BoneWeights[v * 8 + q];
+                return sum;
+            }
+            var bones = Enumerable.Range(0, XivLiveMesh.SkinnedMesh.MaxInfluences)
+                                  .SelectMany(q => new[] { (r, q), (b, q) })
+                                  .Where(x => skin.BoneWeights[x.Item1 * 8 + x.Item2] > 0f)
+                                  .Select(x => skin.BoneIndices[x.Item1 * 8 + x.Item2]).Distinct();
+            if (bones.Any(bone => MathF.Abs(WeightOn(r, bone) - WeightOn(b, bone)) > 1.5f / 255f))
+                return "a rim vertex's weights are not the body's at the seam";
+        }
+        return null;
     }
 
     /// <summary>

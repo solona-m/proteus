@@ -155,4 +155,28 @@ public class TbseSizeSetPinLocalTests(ITestOutputHelper o)
         // featureless-bulge: Stormblessed's legs onto TBSE Gen A go onto it made featureless (69 -> 36 folds through the job).
         => Check("stormblessed", SizeSetCrossSexLocalTests.Stormblessed, StormblessedRows, StormblessedFiles,
                  newlyMade: ["c0101e0633_dwn.mdl"]);
+
+    /// <summary>featureless-bulge: with the bulge switched off, the two rows it makes on purpose are today's again — every
+    /// row and file of the Stormblessed and Sheer TBSE size sets as pinned, none allowed to differ.</summary>
+    [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Stormblessed, CrossSexRefitLocalTests.Bibo,
+                   CrossSexRefitLocalTests.Tbse, CrossSexNudeLegsLocalTests.LavaBod, LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-featureless-bulge-7")]
+    [Trait("Plan", "EDGE-featureless-bulge-24")]
+    public void Stormblessed_tbse_size_set_without_the_bulge_is_unchanged()
+        => BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoBulge: true), () =>
+        {
+            Check("stormblessed, no bulge", SizeSetCrossSexLocalTests.Stormblessed, StormblessedRows, StormblessedFiles);
+            return 0;
+        });
+
+    [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Sheer, CrossSexRefitLocalTests.Bibo,
+                   CrossSexRefitLocalTests.Tbse, CrossSexNudeLegsLocalTests.LavaBod, LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-featureless-bulge-7")]
+    [Trait("Plan", "EDGE-featureless-bulge-24")]
+    public void Sheer_tbse_size_set_without_the_bulge_is_unchanged()
+        => BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoBulge: true), () =>
+        {
+            Check("sheer, no bulge", SizeSetCrossSexLocalTests.Sheer, SheerRows, SheerFiles, newlyMade: ["c0101e6010_top.mdl"]);
+            return 0;
+        });
 }

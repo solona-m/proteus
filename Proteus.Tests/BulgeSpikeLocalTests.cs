@@ -95,6 +95,7 @@ public partial class BulgeSpikeLocalTests(ITestOutputHelper output)
     [Fact]
     [Trait("Plan", "EDGE-featureless-bulge-2")]
     [Trait("Plan", "EDGE-featureless-bulge-5")]
+    [Trait("Plan", "EDGE-featureless-bulge-37")]
     public void Genital_inventory()
     {
         int read = 0;
@@ -222,7 +223,7 @@ public partial class BulgeSpikeLocalTests(ITestOutputHelper output)
     /// 1.5 mm at p95.
     /// </summary>
     [LocalDataFact(BulgeAssetLocalTests.Common64)]
-    [Trait("Plan", "AC-featureless-bulge-10")]
+    [Trait("Plan", "AC-featureless-bulge-11")]
     public void Asset_base_and_relief()
     {
         var asset = Proteus.Services.Bulge.BulgeAsset.Load(null, out var why);

@@ -799,21 +799,57 @@ internal static partial class BodyRetarget
         // than its residual; today's is then kept if it folds less, and the log says the penis was kept.
         if (!Tuned.NoBulge && swapSlot == null && pairs.Any(p => p.Featureless != null))
         {
-            var fitted = FitBulges(garment, garmentBytes, pairs, replaceSkin, log, out var fitGarment, out var fitBytes, out bool bulged);
-            if (bulged)
+            Planned Again(ModelParts g, byte[] b, IReadOnlyList<SlotPair> p, bool quiet = false)
+                => WithTuning(Tuned with { NoBulge = true }, () => Plan(g, b, p, garmentSlot: garmentSlot, pushOut: pushOut,
+                    held: held, replaceSkin: replaceSkin, acrossBodies: acrossBodies, clearBody: clearBody, cutHidden: cutHidden,
+                    keepShape: keepShape, swapSlot: swapSlot, log: quiet ? null : log, warn: quiet ? null : warn,
+                    chestSlot: chestSlot, trace: quiet ? null : trace,
+                    outfit: outfit, tuckSlot: tuckSlot, deepClear: deepClear, keepStandoff: keepStandoff,
+                    carryPiercings: carryPiercings, liftUnderbust: liftUnderbust, seeInside: seeInside,
+                    relaxSinkGuard: relaxSinkGuard, openSkin: openSkin, rebuildSwapsShapeOnly: rebuildSwapsShapeOnly,
+                    swappedSkinTags: swappedSkinTags, carryPubes: carryPubes));
+            // Never fails a refit: anything thrown on the way to the featureless refit leaves today's.
+            Planned? featureless = null;
+            System.Threading.Tasks.Task<Planned>? today = null;
+            try
             {
-                Planned Again(ModelParts g, byte[] b, IReadOnlyList<SlotPair> p)
-                    => WithTuning(Tuned with { NoBulge = true }, () => Plan(g, b, p, garmentSlot, pushOut, held, replaceSkin,
-                        acrossBodies, clearBody, cutHidden, keepShape, swapSlot, log, warn, chestSlot, trace, outfit, tuckSlot,
-                        deepClear, keepStandoff, carryPiercings, liftUnderbust, seeInside, relaxSinkGuard, openSkin,
-                        rebuildSwapsShapeOnly, swappedSkinTags, carryPubes));
-                var featureless = Again(fitGarment, fitBytes, fitted);
-                if (featureless.Report.Folded <= BulgeResidual) return featureless;
-                var plain = Again(garment, garmentBytes, pairs);
-                if (featureless.Report.Folded <= plain.Report.Folded) return featureless;
+                var fitted = FitBulges(garment, garmentBytes, pairs, replaceSkin, log, out var fitGarment, out var fitBytes,
+                                       out bool bulged, out bool garmentSkinCollapsed);
+                if (bulged)
+                {
+                    if (Tuned.BulgeFault) throw new InvalidOperationException("bulge fault (test)");
+                    // Today's refit, planned beside the featureless one for the guard below (quietly: its log is not the
+                    // refit's), so the guard costs no wall time.
+                    var tuned = Tuned;
+                    today = System.Threading.Tasks.Task.Run(() => WithTuning(tuned, () => Again(garment, garmentBytes, pairs, quiet: true)));
+                    featureless = Again(fitGarment, fitBytes, fitted);
+                    // The garment's own genital skin was collapsed, yet the rebuild kept a skin mesh of the garment's: its
+                    // collapsed triangles would show as a hole. Today's refit instead.
+                    if (garmentSkinCollapsed && featureless.Report.Swap is { Kept: > 0 })
+                    {
+                        log?.Invoke("bulge: _dwn left as it is — garment carries genitals and this refit keeps its skin");
+                        featureless = null;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                log?.Invoke($"bulge: _dwn left as it is — failed: {e.Message}");
+                featureless = null;
+            }
+            if (featureless != null)
+            {
+                // The guard compares the whole garment's folds: the bulge changes the crotch alone (cloth beyond it ends
+                // within 1 mm of today's), so a fold it adds is a fold the whole garment adds.
+                // BulgeForceGuard (tests only) counts the featureless refit as folding without end, to drive the guard.
+                int folded = Tuned.BulgeForceGuard ? int.MaxValue : featureless.Report.Folded;
+                if (folded <= BulgeResidual) return featureless;
+                var plain = today?.GetAwaiter().GetResult() ?? Again(garment, garmentBytes, pairs);
+                if (folded <= plain.Report.Folded) return featureless;
                 log?.Invoke($"bulge: _dwn penis kept: guard — featureless {featureless.Report.Folded} folds, NoBulge {plain.Report.Folded}");
                 return plain;
             }
+            return Again(garment, garmentBytes, pairs);
         }
 
         // The pairs that go in for their shape only as asked — not one ReadySmallclothes turns so below, which keeps the

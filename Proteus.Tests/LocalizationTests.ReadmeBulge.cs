@@ -12,7 +12,7 @@ public sealed partial class LocalizationTests
     /// </summary>
     [Theory]
     [MemberData(nameof(AllLocales))]
-    [Trait("Plan", "AC-featureless-bulge-10")]
+    [Trait("Plan", "AC-featureless-bulge-11")]
     public void Readme_body_size_says_the_bulge(string lang)
     {
         var lines = ReadmeText(lang).Split('\n');

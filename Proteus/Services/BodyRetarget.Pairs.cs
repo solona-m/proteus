@@ -133,6 +133,10 @@ internal static partial class BodyRetarget
                 if (!BodyCorrespondence.TryBuild(source, Uv(sourceBytes), drawn, uv, name, out var correspondence,
                                                  out string refusal, out _, uvRemap, male, targetMale))
                     return (null, "the featureless body was refused: " + refusal);
+                // A source of the same mesh would land vertex for vertex: its genitals onto bulge slots in whatever order
+                // they were written. Only a landing by uv knows where the bulge is.
+                if (correspondence is IdentityCorrespondence)
+                    return (null, "the garment's body is the same mesh as the new body: no landing onto the bulge");
                 return (plain with { Correspondence = correspondence!, Target = drawn, TargetModel = swapped.Model, Featureless = null }, "");
             }
             catch (Exception e)

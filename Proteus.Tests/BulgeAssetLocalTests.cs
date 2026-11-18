@@ -116,7 +116,7 @@ public partial class BulgeAssetLocalTests(ITestOutputHelper output)
     }
 
     [LocalDataFact(Common64)]
-    [Trait("Plan", "AC-featureless-bulge-10")]
+    [Trait("Plan", "AC-featureless-bulge-11")]
     public void Generate_footprint()
     {
         var lavaBytes = File.ReadAllBytes(RepoFile("Proteus/Resources/lava_bulge.mdl"));
@@ -198,7 +198,7 @@ public partial class BulgeAssetLocalTests(ITestOutputHelper output)
 
     /// <summary>The embedded file is the user's own copy, byte for byte.</summary>
     [LocalDataFact(LocalData.BulgeReference)]
-    [Trait("Plan", "AC-featureless-bulge-10")]
+    [Trait("Plan", "AC-featureless-bulge-11")]
     public void Embedded_asset_is_the_users_copy()
         => Assert.Equal(File.ReadAllBytes(LocalData.Path(LocalData.BulgeReference)),
                         File.ReadAllBytes(RepoFile("Proteus/Resources/lava_bulge.mdl")));

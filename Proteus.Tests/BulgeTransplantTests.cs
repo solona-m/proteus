@@ -51,8 +51,8 @@ public class BulgeTransplantTests
     }
 
     [Fact]
-    [Trait("Plan", "AC-featureless-bulge-5")]
-    [Trait("Plan", "EDGE-featureless-bulge-16")]
+    [Trait("Plan", "AC-featureless-bulge-6")]
+    [Trait("Plan", "EDGE-featureless-bulge-29")]
     public void Rim_takes_the_bodys_weights_and_no_penis_bone_remains()
     {
         var bulge = TbseBulge.Shared!;
@@ -111,7 +111,7 @@ public class BulgeTransplantTests
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-featureless-bulge-21")]
+    [Trait("Plan", "AC-featureless-bulge-9")]
     public void A_hole_a_few_millimetres_off_takes_the_bulge_warped_onto_it()
     {
         var bulge = TbseBulge.Shared!;

@@ -110,7 +110,7 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
     /// <summary>featureless-bulge: with the bulge switched off, Stormblessed's legs come out as they did before it.</summary>
     [LocalDataFact(LocalData.GameData, CrossSexNudeLegsLocalTests.StormblessedLegs, CrossSexNudeLegsLocalTests.LavaBod,
                    CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
-    [Trait("Plan", "AC-featureless-bulge-6")]
+    [Trait("Plan", "AC-featureless-bulge-7")]
     [Trait("Plan", "EDGE-featureless-bulge-24")]
     public void Stormblessed_legs_without_the_bulge_keep_todays_pin()
     {

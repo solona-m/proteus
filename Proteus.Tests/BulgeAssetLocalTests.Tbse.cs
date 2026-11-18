@@ -19,7 +19,7 @@ namespace Proteus.Tests;
 /// </summary>
 public partial class BulgeAssetLocalTests
 {
-    internal const string TbseBulgeFbx = "USERPROFILE:OneDrive/Desktop/tbse bulge.fbx";
+    internal const string TbseBulgeFbx = LocalData.TbseBulgeReference;
     internal const string GenA = LocalData.Mods + ":The Body SE/p2/step 6- smallclothes options/gen a/chara/equipment/e0000/model/c0101e0000_dwn.mdl";
 
     /// <summary>How near a point must be to a hole point to be on it (0.1 mm).</summary>
@@ -231,7 +231,7 @@ public partial class BulgeAssetLocalTests
 
     /// <summary>The embedded file's shape: see <see cref="TbseBulge"/>.</summary>
     [LocalDataFact(TbseBulgeFbx, GenA, LocalData.TbseUvMaps)]
-    [Trait("Plan", "AC-featureless-bulge-10")]
+    [Trait("Plan", "AC-featureless-bulge-11")]
     public void Generate_tbse_bulge()
     {
         var fbxPath = LocalData.Path(TbseBulgeFbx);

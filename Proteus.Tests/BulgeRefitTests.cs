@@ -17,7 +17,7 @@ public partial class BulgeRefitTests
     /// (2026-11-18, build 1482) and never re-recorded: a change here is the bulge reaching a refit it must leave alone.
     /// </summary>
     [Theory]
-    [Trait("Plan", "AC-featureless-bulge-6")]
+    [Trait("Plan", "AC-featureless-bulge-7")]
     [InlineData("women", false, false, "601EA4F93F43CE3F1531E99FC4D20EAD1280265C3A706D89906BEAB4F3FA94C6")]
     [InlineData("women", true, true, "3A97E9F56139568CACBB50919DF25E384DE9AE54A3379934F69C60B5C78CB122")]
     [InlineData("pouch", false, false, "601EA4F93F43CE3F1531E99FC4D20EAD1280265C3A706D89906BEAB4F3FA94C6")]

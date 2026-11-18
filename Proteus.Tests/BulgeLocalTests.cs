@@ -14,7 +14,7 @@ namespace Proteus.Tests;
 
 /// <summary>The featureless bulge on real files (plan featureless-bulge): garments refitted onto bodies with a penis.</summary>
 [Trait("Speed", "Slow")]
-public class BulgeLocalTests(ITestOutputHelper output)
+public partial class BulgeLocalTests(ITestOutputHelper output)
 {
     private static Vector3 At(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
 
@@ -88,9 +88,9 @@ public class BulgeLocalTests(ITestOutputHelper output)
     /// with the reason. Gen A and TBSE-X Flaccid M A must fit.
     /// </summary>
     [LocalDataFact(LocalData.Mods)]
-    [Trait("Plan", "AC-featureless-bulge-8")]
     [Trait("Plan", "AC-featureless-bulge-9")]
-    [Trait("Plan", "AC-featureless-bulge-5")]
+    [Trait("Plan", "AC-featureless-bulge-6")]
+    [Trait("Plan", "AC-featureless-bulge-10")]
     [Trait("Plan", "EDGE-featureless-bulge-39")]
     public void Tbse_family_bodies()
     {
@@ -187,17 +187,62 @@ public class BulgeLocalTests(ITestOutputHelper output)
         }
     }
 
-    /// <summary>Output skin vertices where a body's own genital piece stood proud of the bulge (any TBSE-family body).</summary>
+    /// <summary>Output skin triangles where a body's own genital piece stood proud of the bulge (any TBSE-family body).</summary>
     internal static int PenisVerticesOf(byte[] model, byte[] body)
     {
         var g = ModelPartReader.Read(body)!;
         var reading = GenitalParts.Read(g, ModelSkinReader.Read(body, null, null)!)!;
-        var penis = reading.Genitals.Where(x => x.Rule == "c").SelectMany(x => x.Part.Triangles.Distinct()).Select(v => At(g, v)).ToList();
+        var piece = reading.Genitals.Where(x => x.Rule == "c").Select(x => x.Part).ToHashSet();
+        var penis = piece.SelectMany(x => x.Triangles.Distinct()).Select(v => At(g, v)).ToList();
         var bulge = TbseBulge.Shared!.Positions;
-        var proud = penis.Where(p => bulge.Min(b => Vector3.Distance(b, p)) > 0.005f).ToList();
+        var mainSkin = g.Parts.Where(p => p.Island < 0 && !piece.Contains(p) && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                        .SelectMany(p => p.Triangles).Distinct().Select(v => At(g, v)).ToList();
+        // Proud: more than 5 mm off both the bulge's SURFACE and the rest of the skin — not the piece's rim, welded to the
+        // skin, nor a penis point the bulge's surface passes over (its vertices are a centimetre apart).
+        var bt = TbseBulge.Shared.Data.triangles;
+        float OffBulge(Vector3 p)
+        {
+            float best = float.MaxValue;
+            for (int t = 0; t + 2 < bt.Length; t += 3)
+                best = MathF.Min(best, PointTriangle(p, bulge[bt[t]], bulge[bt[t + 1]], bulge[bt[t + 2]]));
+            return best;
+        }
+        var proud = penis.Where(p => OffBulge(p) > 0.005f && mainSkin.Min(q => Vector3.Distance(q, p)) > 0.005f).ToList();
+        // Drawn skin TRIANGLES lying wholly on the penis: every corner within 1 mm of a proud penis point.
         var m = ModelPartReader.Read(model)!;
-        var drawn = m.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
-                     .SelectMany(p => p.Triangles).Distinct().Select(v => At(m, v)).ToList();
-        return drawn.Count(d => proud.Any(p => Vector3.Distance(p, d) < 0.001f));
+        bool OnPenis(int v) => proud.Any(p => Vector3.Distance(p, At(m, v)) < 0.001f);
+        int count = 0;
+        foreach (var part in m.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
+                if (a == b || b == c || a == c || !OnPenis(a) || !OnPenis(b) || !OnPenis(c)) continue;
+                count++;
+                if (LastPenisHits.Count < 3) LastPenisHits.Add(At(m, a));
+            }
+        return count;
     }
+
+    /// <summary>The distance from a point to a triangle (Ericson's closest point).</summary>
+    internal static float PointTriangle(Vector3 p, Vector3 a, Vector3 b, Vector3 c)
+    {
+        var ab = b - a; var ac = c - a; var ap = p - a;
+        float d1 = Vector3.Dot(ab, ap), d2 = Vector3.Dot(ac, ap);
+        if (d1 <= 0 && d2 <= 0) return Vector3.Distance(p, a);
+        var bp = p - b; float d3 = Vector3.Dot(ab, bp), d4 = Vector3.Dot(ac, bp);
+        if (d3 >= 0 && d4 <= d3) return Vector3.Distance(p, b);
+        float vc = d1 * d4 - d3 * d2;
+        if (vc <= 0 && d1 >= 0 && d3 <= 0) return Vector3.Distance(p, a + ab * (d1 / (d1 - d3)));
+        var cp = p - c; float d5 = Vector3.Dot(ab, cp), d6 = Vector3.Dot(ac, cp);
+        if (d6 >= 0 && d5 <= d6) return Vector3.Distance(p, c);
+        float vb = d5 * d2 - d1 * d6;
+        if (vb <= 0 && d2 >= 0 && d6 <= 0) return Vector3.Distance(p, a + ac * (d2 / (d2 - d6)));
+        float va = d3 * d6 - d5 * d4;
+        if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) return Vector3.Distance(p, b + (c - b) * ((d4 - d3) / ((d4 - d3) + (d5 - d6))));
+        float den = 1f / (va + vb + vc);
+        return Vector3.Distance(p, a + ab * (vb * den) + ac * (vc * den));
+    }
+
+    /// <summary>Where the last count found penis skin (diagnostic).</summary>
+    internal static readonly List<Vector3> LastPenisHits = [];
 }

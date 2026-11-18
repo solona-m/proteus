@@ -98,7 +98,8 @@ internal static partial class BodyRetarget
                                   bool NoRelaxSinkGuard = false, bool NoSeamWeights = false,
                                   bool NoCutOpenSkin = false, bool CutOpenSkinUnderCloth = false,
                                   bool CutOpenSkinAnyFacing = false, bool NoCutInside = false,
-                                  bool NoReshapeEnds = false, bool NoBulge = false);
+                                  bool NoReshapeEnds = false, bool NoBulge = false, bool BulgeFault = false,
+                                  bool BulgeForceGuard = false);
 
     private static readonly Tuning DefaultTuning = new();
 
