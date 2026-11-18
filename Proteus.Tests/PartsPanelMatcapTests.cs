@@ -132,6 +132,48 @@ public class PartsPanelMatcapTests
     }
 
     [Fact]
+    public void A_finished_job_keeps_one_line_in_the_panel_and_says_the_rest_in_chat()
+    {
+        var finish = Method(Wiring(), "private void Finish(MatcapJobResult r)");
+        Assert.Contains("MatcapPanelModel.Report(", finish);
+        Assert.Contains("status = headline;", finish);
+        Assert.Contains("foreach (var line in chat) Plugin.ChatGui.Print(", finish);
+    }
+
+    [Fact]
+    public void An_apply_report_is_short_names_options_and_counts_the_rest()
+    {
+        var skipped = new[]
+        {
+            "body retarget/rosaline m/chara/equipment/e0041/model/c0201e0041_top.mdl",
+            "body retarget/rosaline l/chara/equipment/e0041/model/c0201e0041_top.mdl",
+            "body retarget/rosaline coconut/chara/equipment/e0041/model/c0201e0041_top.mdl",
+        };
+        var long1 = "Matcap applied: mt_c0201e0041_top_top_mcapa49a531 on 19 model file(s).";
+        var (headline, chat) = MatcapPanelModel.Report(new MatcapPanelModel.JobReport(long1, true, 19, true, skipped, true, false, []));
+        Assert.Equal(string.Format(Strings.Matcap.ChatAppliedFmt, 19), headline);
+        Assert.DoesNotContain("mcap", headline);
+        Assert.Equal(headline, chat[0]);
+        Assert.Contains(Strings.Matcap.ChatHoles, chat);
+        Assert.DoesNotContain(Strings.Matcap.ChatEdges, chat);   // the holes line already says it
+        Assert.Contains(string.Format(Strings.Matcap.ChatSkippedFmt, "rosaline m, rosaline l, rosaline coconut"), chat);
+        Assert.DoesNotContain(chat, l => l.Contains("chara/", StringComparison.Ordinal));
+
+        var many = Enumerable.Range(0, 18).Select(i => $"size/jacket/s{i}/chara/accessory/a0111/model/c0201a0111_wrs.mdl").ToList();
+        var (_, chat2) = MatcapPanelModel.Report(new MatcapPanelModel.JobReport(long1, true, 1, false, many, true, false, ["drawn"]));
+        var skipLine = Assert.Single(chat2, l => l.Contains("s0, s1, s2, s3, s4, s5", StringComparison.Ordinal));
+        Assert.Contains(string.Format(Strings.Matcap.ChatMoreFmt, 18 - MatcapPanelModel.SkippedNamed), skipLine);
+        Assert.DoesNotContain("s6,", skipLine);
+        Assert.Contains(Strings.Matcap.ChatEdges, chat2);
+        Assert.Equal("drawn", chat2[^1]);
+
+        // Change, Undo and Forget keep their own message.
+        var (undoHead, undoChat) = MatcapPanelModel.Report(new MatcapPanelModel.JobReport("Undone.", false, 0, false, [], false, false, []));
+        Assert.Equal("Undone.", undoHead);
+        Assert.Single(undoChat);
+    }
+
+    [Fact]
     [Trait("Plan", "AC-matcaps-5")]
     public void Library_off_is_asked_before_anything_is_written()
     {

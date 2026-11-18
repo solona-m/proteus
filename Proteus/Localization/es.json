@@ -6527,10 +6527,6 @@
     "message": "Quien reciba este mod también necesita {0} ({1}), con el mismo matcap elegido. Sus texturas nunca se copian a tu mod.",
     "description": ""
   },
-  "Parts.Matcap.SiblingsSkipped.Fmt": {
-    "message": "No se aplicó a estas otras opciones de cuerpo, cuyas partes son distintas: {0}.",
-    "description": ""
-  },
   "Parts.Matcap.SkinTip": {
     "message": "La piel no puede llevar un matcap.",
     "description": ""
@@ -6805,6 +6801,26 @@
   },
   "Parts.Matcap.RowHolesWarn": {
     "message": "Algunos huecos recortados de esta pieza están dentro de los triángulos de la fila, así que mostrarán el matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Applied.Fmt": {
+    "message": "Matcap aplicado a {0} archivo(s) de modelo.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Holes": {
+    "message": "Algunos huecos transparentes de esta fila mostrarán el matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Edges": {
+    "message": "Revisa los bordes transparentes en el juego.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Skipped.Fmt": {
+    "message": "No se aplicó a {0}: sus partes son distintas.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.More.Fmt": {
+    "message": "y {0} más",
     "description": ""
   },
   "Parts.Matcap.RowStale": {

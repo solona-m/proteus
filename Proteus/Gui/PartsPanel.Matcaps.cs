@@ -85,6 +85,10 @@ public sealed partial class PartsPanel
         public bool IsChange { get; init; }
         /// <summary>An Apply: only then is the drawn file checked (Change and Forget write no model).</summary>
         public bool IsApply { get; init; }
+        /// <summary>An Apply: the model files written.</summary>
+        public int ModelCount { get; init; }
+        /// <summary>A row Apply over cut-out holes inside the row's triangles (they show the matcap).</summary>
+        public bool RowHoles { get; init; }
     }
 
     private string? MatcapImageFolder()
@@ -657,9 +661,9 @@ public sealed partial class PartsPanel
             var outcome = prepared.Ok ? MatcapWriter.Apply(root, prepared.Request!)
                                       : MatcapWriter.Outcome.Refuse(prepared.Code, prepared.Message);
             // A row matcap over cut-out holes inside the row's triangles: said with the result, since they show the matcap.
-            if (outcome.Ok && prepared.RowHoles) outcome = outcome with { Message = outcome.Message + " " + Strings.Matcap.RowHolesWarn };
             return new MatcapJobResult(root, outcome, outcome.Ok && choice.IsLibrary ? choice : null, confirmEnable,
-                                       prepared.SiblingsSkipped, prepared.Lod0Cut, prepared.AlphaTested, model.GamePath) { IsApply = true };
+                                       prepared.SiblingsSkipped, prepared.Lod0Cut, prepared.AlphaTested, model.GamePath)
+                { IsApply = true, ModelCount = prepared.Request?.Models.Count ?? 0, RowHoles = prepared.RowHoles };
         });
     }
 
@@ -760,7 +764,8 @@ public sealed partial class PartsPanel
             MatcapRecord.Write(c.Root, rec);
         }
         Finish(new MatcapJobResult(c.Root, outcome, outcome.Ok && original.IsLibrary ? original : null, confirm,
-                                   prepared?.SiblingsSkipped ?? [], prepared?.Lod0Cut ?? false, prepared?.AlphaTested ?? false, piece.GamePath) { IsApply = true });
+                                   prepared?.SiblingsSkipped ?? [], prepared?.Lod0Cut ?? false, prepared?.AlphaTested ?? false, piece.GamePath)
+            { IsApply = true, ModelCount = prepared?.Request?.Models.Count ?? 0, RowHoles = prepared?.RowHoles ?? false });
     }
 
     private void Finish(MatcapJobResult r)
@@ -777,18 +782,15 @@ public sealed partial class PartsPanel
         }
         matcapRedrawOwed = false;   // AfterModChange below reloads and redraws
 
-        var lines = new List<string> { r.Outcome.Message };
+        var extra = new List<string>();
         if (r.Select is { Library: { } lib, Option: { } option })
         {
             var sel = MatcapSelection.Select(new PenumbraMatcapAdapter(penumbra), lib, option, r.ConfirmEnable);
-            if (!sel.Ok) lines.Add(sel.Message);
-            else if (!sel.Winning && sel.WinningFile != null) lines.Add(string.Format(s.NotWinningFmt, sel.WinningFile));
+            if (!sel.Ok) extra.Add(sel.Message);
+            else if (!sel.Winning && sel.WinningFile != null) extra.Add(string.Format(s.NotWinningFmt, sel.WinningFile));
             matcapPanel.InvalidateStatus();
         }
-        if (r.Lod0Cut) lines.Add(s.Lod0Cut);
-        if (r.SiblingsSkipped.Count > 0) lines.Add(string.Format(s.SiblingsSkippedFmt, string.Join(", ", r.SiblingsSkipped)));
-        if (r.AlphaTested) lines.Add(s.AlphaWarn);
-        if (r.IsApply && r.GamePath != null && DrawnElsewhere(r.Root, r.GamePath, r.Outcome.Files) is { } drawn) lines.Add(drawn);
+        if (r.IsApply && r.GamePath != null && DrawnElsewhere(r.Root, r.GamePath, r.Outcome.Files) is { } drawn) extra.Add(drawn);
         // A face file the face overlay rewrites must be read again, not from its remembered copy (before the recomposite).
         // Only when a face model was written (Apply, Undo, Forget — a Change rewrites no model), for every face game path
         // the written files are published at (another race's path included).
@@ -805,11 +807,17 @@ public sealed partial class PartsPanel
                     compositor.ForgetFaceUpstream(red.GamePath, Path.Combine(r.Root, red.File.Replace('\\', Path.DirectorySeparatorChar)));
         }
 
-        status = string.Join("\n", lines.Where(l => l.Length > 0));
+        // The panel keeps one short line; the details go to chat, short; the log keeps the full message and file names.
+        var (headline, chat) = MatcapPanelModel.Report(new MatcapPanelModel.JobReport(r.Outcome.Message, r.IsApply, r.ModelCount, r.RowHoles,
+                                                                                      r.SiblingsSkipped, r.AlphaTested, r.Lod0Cut, extra));
+        status = headline;
         statusIsError = false;
         matcapError = null;
         ticked.Clear();
-        log.Information("[Proteus] matcap: {0}", status.Replace('\n', ' '));
+        foreach (var line in chat) Plugin.ChatGui.Print("[Proteus] " + line);
+        log.Information("[Proteus] matcap: {0}{1}{2}", r.Outcome.Message,
+            r.SiblingsSkipped.Count > 0 ? " Skipped: " + string.Join(", ", r.SiblingsSkipped) + "." : "",
+            extra.Count > 0 ? " " + string.Join(" ", extra) : "");
         AfterModChange(r.Root, r.Outcome.Files.Where(f => f.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)).ToList());
     }
 

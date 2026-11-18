@@ -6527,10 +6527,6 @@
     "message": "你分享此模组的对象也需要 {0}（{1}），并设为同一个 matcap。它的纹理绝不会被复制进你的模组。",
     "description": ""
   },
-  "Parts.Matcap.SiblingsSkipped.Fmt": {
-    "message": "以下其他体型选项的部件不同，因此未应用：{0}。",
-    "description": ""
-  },
   "Parts.Matcap.SkinTip": {
     "message": "皮肤不能使用 matcap。",
     "description": ""
@@ -6805,6 +6801,26 @@
   },
   "Parts.Matcap.RowHolesWarn": {
     "message": "此部件的部分镂空孔位于该行的三角形内，因此会露出 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Applied.Fmt": {
+    "message": "已将 matcap 应用于 {0} 个模型文件。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Holes": {
+    "message": "此行的部分透明镂空处会显示 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Edges": {
+    "message": "请在游戏中检查透明边缘。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Skipped.Fmt": {
+    "message": "未应用于 {0}：它们的部件不同。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.More.Fmt": {
+    "message": "及另外 {0} 个",
     "description": ""
   },
   "Parts.Matcap.RowStale": {

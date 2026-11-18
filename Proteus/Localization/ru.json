@@ -6527,10 +6527,6 @@
     "message": "Тем, с кем вы делитесь этим модом, тоже нужен {0} ({1}) с тем же мэткапом. Его текстуры никогда не копируются в ваш мод.",
     "description": ""
   },
-  "Parts.Matcap.SiblingsSkipped.Fmt": {
-    "message": "Не применено к этим другим вариантам тела, где части отличаются: {0}.",
-    "description": ""
-  },
   "Parts.Matcap.SkinTip": {
     "message": "На кожу нельзя поставить мэткап.",
     "description": ""
@@ -6805,6 +6801,26 @@
   },
   "Parts.Matcap.RowHolesWarn": {
     "message": "Некоторые вырезанные отверстия этой части лежат внутри треугольников строки, поэтому в них будет виден мэткап.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Applied.Fmt": {
+    "message": "Мэткап применён к файлам моделей: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Holes": {
+    "message": "В некоторых прозрачных отверстиях этой строки будет виден мэткап.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Edges": {
+    "message": "Проверьте прозрачные края в игре.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Skipped.Fmt": {
+    "message": "Не применено к {0}: их части отличаются.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.More.Fmt": {
+    "message": "и ещё {0}",
     "description": ""
   },
   "Parts.Matcap.RowStale": {

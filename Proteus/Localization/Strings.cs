@@ -216,10 +216,6 @@ public sealed class MatcapStrings
     public readonly string Lod0Cut = ProteusLoc.Localize("Parts.Matcap.Lod0Cut",
         "The model was cut to its nearest level of detail, so the matcap shows at every distance.");
 
-    /// <summary>{0} the files that did not line up.</summary>
-    public readonly string SiblingsSkippedFmt = ProteusLoc.Localize("Parts.Matcap.SiblingsSkipped.Fmt",
-        "Not applied to these other body options, whose parts differ: {0}.");
-
     /// <summary>{0} the file Penumbra draws instead.</summary>
     public readonly string NotWinningFmt = ProteusLoc.Localize("Parts.Matcap.NotWinning.Fmt",
         "Another mod's texture is drawn on this slot instead ({0}). Raise the library's priority in Penumbra.");
@@ -259,6 +255,15 @@ public sealed class MatcapStrings
         "This material has colours set in Proteus. The matcapped row's pixels draw from a copy of the material and won't follow them.");
     public readonly string RowHolesWarn = ProteusLoc.Localize("Parts.Matcap.RowHolesWarn",
         "Some cut-out holes in this part sit inside the row's triangles, so they will show the matcap.");
+    // ── a finished job, said in chat ──
+    /// <summary>{0} the number of model files written.</summary>
+    public readonly string ChatAppliedFmt = ProteusLoc.Localize("Parts.Matcap.Chat.Applied.Fmt", "Matcap applied to {0} model file(s).");
+    public readonly string ChatHoles = ProteusLoc.Localize("Parts.Matcap.Chat.Holes", "Some see-through holes on this row will show the matcap.");
+    public readonly string ChatEdges = ProteusLoc.Localize("Parts.Matcap.Chat.Edges", "Check see-through edges in game.");
+    /// <summary>{0} the options left out.</summary>
+    public readonly string ChatSkippedFmt = ProteusLoc.Localize("Parts.Matcap.Chat.Skipped.Fmt", "Not applied to {0}: their parts differ.");
+    /// <summary>{0} how many more options were left out.</summary>
+    public readonly string ChatMoreFmt = ProteusLoc.Localize("Parts.Matcap.Chat.More.Fmt", "and {0} more");
     public readonly string RowStale = ProteusLoc.Localize("Parts.Matcap.RowStale",
         "The author's material changed since this row matcap was made. Undo it and apply it again.");
     public readonly string RowOneMaterial = ProteusLoc.Localize("Matcap.Refused.RowOneMaterial",

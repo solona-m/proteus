@@ -6527,10 +6527,6 @@
     "message": "この Mod を共有する相手にも、同じマットキャップに設定した {0}（{1}）が必要です。そのテクスチャがあなたの Mod にコピーされることはありません。",
     "description": ""
   },
-  "Parts.Matcap.SiblingsSkipped.Fmt": {
-    "message": "パーツが異なるため、次のほかの体型オプションには適用していません: {0}。",
-    "description": ""
-  },
   "Parts.Matcap.SkinTip": {
     "message": "肌にはマットキャップを付けられません。",
     "description": ""
@@ -6805,6 +6801,26 @@
   },
   "Parts.Matcap.RowHolesWarn": {
     "message": "このパーツの切り抜き穴の一部が行の三角形の中にあるため、そこにマットキャップが見えます。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Applied.Fmt": {
+    "message": "{0} 個のモデルファイルにマットキャップを適用しました。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Holes": {
+    "message": "この行の透けた穴の一部にはマットキャップが見えます。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Edges": {
+    "message": "透ける縁をゲーム内で確認してください。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Skipped.Fmt": {
+    "message": "{0} には適用していません: パーツが異なります。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.More.Fmt": {
+    "message": "ほか {0} 件",
     "description": ""
   },
   "Parts.Matcap.RowStale": {

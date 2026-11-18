@@ -114,6 +114,25 @@ public class MatcapRowUnitTests
     }
 
     [Fact]
+    public void Garbage_uvs_near_float_max_finish_and_cover_the_whole_texture()
+    {
+        // Farfalla's wrist piece carries hidden triangles with UVs at ±3.4e38: the texel span overflowed and the scan never
+        // ended (Apply and the click preview hung). Now a footprint that wide is the whole texture, scanned once.
+        var big = 3.4028233E+38f;
+        var garbage = Tri(0.5f, -big, 0.5f, 0.9f, big, 0.9f);
+        var none = Bake((_, _) => false, zero: false, threshold: 0.5f, w: 2048, h: 2048);
+        var corner = Bake((x, y) => x == 2047 && y == 0, w: 2048, h: 2048);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        Assert.True(MatcapRowCut.Touches(garbage, [corner]));
+        Assert.False(MatcapRowCut.HoleInside(garbage, [none]));
+        Assert.True(watch.ElapsedMilliseconds < 5000, $"took {watch.ElapsedMilliseconds} ms");
+        // Far from the origin but a narrow span: one wrapped texel column, not a scan from long.MinValue.
+        var far = Tri(1e20f, 0.1f, 1e20f, 0.2f, 1e20f, 0.15f);
+        Assert.False(MatcapRowCut.Touches(far, [Bake((_, y) => y == 15)]));
+        Assert.True(MatcapRowCut.Touches(far, [Bake((_, y) => y == 2)]));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-matcap-row-40")]
     public void Union_mask_keeps_triangles_whose_row_is_only_in_another_options_index()
     {
