@@ -54,6 +54,7 @@ public sealed class EquinoxRun : IDisposable
 }
 
 [Trait("Speed", "Slow")]
+[Trait("Suite", "Diagnostic")] // EquinoxRun's setup measured ~129 s idle: the whole class moves (SuiteBudgetTests.MovedFixtures)
 public class EquinoxSizeSetLocalTests(ITestOutputHelper output, EquinoxRun run) : IClassFixture<EquinoxRun>
 {
     private const string Top = "chara/equipment/e0317/model/c0201e0317_top.mdl";
@@ -178,7 +179,6 @@ public class EquinoxSizeSetLocalTests(ITestOutputHelper output, EquinoxRun run) 
 
     [LocalDataFact(Data.EquinoxPack, Data.Rue, LocalData.GameData, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-equinox-legs-slits-9")]
-    [Trait("Suite", "Diagnostic")]
     public void Equinox_without_made_on_sizes_its_legs_from_Bottom_Size_alone()
     {
         string copy = Data.UnpackedPack(Data.EquinoxPack);

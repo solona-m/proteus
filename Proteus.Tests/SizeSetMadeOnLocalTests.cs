@@ -202,7 +202,6 @@ public class SizeSetMadeOnLocalTests(ITestOutputHelper output, ObliqueRun obliqu
     [LocalDataFact(Data.ObliquePack, Data.Bibo, Data.Rue, LocalData.GameData, LocalData.UvMaps)]
     [Trait("Plan", "AC-size-set-made-on-4")]
     [Trait("Plan", "EDGE-size-set-made-on-8")]
-    [Trait("Suite", "Diagnostic")]
     [Trait("Speed", "Slow")]
     public void Oblique_without_made_on_gets_nothing_and_is_told_to_choose_it() // [AC-size-set-made-on-4] [EDGE-size-set-made-on-8]
     {

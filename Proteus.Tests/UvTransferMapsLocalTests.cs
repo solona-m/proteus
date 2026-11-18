@@ -19,6 +19,7 @@ public sealed class TbseBakeFixture
 
 /// <summary>The committed bibo↔TBSE maps: made from the inputs they say, and as good as the gate demands.</summary>
 [Trait("Speed", "Slow")]
+[Trait("Suite", "Diagnostic")] // TbseBakeFixture's lazy bake measured ~32 s idle: the whole class moves (SuiteBudgetTests.MovedFixtures)
 public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper output) : IClassFixture<TbseBakeFixture>
 {
     private const string Bibo = UvTransferBakeLocalTests.Bibo;
@@ -44,7 +45,6 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
 
     /// <summary>A bake that misses its gate still reports what it measured: at 256 the maps are too coarse to pass.</summary>
     [LocalDataFact(LocalData.GameData, Bibo, Tbse)]
-    [Trait("Suite", "Diagnostic")]
     public void A_gate_miss_with_a_field_still_reports_its_figures()
     {
         var r = UvTransferBakeJob.Run(UvTransferBakeLocalTests.Inputs(), 256);
@@ -84,7 +84,6 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
 
     [LocalDataFact(LocalData.GameData, Bibo, Tbse)]
     [Trait("Plan", "AC-tbse-uvmap-2")]
-    [Trait("Suite", "Diagnostic")]
     public void Landmarks_land_on_each_other() // [AC-tbse-uvmap-2]
     {
         // Nipples by how far across the skin they land; the old under-bust point (at Bibo+'s nipple height) reported
@@ -128,7 +127,6 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
     [LocalDataFact(LocalData.GameData, Bibo, Rue, Tbse, TbseX)]
     [Trait("Plan", "AC-tbse-uvmap-2")]
     [Trait("Plan", "EDGE-uvmap-nipples-14")]
-    [Trait("Suite", "Diagnostic")]
     public void Same_layout_bodies_bake_to_identity() // [AC-tbse-uvmap-2] [EDGE-uvmap-nipples-14]
     {
         const int size = 2048;   // a 4096 bound halves: p50 ≤ 4 px at 4096 is ≤ 2 px here
@@ -172,7 +170,6 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
 
     [LocalDataFact(LocalData.GameData, Bibo, Tbse, LocalData.UvMaps)]
     [Trait("Plan", "AC-tbse-uvmap-4")]
-    [Trait("Suite", "Diagnostic")]
     public void Sternum_dot_lands_on_male_vanilla_sternum() // [AC-tbse-uvmap-4]
     {
         // A dot at Bibo+'s sternum, carried into men's vanilla space (the right half of TBSE's sheet), lands where
@@ -316,7 +313,6 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
     /// </summary>
     [LocalDataFact(LocalData.GameData, Bibo, Tbse, LocalData.UvMaps)]
     [Trait("Plan", "AC-uvmap-nipples-1")]
-    [Trait("Suite", "Diagnostic")]
     public void OverlayMap_nipple_dot_lands_on_tbse_nipple() // [AC-uvmap-nipples-1]
     {
         var uv = Maps();
@@ -435,7 +431,6 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
     /// </summary>
     [LocalDataFact(LocalData.GameData, Bibo, Tbse, BiboSkin, TbseSkin)]
     [Trait("Plan", "EDGE-uvmap-nipples-23")]
-    [Trait("Suite", "Diagnostic")]
     public void Nipple_uv_matches_areola_in_skin_diffuse() // [EDGE-uvmap-nipples-23]
     {
         var loader = new TextureLoader(Substitute.For<Dalamud.Plugin.Services.IDataManager>(), Substitute.For<Dalamud.Plugin.Services.IPluginLog>());
@@ -482,7 +477,6 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
     /// </summary>
     [LocalDataFact(LocalData.GameData, Bibo, Tbse, LocalData.UvMaps)]
     [Trait("Plan", "AC-uvmap-nipples-1")]
-    [Trait("Suite", "Diagnostic")]
     public void OverlayMap_chest_profile_bibo_to_tbse() // [AC-uvmap-nipples-1] [EDGE-uvmap-nipples-24]
     {
         var uv = Maps();
@@ -588,7 +582,6 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
     /// </summary>
     [LocalDataFact(LocalData.GameData, Bibo, Tbse, LocalData.UvMaps)]
     [Trait("Plan", "AC-uvmap-nipples-9")]
-    [Trait("Suite", "Diagnostic")]
     public void RefitMap_nipple_point_lands_on_male_vanilla_nipple() // [AC-uvmap-nipples-9] [EDGE-uvmap-nipples-7]
     {
         var conv = Maps().UvConverter("bibo", UVRemapService.MaleVanillaSpace, fold: true)!;
@@ -609,7 +602,6 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
     /// <summary>Art map back, <c>tbse_to_bibo</c>: a dot on TBSE's nipple carried to bibo lands on Bibo+'s nipple.</summary>
     [LocalDataFact(LocalData.GameData, Bibo, Tbse, LocalData.UvMaps)]
     [Trait("Plan", "AC-uvmap-nipples-3")]
-    [Trait("Suite", "Diagnostic")]
     public void ArtBackMap_nipple_dot_on_tbse_lands_on_bibo_nipple() // [AC-uvmap-nipples-3]
     {
         var uv = Maps();

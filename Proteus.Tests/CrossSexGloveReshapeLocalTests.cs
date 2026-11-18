@@ -59,6 +59,7 @@ public sealed class HalonesMensSizeSet : IDisposable
 /// Chosen showed a line across the bare forearm where they did).
 /// </summary>
 [Trait("Speed", "Slow")]
+[Trait("Suite", "Diagnostic")] // HalonesMensSizeSet's setup measured ~33 s idle: the whole class moves (SuiteBudgetTests.MovedFixtures)
 public class CrossSexGloveReshapeLocalTests(HalonesMensSizeSet run, ITestOutputHelper o) : IClassFixture<HalonesMensSizeSet>
 {
     private const string GamePath = "chara/equipment/e0613/model/c0201e0613_glv.mdl";
@@ -210,7 +211,6 @@ public class CrossSexGloveReshapeLocalTests(HalonesMensSizeSet run, ITestOutputH
     [InlineData("tbse")]
     [InlineData("tbse-x")]
     [Trait("Plan", "AC-cross-sex-wrist-band-7")]
-    [Trait("Suite", "Diagnostic")]
     public void Studio_cli_and_size_set_make_one_glove(string key) // [AC-cross-sex-wrist-band-7]
         => Assert.Equal(Glove(key).Saved!.Model, run.Saved(Option(key), "_glv"));
 
@@ -220,7 +220,6 @@ public class CrossSexGloveReshapeLocalTests(HalonesMensSizeSet run, ITestOutputH
     [InlineData("tbse-x")]
     [Trait("Plan", "EDGE-cross-sex-wrist-band-18")]
     [Trait("Plan", "EDGE-cross-sex-wrist-band-20")]
-    [Trait("Suite", "Diagnostic")]
     public void Halones_swap_drops_what_the_solve_parts_and_the_arm_comes_back(string key) // [EDGE-cross-sex-wrist-band-18] [EDGE-cross-sex-wrist-band-20]
     {
         var r = Job(key);

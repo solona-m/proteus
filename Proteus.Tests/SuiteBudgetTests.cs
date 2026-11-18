@@ -46,6 +46,14 @@ public class SuiteBudgetTests
         "SizeSetBatchLocalTests.Body_mods_are_not_written",
         "SizeSetBatchLocalTests.Work_copy_conversion_matches_Penumbras",
         "SizeSetBatchLocalTests.Pack_holds_no_local_paths",
+        "SizeSetBatchLocalTests.Second_run_adds_nothing",
+        // The same kind of check in the other size-set fixture classes, so their fixtures stay paid (measured 2026-11-18).
+        "SizeSetKeepSkinLocalTests.Ticked_without_make_again_leaves_every_file",
+        "SizeSetKeepSkinLocalTests.Old_sizes_change_only_through_make_again",
+        "SizeSetMadeOnLocalTests.Second_made_on_run_adds_nothing_and_says_so",
+        "SizeSetMadeOnLocalTests.Cli_made_on_not_a_body_is_refused_and_writes_nothing",
+        "SizeSetMadeOnLocalTests.Oblique_without_made_on_gets_nothing_and_is_told_to_choose_it", // manifest byte-identical after a refused run
+        "SizeSetMadeOnSkinlessLocalTests.Second_Tutting_run_adds_nothing",
     };
 
     /// <summary>Failing tests stay in the release run so the failure stays visible. Drop an entry once it is fixed.</summary>
@@ -61,8 +69,13 @@ public class SuiteBudgetTests
 
     /// <summary>Test classes that moved whole because their class fixture's setup measured 10 s or more idle
     /// (AGENTS.md: a fixture's setup counts against every test of its class). Each carries the class-level tags.</summary>
+    // Kept paid because their classes hold exempt write-behaviour tests (measured idle 2026-11-18): ThisOldThingRun ~127 s,
+    // ObliqueRun ~156 s, KeepSkinRuns ~264 s, DanceRun ~82 s.
     internal static readonly (string Class, string Fixture, double SetupSeconds)[] MovedFixtures =
     {
+        ("EquinoxSizeSetLocalTests", "EquinoxRun", 129),
+        ("CrossSexGloveReshapeLocalTests", "HalonesMensSizeSet", 33),
+        ("UvTransferMapsLocalTests", "TbseBakeFixture", 32),
     };
 
     /// <summary>The heaviest methods (slowest row ≥ 300 s in the 2026-11-18 full run); any one alone would break the budget.</summary>
