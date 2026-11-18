@@ -98,6 +98,19 @@ internal sealed class HairPortRecord
                 (e.Materials ?? []).ToDictionary(p => p.Key, p => Rel(p.Value)), StringComparer.OrdinalIgnoreCase);
         }
 
+        // The record ships inside the mod, so its author controls it — and the manifest too, so agreeing with it proves
+        // nothing: a port whose file (or source file) is outside the mod is dropped, as is a material redirect to one
+        // outside it (ModPath). Before the owner filter, so a remake never writes where such an entry says.
+        int dropped = record.Ports.RemoveAll(e => e == null || !ModPath.TryResolve(modRoot, e.File, out _)
+                                                  || e.SourceFile.Length > 0 && !ModPath.TryResolve(modRoot, e.SourceFile, out _));
+        foreach (var e in record.Ports)
+            foreach (var key in e.Materials.Where(m => !ModPath.TryResolve(modRoot, m.Value, out _)).Select(m => m.Key).ToList())
+            {
+                e.Materials.Remove(key);
+                dropped++;
+            }
+        ModPath.NoteDropped("hair ports", modRoot, dropped);
+
         if (record.Ports.Count > 0 && HairPortPlan.ReadOwners(modRoot) is { } owners)
             record.Ports.RemoveAll(e => !owners.Any(o => HairPortPlan.Same(o, e.Owner)
                                                        && HairPortPlan.FileFor(o, e.TargetGamePath) is { } rel

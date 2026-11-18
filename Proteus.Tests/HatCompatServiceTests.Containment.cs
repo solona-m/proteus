@@ -48,7 +48,7 @@ public partial class HatCompatServiceTests
         File.WriteAllBytes(dest, model);
     }
 
-    /// [AC-mod-path-containment-1][EDGE-mod-path-containment-1][EDGE-mod-path-containment-2] Sink.
+    // [AC-mod-path-containment-1][EDGE-mod-path-containment-1][EDGE-mod-path-containment-2] Sink.
     [Theory, MemberData(nameof(HostileForms))]
     public void RevertWithHostileRecordLeavesTheVictimUntouched(string form)
     {
@@ -65,7 +65,7 @@ public partial class HatCompatServiceTests
         kit.AssertVictimUntouched();
     }
 
-    /// [AC-mod-path-containment-2][EDGE-mod-path-containment-13]
+    // [AC-mod-path-containment-2][EDGE-mod-path-containment-13]
     [Fact]
     public void ReadRecordDropsHostileEntries()
     {
@@ -81,7 +81,7 @@ public partial class HatCompatServiceTests
         Assert.Equal([ModelRel], record.Versions.Keys.ToList());
     }
 
-    /// [AC-mod-path-containment-3][EDGE-mod-path-containment-12] Sink.
+    // [AC-mod-path-containment-3][EDGE-mod-path-containment-12] Sink.
     [Fact]
     public void MixedRecordRestoresTheLegitimateFile()
     {
@@ -110,7 +110,7 @@ public partial class HatCompatServiceTests
         kit.AssertVictimUntouched();
     }
 
-    /// [EDGE-mod-path-containment-11]
+    // [EDGE-mod-path-containment-11]
     [Fact]
     public void RecordWithOnlyHostileEntriesSaysNothingToUndo()
     {
@@ -126,7 +126,7 @@ public partial class HatCompatServiceTests
         kit.AssertVictimUntouched();
     }
 
-    /// [AC-mod-path-containment-1] Sink.
+    // [AC-mod-path-containment-1] Sink.
     [Theory, MemberData(nameof(HostileForms))]
     public void ForgetWithHostileRelLeavesTheVictimUntouched(string form)
     {
@@ -140,7 +140,7 @@ public partial class HatCompatServiceTests
         kit.AssertVictimUntouched();
     }
 
-    /// [AC-mod-path-containment-4][EDGE-mod-path-containment-20] Sink: what the watcher does with a worn hairstyle's
+    // [AC-mod-path-containment-4][EDGE-mod-path-containment-20] Sink: what the watcher does with a worn hairstyle's
     /// siblings — list them, then fit each one.
     [Theory, MemberData(nameof(HostileForms))]
     public void SiblingFilesIgnoresHostileRedirects(string form)
@@ -164,7 +164,7 @@ public partial class HatCompatServiceTests
         kit.AssertVictimUntouched();
     }
 
-    /// [AC-mod-path-containment-4] Sink: switching "replace authored hat compat" off walks EVERY mod's record.
+    // [AC-mod-path-containment-4] Sink: switching "replace authored hat compat" off walks EVERY mod's record.
     [Theory, MemberData(nameof(HostileForms))]
     public void RestoreReplacedSkipsHostileReplacedEntries(string form)
     {
@@ -186,7 +186,7 @@ public partial class HatCompatServiceTests
         kit.AssertVictimUntouched();
     }
 
-    /// [AC-mod-path-containment-6][EDGE-mod-path-containment-25] Sink: a caller handing Apply a hostile rel directly.
+    // [AC-mod-path-containment-6][EDGE-mod-path-containment-25] Sink: a caller handing Apply a hostile rel directly.
     [Theory, MemberData(nameof(HostileForms))]
     public void ApplyWithHostileProposalRelFailsAndWritesNothing(string form)
     {

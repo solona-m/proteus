@@ -234,12 +234,21 @@ internal sealed class MeshToggleService
 
         var patched = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         var skipped = new List<string>();
+        // Where each patched file and its backup go, resolved here — before anything is written — so the write loop never
+        // builds a path of its own. A redirect is the author's to write: one outside the mod is skipped (ModPath).
+        var at = new Dictionary<string, (string File, string Backup)>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var rel in targets)
         {
+            if (!ModPath.TryResolve(modRoot, rel, out var file) || !ModPath.TryBackup(modRoot, BackupSubdir, rel, out var backup))
+            {
+                skipped.Add(rel);
+                continue;
+            }
             byte[] bytes;
-            try { bytes = File.ReadAllBytes(Path.Combine(modRoot, Native(rel))); }
+            try { bytes = File.ReadAllBytes(file); }
             catch { skipped.Add(rel); continue; }
+            at[rel] = (file, backup);
 
             // Only a file that agrees about the CLAIMED geometry can take the same edit: plans address by number.
             var theirs = rel.Equals(model.File, StringComparison.OrdinalIgnoreCase)
@@ -275,8 +284,8 @@ internal sealed class MeshToggleService
 
             foreach (var (rel, bytes) in patched)
             {
-                Backup(modRoot, rel);
-                PenumbraModMeta.AtomicWrite(Path.Combine(modRoot, Native(rel)), bytes);
+                Backup(at[rel].File, at[rel].Backup);
+                PenumbraModMeta.AtomicWrite(at[rel].File, bytes);
                 if (!item.Files.Contains(rel, StringComparer.OrdinalIgnoreCase)) item.Files.Add(rel);
             }
 
@@ -529,13 +538,20 @@ internal sealed class MeshToggleService
         var skipped = new List<string>();
         var restoredFrom = new List<string>();
         var restored = new List<string>();
-        foreach (var rel in record.Items.SelectMany(i => i.Files).Distinct(StringComparer.OrdinalIgnoreCase))
+        var rels = record.Items.SelectMany(i => i.Files).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        // Every target and backup classified before the first write: one outside the mod is skipped, never touched.
+        var at = new Dictionary<string, (string File, string Backup)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rel in rels)
+            if (ModPath.TryResolve(modRoot, rel, out var file) && ModPath.TryBackup(modRoot, BackupSubdir, rel, out var bak))
+                at[rel] = (file, bak);
+        foreach (var rel in rels)
         {
-            var backup = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, BackupSubdir, Native(rel));
+            if (!at.TryGetValue(rel, out var where)) { skipped.Add(rel); continue; }
+            var backup = where.Backup;
             if (!File.Exists(backup)) { skipped.Add(rel); continue; }
             try
             {
-                PenumbraModMeta.AtomicWrite(Path.Combine(modRoot, Native(rel)), File.ReadAllBytes(backup));
+                PenumbraModMeta.AtomicWrite(where.File, File.ReadAllBytes(backup));
                 restoredFrom.Add(backup);
                 restored.Add(rel);
             }
@@ -621,6 +637,11 @@ internal sealed class MeshToggleService
 
             // A pre-per-item record must still be undoable and RECOGNISED, so a later write updates its group.
             record.MigrateLegacy();
+            // The record ships inside the mod, so its author controls it: a file outside the mod is dropped (ModPath).
+            int dropped = 0;
+            foreach (var item in record.Items)
+                dropped += (item.Files ??= []).RemoveAll(f => !ModPath.TryResolve(modRoot, f, out _));
+            ModPath.NoteDropped("part switches", modRoot, dropped);
             BackfillIdentity(modRoot, record);
             return record;
         }
@@ -659,15 +680,14 @@ internal sealed class MeshToggleService
     /// <summary>
     /// Copy a model aside before its first edit only, so revert always restores the author's file.
     /// </summary>
-    private static void Backup(string modRoot, string rel)
+    /// <param name="file">The model, resolved inside the mod (<see cref="ModPath"/>).</param>
+    /// <param name="backup">Its backup, resolved inside <see cref="BackupSubdir"/>.</param>
+    private static void Backup(string file, string backup)
     {
-        var backup = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, BackupSubdir, Native(rel));
         if (File.Exists(backup)) return;
         Directory.CreateDirectory(Path.GetDirectoryName(backup)!);
-        File.Copy(Path.Combine(modRoot, Native(rel)), backup);
+        File.Copy(file, backup);
     }
-
-    private static string Native(string rel) => rel.Replace('/', Path.DirectorySeparatorChar);
 
     /// <summary>
     /// The letter an attribute name carries for this slot: <c>atr_<b>t</b>v_a</c> on a top, <c>atr_<b>d</b>v_a</c>

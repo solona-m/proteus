@@ -138,6 +138,23 @@ public partial class BodyRetargetWriterTests
         kit.AssertVictimUntouched();
     }
 
+    // [EDGE-mod-path-containment-4][EDGE-mod-path-containment-17] Pure: the drive and climb forms only here, never against
+    // a real folder.
+    [Theory]
+    [InlineData("Body Retarget/C:/x/a.mdl", null)]
+    [InlineData("Body Retarget/../a/b.mdl", null)]
+    [InlineData("Body Retarget/./a/b.mdl", null)]
+    [InlineData(@"Body Retarget\Neolithe L\chara\a.mdl", "Neolithe L")]
+    public void FolderOfRejectsUnsafeSegments(string file, string? expected)
+    {
+        var options = new List<PenumbraModMeta.FileOption>
+        {
+            new("L", new Dictionary<string, string> { [GamePath] = file }),
+        };
+
+        Assert.Equal(expected, BodyRetargetWriter.FolderOf(options, "L"));
+    }
+
     // [AC-mod-path-containment-6][EDGE-mod-path-containment-3]
     [Theory]
     [InlineData("Body Retarget/../../x")]
