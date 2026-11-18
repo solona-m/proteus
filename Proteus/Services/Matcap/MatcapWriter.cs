@@ -67,6 +67,9 @@ internal static class MatcapWriter
         /// <summary>PROTOTYPE (row matcap): the baked, row-cut normal the material reads, and where. Preview only.</summary>
         public string? RowNormalTemp { get; init; }
         public string? RowNormalGamePath { get; init; }
+        /// <summary>PROTOTYPE: the part's own material, repointed at the cut normal, and the paths it replaces.</summary>
+        public byte[]? CutMaterial { get; init; }
+        public IReadOnlyList<string> CutMaterialGamePaths { get; init; } = [];
     }
 
     /// <summary>PROTOTYPE: a row matcap is shown by the click preview only; Apply refuses it.</summary>

@@ -33,8 +33,8 @@ internal static class MatcapStudio
     public sealed record Environment(Func<string, byte[]?> ReadGameFile, TextureLoader Loader, bool Compress, string TempDir,
                                      int? WornFolder = null, int RowOnly = 0, SubRowPick RowSub = SubRowPick.Both);
 
-    /// <summary>PROTOTYPE: how far the row overlay sits above the surface it copies, in metres.</summary>
-    internal const float RowOverlayPush = 0.0006f;
+    /// <summary>PROTOTYPE: how far the row matcap copy sits UNDER the surface it copies, in metres (negative: inward).</summary>
+    internal const float RowOverlayPush = -0.0006f;
 
     /// <summary>PROTOTYPE: the overlay's alpha cut (its baked normal alpha is 0 or 255).</summary>
     internal const float RowAlphaThreshold = 0.5f;
@@ -296,40 +296,40 @@ internal static class MatcapStudio
             if (gamePaths.Count == 0)
                 return Prepared.Refuse("no-name", ProteusLoc.Localize("Matcap.Refused.NoName", "Proteus could not tell where the game reads this model's materials."));
 
-            // PROTOTYPE: the overlay reads a normal of its own whose alpha keeps only the chosen row's texels.
+            // PROTOTYPE: characterreflection never cuts in its colour passes (measured: its G-buffer shaders have no
+            // discard), so the matcap copy sits UNDER the part, whole, and the part's OWN material is cut instead:
+            // a copy of it whose normal has blue 0 on the chosen row — character.shpk's G-buffer pass discards where
+            // normal blue < g_AlphaThreshold — so the matcap shows through exactly there.
             string? rowTemp = null, rowPath = null;
+            byte[]? cutMtrl = null;
+            IReadOnlyList<string> cutPaths = [];
             if (env.RowOnly > 0)
             {
-                if (sh == null || string.IsNullOrEmpty(sh.TextureOf(MatcapMaterial.SamplerNormal)))
+                var srcNormal = sh?.TextureOf(MatcapMaterial.SamplerNormal);
+                if (sourceMtrl == null || sh == null || string.IsNullOrEmpty(srcNormal))
                     return Prepared.Refuse("row-no-normal", "Row matcap (prototype): the part's material has no normal map to cut by.");
-                rowTemp = Path.Combine(env.TempDir, $"rownormal_{stamp}_{si}.tex");
+                rowTemp = Path.Combine(env.TempDir, $"rowcut_{stamp}_{si}.tex");
                 if (BakeRowNormal(modRoot, redirects, env, sh, rowTemp) is { } why)
                     return Prepared.Refuse("row-bake", "Row matcap (prototype): " + why);
-                rowPath = $"{MatcapWriter.TextureFolder(token)}/{MatcapWriter.StemOf(name).ToLowerInvariant()}_row.tex";
-                normal = rowPath;
-                alpha = RowAlphaThreshold;
+                rowPath = $"{MatcapWriter.TextureFolder(token)}/{MatcapWriter.StemOf(name).ToLowerInvariant()}_cut.tex";
+                int ni = sh.Textures.ToList().FindIndex(t => string.Equals(t, srcNormal, StringComparison.OrdinalIgnoreCase));
+                cutMtrl = ni < 0 ? null : MatcapMaterial.RetargetByIndex(sourceMtrl, new Dictionary<int, string> { [ni] = rowPath });
+                if (cutMtrl == null) return Prepared.Refuse("row-cut", "Row matcap (prototype): the part's material could not be repointed at the cut normal.");
+                if (!(sh.AlphaThreshold is > 0f))
+                    cutMtrl = TextureLoader.EnsureConstantValues(cutMtrl, MatcapMaterial.ConstAlphaThreshold, RowAlphaThreshold).data;
+                IEnumerable<int>? readFolders = target.Kind == MatcapPlan.Kind.Gear ? folders ?? [env.WornFolder ?? 1] : null;
+                cutPaths = MatcapPlan.MaterialGamePaths(target, sources[si], [], readFolders);
             }
 
             byte[] mtrl;
-            try
-            {
-                mtrl = MatcapMaterial.Build(template, normal!, MatcapWriter.MaskGamePath(token), matcapPath, alpha);
-                if (env.RowOnly > 0)
-                {
-                    mtrl = TextureLoader.EnsureConstantValues(mtrl, MatcapMaterial.ConstAlphaThreshold, RowAlphaThreshold).data;
-                    // The cut itself: the depth passes discard where normal blue < this (our bake zeroes blue off the row).
-                    var (withCut, ok) = TextureLoader.EnsureConstantValues(mtrl, MatcapMaterial.ConstShadowAlphaThreshold, RowAlphaThreshold);
-                    if (!ok) return Prepared.Refuse("row-cut", "Row matcap (prototype): the cut-out threshold could not be added to the material.");
-                    mtrl = withCut;
-                }
-            }
+            try { mtrl = MatcapMaterial.Build(template, normal!, MatcapWriter.MaskGamePath(token), matcapPath, alpha); }
             catch (InvalidDataException ex)
             {
                 return Prepared.Refuse("no-template", string.Format(ProteusLoc.Localize("Matcap.Refused.Failed.Fmt", "The matcap could not be written ({0}). Nothing was changed."), ex.Message));
             }
             plans.Add(new MatcapWriter.MaterialPlan(name, mtrl, gamePaths, normal!, alpha, source, texTemp,
                                                     meshesOf[name].Where(x => okModels.Any(m => m.Rel == x.Rel)).ToList())
-                      { RowNormalTemp = rowTemp, RowNormalGamePath = rowPath });
+                      { RowNormalTemp = rowTemp, RowNormalGamePath = rowPath, CutMaterial = cutMtrl, CutMaterialGamePaths = cutPaths });
         }
 
         var req = new MatcapWriter.ApplyRequest(token, plans, edits, maskTemp, flatTemp);
@@ -337,9 +337,9 @@ internal static class MatcapStudio
     }
 
     /// <summary>
-    /// PROTOTYPE: bake the overlay's normal — the part's own normal map, at the larger of its and the index map's size,
-    /// with alpha 255 (and blue as it was) where the texel uses row <see cref="Environment.RowOnly"/>, and alpha and blue 0
-    /// elsewhere, so the cut holds whichever channel the reflection shader reads it from. The row comes from the index map
+    /// PROTOTYPE: bake the PART's cut normal — its own normal map, at the larger of its and the index map's size, with
+    /// blue (character.shpk's opacity) 0 where the texel uses row <see cref="Environment.RowOnly"/> and untouched
+    /// elsewhere, so the part opens there onto the matcap copy beneath it. The row comes from the index map
     /// (<c>_id</c>: red = row pair, green = sub-row A at 255), or for a material without one from the normal's alpha.
     /// Null when written, else why not.
     /// </summary>
@@ -386,8 +386,8 @@ internal static class MatcapStudio
                          && (env.RowSub == SubRowPick.Both || (ix.Rgba[q + 1] > 127) == (env.RowSub == SubRowPick.A));
                 }
                 else on = ContentIndexTexture.RowOf(normal[p + 3]) == row;
-                if (on) { outp[p + 3] = 255; kept++; }
-                else { outp[p + 2] = 0; outp[p + 3] = 0; }
+                // The PART's cut normal: the chosen row's texels lose their opacity (blue), so the matcap beneath shows.
+                if (on) { outp[p + 2] = 0; kept++; }
             }
         if (kept == 0) return $"no texel of this part uses row {row}{(env.RowSub == SubRowPick.Both ? "" : env.RowSub.ToString())}";
         return env.Loader.WriteTex(outp, w, h, outPath) ? null : "the cut normal could not be written";

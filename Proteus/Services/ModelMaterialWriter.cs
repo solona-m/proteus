@@ -69,9 +69,9 @@ internal static class ModelMaterialWriter
     /// The parts are <see cref="ModelPartReader.Read"/>'s, read from THIS <paramref name="mdl"/>.
     /// </summary>
     /// <exception cref="Refused">The model or the parts can't take it; nothing was changed.</exception>
-    /// <param name="overlayPush">PROTOTYPE (row matcaps): above 0, the parts are COPIED rather than moved — the source
+    /// <param name="overlayPush">PROTOTYPE (row matcaps): not 0, the parts are COPIED rather than moved — the source
     /// keeps every triangle, every touched mesh gets a copy (none is rebound whole), and the copy's vertices are pushed
-    /// out along their normals by this many metres so it draws over the original without fighting it.</param>
+    /// along their normals by this many metres (negative: inward, under the original) so the two never fight.</param>
     public static Result MoveToMaterial(byte[] mdl, IReadOnlyList<ModelPart> parts, string materialName, float overlayPush = 0f)
     {
         if (parts.Count == 0) throw new Refused(CodeUnknownPart, "no parts were chosen");
@@ -128,7 +128,7 @@ internal static class ModelMaterialWriter
     private static (byte[] Model, List<(int Source, int Drawn)> Meshes) Emit(
         byte[] s, SecondSkinWriter.Source src, IReadOnlyList<ModelPart> parts, string materialName, float overlayPush = 0f)
     {
-        bool overlay = overlayPush > 0f;
+        bool overlay = overlayPush != 0f;   // negative: the copy sits under the surface
         int mh = src.Mh;
         bool v6 = U32(s, 0) >= SecondSkinWriter.MdlVersionV6;
         ushort meshCount = U16(s, mh + 4), attrCount = U16(s, mh + 6), submeshCount = U16(s, mh + 8);

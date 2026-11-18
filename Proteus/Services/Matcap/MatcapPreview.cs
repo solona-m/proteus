@@ -88,6 +88,8 @@ internal static class MatcapPreview
                     files.Add(new([tex.GamePath], ".tex", File.ReadAllBytes(m.ImageTexTemp)));
                 if (m.RowNormalTemp != null && m.RowNormalGamePath != null)
                     files.Add(new([m.RowNormalGamePath], ".tex", File.ReadAllBytes(m.RowNormalTemp)));
+                if (m.CutMaterial != null && m.CutMaterialGamePaths.Count > 0)
+                    files.Add(new(m.CutMaterialGamePaths, ".mtrl", m.CutMaterial));
             }
             files.Add(new([MatcapWriter.MaskGamePath(req.Token)], ".tex", File.ReadAllBytes(req.MaskTemp)));
             if (req.FlatNormalTemp != null)
