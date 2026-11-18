@@ -211,7 +211,9 @@ public class SuiteBudgetTests
         var sets = new[] { plain, slow, slowDiag, diag };
 
         Assert.Equal(new[] { true, true, false, false }, sets.Select(s => Matches(Filter(full), s)).ToArray());
-        Assert.Equal(new[] { true, false, false, false }, sets.Select(s => Matches(Filter(quick), s)).ToArray());
+        // The quick filter only knows Slow: a Diagnostic test without Slow (the last set) would run in it. That leak is
+        // why Every_diagnostic_test_is_also_slow forbids that tagging; every real Diagnostic test is the third set.
+        Assert.Equal(new[] { true, false, false, true }, sets.Select(s => Matches(Filter(quick), s)).ToArray());
         Assert.Equal(new[] { false, false, true, true }, sets.Select(s => Matches(Filter(diagnostic), s)).ToArray());
 
         // Iterating on one Diagnostic test: the usual targeted filter skips it; adding the category selects it.
