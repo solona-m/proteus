@@ -276,7 +276,7 @@ public sealed class HarnessAutoRefitNowTests : IDisposable
         };
         var (_, body) = await Trigger();
         string id = body.GetProperty("job").GetString()!;
-        while (fx.Game.RunNowAsked.Count == 0) await Task.Delay(10);
+        await Asked();
         var (_, putBack) = await fx.Post("/actions/put-back", "{}");
         Assert.Equal("skipped-running", putBack.GetProperty("autoRefit").GetProperty("preference").GetString());
         fx.Game.Activity = default;
@@ -300,7 +300,7 @@ public sealed class HarnessAutoRefitNowTests : IDisposable
         };
         var (_, body) = await Trigger();
         string id = body.GetProperty("job").GetString()!;
-        while (fx.Game.RunNowAsked.Count == 0) await Task.Delay(10);
+        await Asked();
         fx.Jobs.CancelRunning();
         var job = await fx.WaitJob(id);
         Assert.Equal("cancelled", Code(job));
@@ -311,5 +311,17 @@ public sealed class HarnessAutoRefitNowTests : IDisposable
         Assert.Equal("recorded-before-finish", putBack.GetProperty("autoRefit").GetProperty("preference").GetString());
         Assert.True(File.Exists(record[0]), "the Before is kept on disk");
         Assert.Equal(0, fx.Game.PreferenceRestores);
+    }
+
+    /// <summary>Until the job has asked for the refit, at most 5 s: a job that died early fails the test, not hangs it.</summary>
+    private async Task Asked()
+    {
+        var until = DateTime.UtcNow.AddSeconds(5);
+        while (true)
+        {
+            lock (fx.Game.RunNowAsked) if (fx.Game.RunNowAsked.Count > 0) return;
+            if (DateTime.UtcNow > until) throw new TimeoutException("the job never asked for the refit");
+            await Task.Delay(10);
+        }
     }
 }

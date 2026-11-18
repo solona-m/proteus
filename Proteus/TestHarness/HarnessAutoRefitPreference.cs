@@ -91,6 +91,17 @@ internal sealed class HarnessAutoRefitPreference(IHarnessGame game, IPluginLog? 
         }
     }
 
+    /// <summary>The job ended without saying how (it threw): treated as not finished. A no-op when it already ended.</summary>
+    public void EndIfRunning()
+    {
+        lock (gate)
+        {
+            if (before == null || !running) return;
+            running = false;
+            unfinished = true;
+        }
+    }
+
     /// <summary>The job failed before its refit could write anything: an earlier job's record stands as it was; a first
     /// job's record has nothing to put back.</summary>
     public void Drop()

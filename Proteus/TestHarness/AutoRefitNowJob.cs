@@ -30,6 +30,21 @@ internal static class AutoRefitNowJob
 
     internal static async Task Run(HarnessJobs jobs, HarnessJob job, Args args)
     {
+        try
+        {
+            await RunSteps(jobs, job, args).ConfigureAwait(false);
+        }
+        finally
+        {
+            // A job that threw before it could say how it ended: what its refits left is not known, so the preference's
+            // Before stays recorded (on disk, logged at put-back) rather than the record waiting on a job that is gone.
+            // A no-op after End or Drop.
+            args.Changes.AutoRefitPreference.EndIfRunning();
+        }
+    }
+
+    private static async Task RunSteps(HarnessJobs jobs, HarnessJob job, Args args)
+    {
         var game = jobs.Game;
         var ct = job.Cancel.Token;
 

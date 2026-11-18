@@ -165,17 +165,17 @@ internal static partial class RefitCore
         bool unread = false;
         var legs = new List<(ModelParts, XivLiveMesh.SkinnedMesh)>();
         foreach (var f in files.Legs)
-            if (OpenSeamFile(modRoot, f.File, note) is { } opened) legs.Add((opened.Model, opened.Skin));
-            else unread = true;
-        if (legs.Count == 0) return new SeamGate(null, "no legs file could be read", Transient: true);
+            if (OpenSeamFile(modRoot, f.File, note, out bool locked) is { } opened) legs.Add((opened.Model, opened.Skin));
+            else unread |= locked;
+        if (legs.Count == 0) return new SeamGate(null, "no legs file could be read", Transient: unread);
 
         bool anySplit = false;
         int readings = 0;
         foreach (var f in SeamCandidateOrder(files.Tops, chestName ?? chestDir))
         {
-            if (OpenSeamFile(modRoot, f.File, note) is not { } top)
+            if (OpenSeamFile(modRoot, f.File, note, out bool locked) is not { } top)
             {
-                unread = true;
+                unread |= locked;
                 continue;
             }
             if (BodyRetarget.SplitPoints(top.Model, top.Skin, legs) is not { } points) continue;
@@ -267,9 +267,24 @@ internal static partial class RefitCore
     }
 
     /// <summary>A candidate file's model, rig and skinning, or null (noted) when it cannot be read.</summary>
+    /// <param name="locked">The file is there but could not be read now (locked, refused): an answer resting on it is not
+    /// kept. A file missing from the mod, or not a model, stays so until its stamp changes, which the cache key carries.</param>
     private static (byte[] Bytes, ModelParts Model, XivLiveMesh.SkinnedMesh Skin, IReadOnlySet<string> Bones)? OpenSeamFile(
-        string modRoot, string file, Action<string>? note)
+        string modRoot, string file, Action<string>? note, out bool locked)
     {
+        locked = false;
+        try
+        {
+            string path = BodySizeCatalog.ResolveCaseInsensitive(modRoot, file);
+            if (File.Exists(path))
+                using (File.OpenRead(path)) { }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            locked = true;
+            note?.Invoke($"{file} could not be read now: {e.Message}");
+            return null;
+        }
         if (SiblingPiece.TryOpen(modRoot, file, note) is not { } opened) return null;
         if (ModelSkinReader.Read(opened.Bytes, null, null) is not { } skin || skin.VertexCount * 3 != opened.Model.Positions.Length)
         {

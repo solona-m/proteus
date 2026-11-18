@@ -60,7 +60,7 @@ internal sealed partial class FakeGame
 
     public IReadOnlyList<(string Slot, string GamePath, string Outcome)>? RunAutoRefitNowFor(string modRoot)
     {
-        RunNowAsked.Add(Path.GetFileName(modRoot));
+        lock (RunNowAsked) RunNowAsked.Add(Path.GetFileName(modRoot));
         return (RunNowBody ?? DefaultRunNow)(modRoot);
     }
 

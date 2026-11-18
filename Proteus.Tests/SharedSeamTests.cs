@@ -322,6 +322,7 @@ public class SharedSeamTests
                                      sharedSeam: legsSeam);
         Assert.Equal(0, held.Report.SeamPinnedNodes);
         Assert.Equal(Segments, held.Report.SeamSkipped);
+        Assert.False(held.Report.SeamKept);         // the record never claims a hold that did not happen
     }
 
     [Fact]
