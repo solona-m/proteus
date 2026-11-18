@@ -213,4 +213,46 @@ public class BulgeSpikeLocalTests(ITestOutputHelper output)
         Assert.True(read > 0, "no body of the inventory is installed here");
         Assert.True(wrong.Count == 0, "the genital rules misread: " + string.Join("; ", wrong));
     }
+
+    /// <summary>
+    /// S0.2: the base (the bulge copy moved onto lava's inner copy) against the body lava was sculpted on, over the
+    /// footprint but the crease the inner copy closed: within 2 mm at p95. And the relief (lava − base) against the sculpt itself (lava − common/64): within
+    /// 1.5 mm at p95.
+    /// </summary>
+    [LocalDataFact(BulgeAssetLocalTests.Common64)]
+    [Trait("Plan", "AC-featureless-bulge-10")]
+    public void Asset_base_and_relief()
+    {
+        var asset = Proteus.Services.Bulge.BulgeAsset.Load(null, out var why);
+        Assert.True(asset != null, why);
+        var body = ModelPartReader.Read(File.ReadAllBytes(LocalData.Path(BulgeAssetLocalTests.Common64)))!;
+        var bodyUv = BodyRetarget.Uv(File.ReadAllBytes(LocalData.Path(BulgeAssetLocalTests.Common64)));
+        var lavaUv = BodyRetarget.Uv(asset!.Bytes);
+        // lava footprint vertex -> the common/64 vertex of the same uv, nearest (the footprint generator's match).
+        var bodyVerts = body.Parts.Where(p => p.Island < 0 && (p.Label is "1.1" or "1.2")).SelectMany(p => p.Triangles).Distinct().ToList();
+        var byUv = bodyVerts.GroupBy(v => (MathF.Round(bodyUv[v * 2] / 1e-4f), MathF.Round(bodyUv[v * 2 + 1] / 1e-4f)))
+                            .ToDictionary(g => g.Key, g => g.ToList());
+        var baseErr = new List<float>();
+        var reliefErr = new List<float>();
+        float crease = 0f;
+        foreach (int v in asset.Footprint)
+        {
+            var key = (MathF.Round(lavaUv[v * 2] / 1e-4f), MathF.Round(lavaUv[v * 2 + 1] / 1e-4f));
+            if (!byUv.TryGetValue(key, out var c)) continue;
+            var lava = At(asset.Lava, v);
+            var b = new Vector3(asset.Base[v * 3], asset.Base[v * 3 + 1], asset.Base[v * 3 + 2]);
+            var orig = c.Select(x => At(body, x)).MinBy(q => Vector3.DistanceSquared(q, b));
+            // The inner copy closed lava's crotch crease (|x| < 1.5 cm, up to 11.8 mm): reported, not gated.
+            if (MathF.Abs(orig.X) < 0.015f) { crease = MathF.Max(crease, Vector3.Distance(b, orig)); continue; }
+            baseErr.Add(Vector3.Distance(b, orig));
+            reliefErr.Add(Vector3.Distance(lava - b, lava - orig));
+        }
+        float P95(List<float> x) { x.Sort(); return x[(int)(x.Count * 0.95f)]; }
+        float baseP95 = P95(baseErr), reliefP95 = P95(reliefErr);
+        output.WriteLine($"footprint {asset.Footprint.Count} (rim {asset.Rim.Count}), relief up to {asset.ReliefMax * 1000f:0.0} mm; "
+                         + $"base vs common/64 p95 {baseP95 * 1000f:0.00} mm max {baseErr.Max() * 1000f:0.0} mm (crease closed up to {crease * 1000f:0.0} mm); "
+                         + $"relief error p95 {reliefP95 * 1000f:0.00} mm");
+        Assert.True(baseP95 <= 0.002f, $"the base lies {baseP95 * 1000f:0.00} mm (p95) off common/64 — over the 2 mm gate");
+        Assert.True(reliefP95 <= 0.0015f, $"the relief is {reliefP95 * 1000f:0.00} mm (p95) off the sculpt — over the 1.5 mm gate");
+    }
 }
