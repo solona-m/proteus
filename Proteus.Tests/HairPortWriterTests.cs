@@ -13,7 +13,7 @@ namespace Proteus.Tests;
 /// Ports written into a mod on disk and taken out again. These edit somebody else's mod, so what matters most is what
 /// they leave alone: the author's files, every other redirect, and the order of the groups.
 /// </summary>
-public class HairPortWriterTests
+public partial class HairPortWriterTests
 {
     private static readonly string Source = HairPortPlan.HairPath(801, Id);
     private static readonly string Target = HairPortPlan.HairPath(201, Id);

@@ -21,7 +21,7 @@ namespace Proteus.Tests;
 /// <see cref="ModelParts.MeshSpans"/> come from the real reader, so the mapping under test — concatenated
 /// vertex back to a mesh's own buffer — is the real one.
 /// </summary>
-public class MeshVolumeServiceTests
+public partial class MeshVolumeServiceTests
 {
     /// <summary>
     /// One mesh of two triangles is six vertices, which weld by position into four distinct points: the two

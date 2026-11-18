@@ -17,7 +17,7 @@ namespace Proteus.Tests;
 /// Proteus redirect, so "undo" is the only way back — a backup that is subtly not the original is worse
 /// than never having offered the feature.
 /// </summary>
-public class HatCompatServiceTests
+public partial class HatCompatServiceTests
 {
     private const string ModelRel = "hair/c0201h0001_hir.mdl";
     private const string GamePath = "chara/human/c0201/obj/hair/h0001/model/c0201h0001_hir.mdl";

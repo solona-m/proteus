@@ -14,7 +14,7 @@ namespace Proteus.Tests;
 /// somebody else's mod, so what matters most is what they leave alone: the author's files, every other redirect, the
 /// groups, and an author's later update.
 /// </summary>
-public class ShaderUpgradeWriterTests
+public partial class ShaderUpgradeWriterTests
 {
     private const string Red = "red/top.mtrl";
     private static string Spec(string mod) => Path.Combine(mod, "tex", "top_s.tex");
