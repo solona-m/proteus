@@ -6670,5 +6670,157 @@
   "Parts.Matcap.PortKept": {
     "message": "That model is one of Proteus's hair ports. While it has a matcap, Proteus keeps it as it is, and doesn't by itself remake the ports of other races that share its material, until you undo the matcap. Porting one of those races by hand in the Studio still remakes it.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.RowFileSwap.Fmt": {
+    "message": "{0} swaps this part's material for another file, so a row matcap can't follow it.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowNoNormal": {
+    "message": "This part's material has no normal map, which a row matcap cuts by.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowAmbiguousOption.Fmt": {
+    "message": "The group \"{0}\" has two options called \"{1}\", so a row matcap can't tell them apart.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowShader.Fmt": {
+    "message": "A row matcap needs the part on character.shpk, and {0} uses {1}.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowOwnedByFeature.Fmt": {
+    "message": "{0} was rewritten by Proteus's gear shader upgrade. Undo that first, then add the row matcap.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowBake.Fmt": {
+    "message": "The row couldn't be cut: {0}.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowBake.Normal": {
+    "message": "the normal map couldn't be read",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowBake.Index": {
+    "message": "the index map couldn't be read",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowBake.Write": {
+    "message": "the cut material couldn't be written",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowTextureVaries.Fmt": {
+    "message": "{0} swaps this part's normal or index map, so one cut can't fit every choice.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowEmpty.Fmt": {
+    "message": "No pixel of this part uses row {0}.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowNothingLeft": {
+    "message": "Every part with this material already has a matcap.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowNotGear": {
+    "message": "A matcap on one colour row works on gear and accessories only.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowOneMaterial": {
+    "message": "A matcap on one colour row works on one material at a time. Tick parts of a single material.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowMixedThreshold": {
+    "message": "This part's options don't agree on how it is cut out, and its vertex colours would cut it. A row matcap can't fit both.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowVertexAlpha": {
+    "message": "This part's vertex colours would cut the row matcap, and they can't be changed.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowGameGear": {
+    "message": "A matcap on one colour row works on a mod's own gear, not the game's own pieces.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Row.GameFile": {
+    "message": "the game's own file",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Row.DefaultData": {
+    "message": "the mod's default files",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Row.Option.Fmt": {
+    "message": "the option \"{1}\" of \"{0}\"",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Row.Container.Fmt": {
+    "message": "entry {1} of \"{0}\"",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowOnly": {
+    "message": "Only on one colour row",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowOnlyTip": {
+    "message": "Put the matcap only on the pixels of one colour row of the part's material, such as a lace or trim pattern. Leave everything unticked to cover every part with this material.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowReading": {
+    "message": "Reading the colour rows…",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowNoRows": {
+    "message": "This part's material has no colour rows to pick from.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowSub": {
+    "message": "Sub-row",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowSubBoth": {
+    "message": "A and B",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowSubA": {
+    "message": "A only",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowSubB": {
+    "message": "B only",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowSubOnly.Fmt": {
+    "message": "This material only uses sub-row {0}.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowMaterial": {
+    "message": "Material",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowAll.Fmt": {
+    "message": "Covers every part drawn with {0}.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowFollowWarn": {
+    "message": "This material has colours set in Proteus. The matcapped row's pixels draw from a copy of the material and won't follow them.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowHolesWarn": {
+    "message": "Some cut-out holes in this part sit inside the row's triangles, so they will show the matcap.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowStale": {
+    "message": "The author's material changed since this row matcap was made. Undo it and apply it again.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowManifestUnreadable": {
+    "message": "The mod's list of files (meta.json) could not be read, so nothing was changed.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowNoSource": {
+    "message": "Proteus couldn't find this part's material in the mod or the game, so there is nothing to cut.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowMapSwap.Fmt": {
+    "message": "{0} swaps this part's normal or index map for another file, so a row matcap can't follow it.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
   }
 }

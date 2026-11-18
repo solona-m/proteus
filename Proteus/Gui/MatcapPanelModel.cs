@@ -53,26 +53,37 @@ internal static class MatcapPanelModel
     /// Why Apply can't be pressed, or null when it can. Ticked parts that all have a matcap change it (in the record, same
     /// kind; no material room needed); none having one makes a new one (room needed); a mix is refused.
     /// </summary>
+    /// <param name="ticked">The parts Apply covers: the ticks, or — a row picked and nothing ticked — the row pool.</param>
+    /// <param name="row">The colour row picked (0: the whole part).</param>
+    /// <param name="gamePiece">The open model is the game's own gear (row matcaps refuse it).</param>
     public static string? ApplyDisabledReason(bool penumbra, IReadOnlyList<ModelPart> ticked, MatcapChoice? choice, int materialRoom,
-                                              MatcapRecord record)
+                                              MatcapRecord record, int row = 0, bool gamePiece = false)
     {
         var s = Strings.Matcap;
         if (!penumbra) return s.NoPenumbra;
-        if (ticked.Count == 0) return s.NeedParts;
+        if (ticked.Count == 0) return row > 0 ? s.RowNothingLeft : s.NeedParts;
         if (choice == null) return s.NeedMatcap;
         switch (MatcapPlan.KindOfApply(ticked))
         {
             case MatcapPlan.ApplyKind.Mixed:
                 return s.AlreadyMatcap;
             case MatcapPlan.ApplyKind.Change:
-                foreach (var name in MatcapPlan.ChangeNames(ticked))
+                foreach (var name in MatcapPlan.ChangeNames(ticked, record))
                 {
-                    var entry = record.Materials.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));
+                    var entry = record.EntryFor(name);
                     if (entry == null) return s.NoEntry;
                     if (entry.Source.IsLibrary != choice.IsLibrary) return s.ChangeKindTip;
                 }
                 return null;
             default:
+                if (row > 0)
+                {
+                    if (gamePiece) return s.RowGameGear;
+                    if (ticked.Select(p => p.Material).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1) return s.RowOneMaterial;
+                    // A row matcap adds two materials: the matcap and the cut copy of the part's own.
+                    if (materialRoom < 2) return string.Format(s.MaterialCapFmt, SecondSkinWriter.MaxMaterials);
+                    return null;
+                }
                 return materialRoom <= 0 ? string.Format(s.MaterialCapFmt, SecondSkinWriter.MaxMaterials) : null;
         }
     }
@@ -84,16 +95,16 @@ internal static class MatcapPanelModel
     /// </summary>
     /// <param name="kind">The open model's kind; null when unknown (the build refuses it as not a target).</param>
     public static string? PreviewBlocked(bool penumbra, IReadOnlyList<ModelPart> ticked, MatcapPlan.Kind? kind, bool gamePiece,
-                                         bool importedPiece, MatcapChoice? choice, int room, MatcapRecord record)
+                                         bool importedPiece, MatcapChoice? choice, int room, MatcapRecord record, int row = 0)
     {
         var s = Strings.Matcap;
         if (!penumbra) return s.NoPenumbra;
-        if (ticked.Count == 0) return s.PreviewTick;
+        if (ticked.Count == 0) return row > 0 ? s.RowNothingLeft : s.PreviewTick;
         if (kind is { } k && k != MatcapPlan.Kind.Gear) return s.PreviewGearOnly;
         if (gamePiece) return s.PreviewGameGear;
         if (importedPiece) return ProteusLoc.Localize("Matcap.Refused.ImportedPiece",
             "This piece belongs to an imported pack, which Proteus rebuilds itself. Put the matcap on the pack's own mod instead.");
-        return ApplyDisabledReason(penumbra, ticked, choice, room, record);
+        return ApplyDisabledReason(penumbra, ticked, choice, room, record, row);
     }
 
     /// <summary>
@@ -105,7 +116,7 @@ internal static class MatcapPanelModel
                                             string modelFile)
     {
         var s = Strings.Matcap;
-        var names = MatcapPlan.ChangeNames(ticked);
+        var names = MatcapPlan.ChangeNames(ticked, record);
         if (names.Count == 0) return [];
         var lines = new List<string> { string.Format(s.ChangesFmt, string.Join(", ", names.Select(MatcapWriter.StemOf))) };
         var tickedLabels = ticked.Select(p => p.Label).ToHashSet(StringComparer.Ordinal);
@@ -170,6 +181,7 @@ internal static class MatcapPanelModel
         var s = Strings.Matcap;
         if (state == MatcapWriter.State.Superseded) return s.Superseded;
         if (state == MatcapWriter.State.Edited) return s.Edited;
+        if (state == MatcapWriter.State.RowStale) return s.RowStale;
         if (entry.Source.IsLibrary && entry.Source.Library is { } lib)
         {
             if (!installed) return string.Format(s.LibraryMissingFmt, lib.Name);

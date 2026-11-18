@@ -27,6 +27,23 @@ public class ModelBackupOrderTests : IDisposable
         File.SetLastWriteTimeUtc(at, written);
     }
 
+    // [AC-mod-path-containment-6][EDGE-mod-path-containment-22] Post-implementation: the one named exception to the
+    // red-proof rule — on the old code every feature's backup of a hostile rel collapsed onto the same file, so nothing
+    // could tell. Now nothing outside a backup folder is even looked at.
+    [Fact]
+    public void HostileRelNeverProbesOutside()
+    {
+        using var kit = new HostilePathKit();
+        kit.SetVictimContent([1, 2, 3]);
+        foreach (var rel in new[] { kit.AbsoluteVictim, kit.ClimbToVictim(), "../../../victim.bin", "../../../../victim.bin" })
+        {
+            Assert.False(ModPath.TryBackup(kit.ModRoot, MeshToggleService.BackupSubdir, rel, out _));
+            Assert.Null(ModelBackupOrder.LaterFeature(kit.ModRoot, MeshToggleService.BackupSubdir, rel));
+            Assert.Null(ModelBackupOrder.LaterFeature(kit.ModRoot, HatCompatService.BackupSubdir, rel));
+        }
+        kit.AssertVictimUntouched();
+    }
+
     /// <summary>Switches first, brush second: undoing the switches must wait for the brush.</summary>
     [Fact]
     public void AnEarlierEditIsBlockedByALaterOne()

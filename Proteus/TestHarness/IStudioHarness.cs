@@ -48,7 +48,9 @@ internal sealed record StudioDragOutcome(StudioRefusal? Refused, string Kind, bo
 /// <summary>The Matcaps tool's click preview, already validated: tick <see cref="Parts"/> and click an image or a library
 /// option, or <see cref="End"/> the preview.</summary>
 internal sealed record StudioMatcapPreviewRequest(IReadOnlyList<string> Parts, string? Image, bool Pack, string? Library,
-                                                  string? Group, string? Option, bool End);
+                                                  string? Group, string? Option, bool End,
+                                                  int Row = 0, Services.SubRowPick Sub = Services.SubRowPick.Both,
+                                                  string? Material = null);
 
 /// <summary>What <c>matcap-preview</c> did: refused, or the preview's state (see <c>/studio</c>'s <c>matcapPreview</c>).</summary>
 internal sealed record StudioMatcapPreviewOutcome(StudioRefusal? Refused, object? Preview, IReadOnlyDictionary<string, object?>? State);
@@ -100,7 +102,10 @@ internal sealed record MatcapHarnessPort(
     System.Action? EndClickPreview = null,
     // After a job changed the mod (by folder): the Studio re-reads the open model if it is that mod's, as the panel's own
     // Apply does through its AfterModChange; framework thread.
-    System.Action<string>? StudioModChanged = null);
+    System.Action<string>? StudioModChanged = null,
+    // (mod folder, mod-relative material file) -> the material has Colors-window colour rows in Proteus for that mod;
+    // read from the last composite's entries (a snapshot, safe off the framework thread).
+    System.Func<string, string, bool>? HasColours = null);
 
 /// <summary>
 /// The Studio as the test harness drives it: the panel's own code for each control, run on the framework thread between

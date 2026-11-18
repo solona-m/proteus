@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
@@ -21,19 +22,28 @@ public sealed class LogExportService
     // export catches the retry and drawn-check lines that follow its refresh.
     private static readonly TimeSpan SettleCap = TimeSpan.FromSeconds(20);
 
+    /// <summary>How long one read of the names may take: Copy Logs is pressed when things are stuck, and must never hang
+    /// on a framework thread that does not answer.</summary>
+    internal static readonly TimeSpan NamesTimeout = TimeSpan.FromSeconds(3);
+
     private readonly CapturingPluginLog capture;
     private readonly CompositorService compositor;
     private readonly PenumbraBridge penumbra;
     private readonly Configuration config;
     private readonly string dalamudLogPath;
+    private readonly Func<Task<(IReadOnlyCollection<string> Collections, string? Character)>> namesNow;
 
+    /// <param name="namesNow">The Penumbra collection names and the logged-in character's name, read on the framework
+    /// thread: what the exported file must not contain.</param>
     public LogExportService(CapturingPluginLog capture, CompositorService compositor, PenumbraBridge penumbra,
-        Configuration config, string configDirectory)
+        Configuration config, string configDirectory,
+        Func<Task<(IReadOnlyCollection<string> Collections, string? Character)>> namesNow)
     {
         this.capture = capture;
         this.compositor = compositor;
         this.penumbra = penumbra;
         this.config = config;
+        this.namesNow = namesNow;
         // ConfigDirectory is XIVLauncher\pluginConfigs\Proteus; dalamud.log sits in XIVLauncher.
         dalamudLogPath = Path.GetFullPath(Path.Combine(configDirectory, "..", "..", "dalamud.log"));
     }
@@ -61,6 +71,8 @@ public sealed class LogExportService
     {
         var started = DateTime.Now;
         var dalamudStart = DalamudLogLength();
+        // Read at the start and again at the end, so a character or collection switched to mid-capture is scrubbed too.
+        var names = await GatherNamesAsync(namesNow, null, NamesTimeout).ConfigureAwait(false);
 
         capture.BeginCapture();
         string outcome;
@@ -81,28 +93,76 @@ public sealed class LogExportService
             outcome = $"refresh threw: {ex.Message}";
         }
         var lines = capture.EndCapture();
+        names = await GatherNamesAsync(namesNow, names, NamesTimeout).ConfigureAwait(false);
 
-        var sb = new StringBuilder();
-        sb.AppendLine("Proteus log");
-        sb.AppendLine($"Build:     #{Plugin.BuildNumber} ({Plugin.BuildStamp}), v{typeof(Plugin).Assembly.GetName().Version}");
-        sb.AppendLine($"Captured:  {started:yyyy-MM-dd HH:mm:ss} to {DateTime.Now:HH:mm:ss}");
-        sb.AppendLine($"Enabled:   {config.PluginEnabled}   Auto redraw: {config.AutoRedraw}"
+        var header = new StringBuilder();
+        header.AppendLine("Proteus log");
+        header.AppendLine($"Build:     #{Plugin.BuildNumber} ({Plugin.BuildStamp}), v{typeof(Plugin).Assembly.GetName().Version}");
+        header.AppendLine($"Captured:  {started:yyyy-MM-dd HH:mm:ss} to {DateTime.Now:HH:mm:ss}");
+        header.AppendLine($"Enabled:   {config.PluginEnabled}   Auto redraw: {config.AutoRedraw}"
                     + (compositor.AutoRedrawOn != config.AutoRedraw ? $" (effective {compositor.AutoRedrawOn}, test harness override)" : "")
                     + $"   Penumbra: {(penumbra.IsAvailable ? "available" : "unavailable")}");
-        sb.AppendLine($"Refresh:   {outcome}");
+        header.AppendLine($"Refresh:   {outcome}");
+
+        var dir = DesktopFolder.Path() ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        var path = Path.Combine(dir, $"Proteus-log-{started:yyyyMMdd-HHmmss}.txt");
+        var text = ComposeExport(header.ToString(), lines, DalamudLogSince(dalamudStart),
+                                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), names.Collections, names.Characters);
+        await File.WriteAllTextAsync(path, text).ConfigureAwait(false);
+        return path;
+    }
+
+    /// <summary>
+    /// The whole exported file: <paramref name="header"/>, the captured Proteus lines and the dalamud.log slice, in that
+    /// order under their headings — scrubbed as a whole, the slice included. The file is meant to be posted, so neither the
+    /// Windows user name nor the character's or any collection's name leaves the machine in it
+    /// (<see cref="LogAnonymizer.Scrub(string, string?, IEnumerable{string}?, IEnumerable{string}?)"/>).
+    /// </summary>
+    /// <param name="characters">Every character the capture saw — the start's and the end's after a switch mid-capture.</param>
+    internal static string ComposeExport(string header, IReadOnlyList<string> lines, string dalamudSlice,
+                                         string? profileDir, IEnumerable<string> collections, IEnumerable<string> characters)
+    {
+        var sb = new StringBuilder();
+        sb.Append(header);
         sb.AppendLine();
         sb.AppendLine($"==== Proteus, all levels ({lines.Count} lines) ====");
         foreach (var line in lines)
             sb.AppendLine(line);
         sb.AppendLine();
         sb.AppendLine("==== dalamud.log, same window ====");
-        sb.AppendLine(DalamudLogSince(dalamudStart));
+        sb.AppendLine(dalamudSlice);
+        return LogAnonymizer.Scrub(sb.ToString(), profileDir, collections, characters);
+    }
 
-        var dir = DesktopFolder.Path() ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        var path = Path.Combine(dir, $"Proteus-log-{started:yyyyMMdd-HHmmss}.txt");
-        // The file is meant to be posted, so no Windows user name leaves the machine in it.
-        await File.WriteAllTextAsync(path, LogAnonymizer.Scrub(sb.ToString())).ConfigureAwait(false);
-        return path;
+    /// <summary>
+    /// The names to scrub, merged with <paramref name="earlier"/>: every collection and every character either read saw,
+    /// so a character switched away from mid-capture is scrubbed too. Never throws and never waits past
+    /// <paramref name="timeout"/>: a read that fails or takes too long keeps the earlier names. A read given up on is still
+    /// observed, so its late fault is never an unobserved one.
+    /// </summary>
+    internal static async Task<(HashSet<string> Collections, HashSet<string> Characters)> GatherNamesAsync(
+        Func<Task<(IReadOnlyCollection<string> Collections, string? Character)>> namesNow,
+        (HashSet<string> Collections, HashSet<string> Characters)? earlier, TimeSpan timeout)
+    {
+        var collections = new HashSet<string>(earlier?.Collections ?? [], StringComparer.OrdinalIgnoreCase);
+        var characters = new HashSet<string>(earlier?.Characters ?? [], StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var call = namesNow();
+            if (await Task.WhenAny(call, Task.Delay(timeout)).ConfigureAwait(false) != call)
+            {
+                _ = call.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+                return (collections, characters);
+            }
+            var (now, who) = await call.ConfigureAwait(false);
+            foreach (var c in now ?? []) if (!string.IsNullOrWhiteSpace(c)) collections.Add(c);
+            if (!string.IsNullOrWhiteSpace(who)) characters.Add(who);
+        }
+        catch (Exception)
+        {
+            // Unknown names: keep what the start read saw. The export itself never fails on this.
+        }
+        return (collections, characters);
     }
 
     private long? DalamudLogLength()

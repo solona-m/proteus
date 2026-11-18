@@ -27,8 +27,17 @@ internal static class MatcapStudio
     /// <param name="Compress">Bake own images as BC7.</param>
     /// <param name="TempDir">Where prepared textures wait until they are placed.</param>
     /// <param name="WornFolder">The material folder the worn variant uses (gear), when known.</param>
+    /// <param name="RowOnly">1–16 puts the matcap only on the texels of that colour-table row pair (a matcap copy of the
+    /// row's triangles under the part, and a cut copy of the part's own material: <see cref="MatcapRowCut"/>); 0 is the
+    /// whole-part matcap.</param>
+    /// <param name="RowSub">Which sub-row of <paramref name="RowOnly"/> (Dawntrail index maps only).</param>
+    /// <param name="Affordable">Test seam for the BC7 budget guard (<see cref="TextureLoader.CompressionAffordable"/>).</param>
     public sealed record Environment(Func<string, byte[]?> ReadGameFile, TextureLoader Loader, bool Compress, string TempDir,
-                                     int? WornFolder = null);
+                                     int? WornFolder = null, int RowOnly = 0, SubRowPick RowSub = SubRowPick.Both,
+                                     Func<bool>? Affordable = null);
+
+    /// <summary>How far a row matcap's copy sits UNDER the surface it copies, in metres (negative: inward).</summary>
+    internal const float RowOverlayPush = -0.0006f;
 
     /// <summary>The ticked parts mix parts with and without a matcap (Apply's and Prepare's refusal).</summary>
     internal const string AlreadyMatcapText =
@@ -48,7 +57,16 @@ internal static class MatcapStudio
     {
         public bool Ok => Request != null;
         public static Prepared Refuse(string code, string message) => new(null, code, message, [], false, false);
+
+        /// <summary>Row matcap: an alpha-tested part has holes inside the row's triangles, which will show the matcap.</summary>
+        public bool RowHoles { get; init; }
+        /// <summary>Row matcap: the cut meshes' vertex alpha was raised to 1.</summary>
+        public bool CutAlphaSet { get; init; }
     }
+
+    public const string CodeRowNotGear = "row-not-gear", CodeRowOneMaterial = "row-one-material",
+                        CodeRowMixedThreshold = "row-mixed-threshold",
+                        CodeRowNothingLeft = "row-nothing-left";
 
 
     /// <summary>Prepared textures an earlier apply left behind (placed, or never used): deleted after an hour.</summary>
@@ -76,8 +94,29 @@ internal static class MatcapStudio
         if (MatcapPlan.RefusedRegenerated(modRoot, modelRel) is { } regen)
             return Prepared.Refuse("regenerated-model", string.Format(ProteusLoc.Localize("Matcap.Refused.Regenerated.Fmt",
                 "This model is made by Proteus from another one ({0}), and remaking it would lose the matcap. Put the matcap on the model it was made from, then remake it."), regen));
-        if (chosen.Count == 0) return Prepared.Refuse("unknown-part", ProteusLoc.Localize("Parts.Matcap.NeedParts", "Tick the parts that should take the matcap."));
+        if (chosen.Count == 0)
+            return env.RowOnly > 0
+                ? Prepared.Refuse(CodeRowNothingLeft, ProteusLoc.Localize("Matcap.Refused.RowNothingLeft",
+                    "Every part with this material already has a matcap."))
+                : Prepared.Refuse("unknown-part", ProteusLoc.Localize("Parts.Matcap.NeedParts", "Tick the parts that should take the matcap."));
         if (chosen.Any(MatcapPlan.IsSkin)) return Prepared.Refuse("skin-part", ProteusLoc.Localize("Matcap.Refused.Skin", "Skin can't take a matcap."));
+        // A row matcap cuts the part's own Dawntrail gear material: gear only, one material at a time — and, as Apply would,
+        // never an imported piece or an old-layout mod (its cut is planned from the manifest before Apply's own checks).
+        if (env.RowOnly > 0)
+        {
+            if (string.Equals(Path.GetFileName(modRoot.TrimEnd('\\', '/')), SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
+                return Prepared.Refuse(MatcapWriter.CodeManaged, ProteusLoc.Localize("Matcap.Refused.ImportedPiece",
+                    "This piece belongs to an imported pack, which Proteus rebuilds itself. Put the matcap on the pack's own mod instead."));
+            if (PenumbraModMeta.IsLegacyFolder(modRoot))
+                return Prepared.Refuse(MatcapWriter.CodeLegacy, ProteusLoc.Localize("Matcap.Refused.Legacy",
+                    "This mod is still in Penumbra's old folder layout. Open it in Penumbra once so it is updated, then try again."));
+            if (target.Kind != MatcapPlan.Kind.Gear)
+                return Prepared.Refuse(CodeRowNotGear, ProteusLoc.Localize("Matcap.Refused.RowNotGear",
+                    "A matcap on one colour row works on gear and accessories only."));
+            if (chosen.Select(p => p.Material).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
+                return Prepared.Refuse(CodeRowOneMaterial, ProteusLoc.Localize("Matcap.Refused.RowOneMaterial",
+                    "A matcap on one colour row works on one material at a time. Tick parts of a single material."));
+        }
         // A change of an existing matcap goes through ChangeAll; a new apply never splits a matcap part again.
         if (chosen.Any(MatcapPlan.IsOnMatcap))
             return Prepared.Refuse("already-matcap", ProteusLoc.Localize("Matcap.Refused.AlreadyMatcap", AlreadyMatcapText));
@@ -130,9 +169,11 @@ internal static class MatcapStudio
             return Prepared.Refuse(ModelMaterialWriter.CodeLayout,
                 string.Format(ProteusLoc.Localize("Matcap.Refused.ModelLayout.Fmt", "This model can't be split: {0}."), ex.Message));
         }
-        if (room < sources.Count)
+        // A row matcap adds two materials: the matcap and the cut copy of the part's own.
+        int need = sources.Count + (env.RowOnly > 0 ? 1 : 0);
+        if (room < need)
             return Prepared.Refuse(ModelMaterialWriter.CodeMaterialCap, string.Format(ProteusLoc.Localize("Matcap.Refused.MaterialCap.Fmt",
-                "This model can't take another material: {0}."), $"{sources.Count} needed, {room} free of {SecondSkinWriter.MaxMaterials}"));
+                "This model can't take another material: {0}."), $"{need} needed, {room} free of {SecondSkinWriter.MaxMaterials}"));
 
         var taken = new List<string>();
         foreach (var (_, bytes, _) in models)
@@ -169,9 +210,32 @@ internal static class MatcapStudio
             foreach (var gp in MatcapPlan.MaterialGamePaths(target, n, publishedAll, folders)) usedPaths.Add(Norm(gp));
         }
 
+        // ── a row matcap: the cut copy's name, and its cut planned before any split ──
+        string? cutName = null;
+        MatcapRowCut.Plan? rowCut = null;
+        Directory.CreateDirectory(env.TempDir);
+        if (env.RowOnly > 0)
+        {
+            // A cut name is skipped while any file of ours carries its stem (a kept, hand-edited "<stem>_2.mtrl" or cut normal
+            // included), so a new cut never writes over one.
+            var ours = Directory.Exists(filesDir) ? Directory.EnumerateFiles(filesDir).Select(Path.GetFileName).OfType<string>().ToList() : [];
+            cutName = MatcapPlan.NewCutName(sources[0], token, taken,
+                c => MatcapPlan.MaterialGamePaths(target, c, publishedAll, folders).Any(gp => usedPaths.Contains(Norm(gp)))
+                     || ours.Any(f => f.StartsWith(MatcapWriter.StemOf(c) + "_", StringComparison.OrdinalIgnoreCase)));
+            taken.Add(cutName);
+            foreach (var gp in MatcapPlan.MaterialGamePaths(target, cutName, publishedAll, folders)) usedPaths.Add(Norm(gp));
+            var (plan, refused) = MatcapRowCut.Make(new MatcapRowCut.Inputs(modRoot, target, sources[0],
+                (folders ?? [env.WornFolder ?? 1]).ToList(), env.WornFolder ?? 1, env, env.RowOnly, env.RowSub, token, cutName,
+                Preview: !withSiblings, Affordable: env.Affordable));
+            if (refused != null) return Prepared.Refuse(refused.Code, refused.Message);
+            rowCut = plan!;
+        }
+
         // ── the splits, one source material at a time, on each model's running bytes ──
         var running = models.Select(m => (m.Rel, Original: m.Bytes, Current: m.Bytes, m.Parts, Cut: false, Ok: true)).ToList();
         var meshesOf = names.ToDictionary(n => n, _ => new List<(string Rel, int Source, int Drawn)>(), StringComparer.Ordinal);
+        var cutMeshes = new List<(string Rel, int Source, int Drawn)>();
+        bool rowHoles = false, cutAlphaSet = false;
         for (int si = 0; si < sources.Count; si++)
         {
             for (int mi = 0; mi < running.Count; mi++)
@@ -186,15 +250,50 @@ internal static class MatcapStudio
                 try
                 {
                     if (mine.Any(p => p == null)) throw new ModelMaterialWriter.Refused(ModelMaterialWriter.CodeUnknownPart, "a part moved during the split");
-                    var r = ModelMaterialWriter.MoveToMaterial(m.Current, mine!, names[si]);
-                    meshesOf[names[si]].AddRange(r.Meshes.Select(x => (m.Rel, x.Source, x.Drawn)));
-                    running[mi] = m with { Current = r.Model, Cut = m.Cut || r.Lod0Cut };
+                    if (rowCut == null)
+                    {
+                        var r = ModelMaterialWriter.MoveToMaterial(m.Current, mine!, names[si]);
+                        meshesOf[names[si]].AddRange(r.Meshes.Select(x => (m.Rel, x.Source, x.Drawn)));
+                        running[mi] = m with { Current = r.Model, Cut = m.Cut || r.Lod0Cut };
+                        continue;
+                    }
+
+                    // Row: only the triangles touching the row (in any bake), picked on each call's own bytes.
+                    var keep = RowTriangles(m.Current, mine!, rowCut, out bool holes);
+                    if (keep.Count == 0)
+                    {
+                        if (mi != 0) { skipped.Add(m.Rel); running[mi] = m with { Ok = false }; continue; }
+                        return Prepared.Refuse(MatcapRowCut.CodeEmpty, string.Format(ProteusLoc.Localize("Matcap.Refused.RowEmpty.Fmt",
+                            "No pixel of this part uses row {0}."), MatcapRowCut.RowLabel(env.RowOnly, env.RowSub)));
+                    }
+                    rowHoles |= holes;
+                    var copy = ModelMaterialWriter.MoveToMaterial(m.Current, mine!, names[si], RowOverlayPush, keep.Contains);
+
+                    var afterCopy = ModelPartReader.Read(copy.Model)?.Parts ?? [];
+                    var mine2 = mine!.Select(p => afterCopy.FirstOrDefault(c => PartClaims.LineUp(p!, c))).ToList();
+                    if (mine2.Any(p => p == null)) throw new ModelMaterialWriter.Refused(ModelMaterialWriter.CodeUnknownPart, "a part moved during the split");
+                    var keep2 = RowTriangles(copy.Model, mine2!, rowCut, out _);
+
+                    // Vertex alpha, decided over every cut copy: all threshold-0 → raise it; mixed → refuse when it would cut.
+                    float alphaMin = ModelMaterialWriter.VertexAlphaMin(copy.Model, mine2!, keep2.Contains);
+                    bool alphaOne = false;
+                    if (alphaMin < 0.5f && rowCut.AllThresholdZero) alphaOne = true;
+                    else if (alphaMin < 0.5f && rowCut.AnyThresholdZero)
+                        return Prepared.Refuse(CodeRowMixedThreshold, ProteusLoc.Localize("Matcap.Refused.RowMixedThreshold",
+                            "This part's options don't agree on how it is cut out, and its vertex colours would cut it. A row matcap can't fit both."));
+                    var moved = ModelMaterialWriter.MoveToMaterial(copy.Model, mine2!, cutName!, 0f, keep2.Contains, alphaOne);
+                    cutAlphaSet |= alphaOne;
+                    meshesOf[names[si]].AddRange(copy.Meshes.Select(x => (m.Rel, x.Source, x.Drawn)));
+                    cutMeshes.AddRange(moved.Meshes.Select(x => (m.Rel, x.Source, x.Drawn)));
+                    running[mi] = m with { Current = moved.Model, Cut = m.Cut || copy.Lod0Cut || moved.Lod0Cut };
                 }
                 catch (ModelMaterialWriter.Refused ex)
                 {
                     if (mi != 0) { skipped.Add(m.Rel); running[mi] = m with { Ok = false }; continue; }
                     return Prepared.Refuse(ex.Code, ex.Code == ModelMaterialWriter.CodeMaterialCap
                         ? string.Format(ProteusLoc.Localize("Matcap.Refused.MaterialCap.Fmt", "This model can't take another material: {0}."), ex.Message)
+                        : ex.Code == ModelMaterialWriter.CodeVertexAlpha
+                        ? ProteusLoc.Localize("Matcap.Refused.RowVertexAlpha", "This part's vertex colours would cut the row matcap, and they can't be changed.")
                         : string.Format(ProteusLoc.Localize("Matcap.Refused.ModelLayout.Fmt", "This model can't be split: {0}."), ex.Message));
                 }
             }
@@ -285,18 +384,135 @@ internal static class MatcapStudio
             var gamePaths = MatcapPlan.MaterialGamePaths(target, name, publishedAt, folders);
             if (gamePaths.Count == 0)
                 return Prepared.Refuse("no-name", ProteusLoc.Localize("Matcap.Refused.NoName", "Proteus could not tell where the game reads this model's materials."));
+
             byte[] mtrl;
             try { mtrl = MatcapMaterial.Build(template, normal!, MatcapWriter.MaskGamePath(token), matcapPath, alpha); }
             catch (InvalidDataException ex)
             {
                 return Prepared.Refuse("no-template", string.Format(ProteusLoc.Localize("Matcap.Refused.Failed.Fmt", "The matcap could not be written ({0}). Nothing was changed."), ex.Message));
             }
+            // A row matcap's matcap copy sits under the part, whole (characterreflection never cuts in its colour passes);
+            // the part's own material is cut instead (MatcapRowCut), so the matcap shows through on the row.
             plans.Add(new MatcapWriter.MaterialPlan(name, mtrl, gamePaths, normal!, alpha, source, texTemp,
-                                                    meshesOf[name].Where(x => okModels.Any(m => m.Rel == x.Rel)).ToList()));
+                                                    meshesOf[name].Where(x => okModels.Any(m => m.Rel == x.Rel)).ToList())
+                      {
+                          Row = rowCut == null ? null : new MatcapWriter.RowPlan(env.RowOnly, env.RowSub, cutName!, rowCut,
+                              cutMeshes.Where(x => okModels.Any(m => m.Rel == x.Rel)).ToList(), cutAlphaSet),
+                      });
         }
 
         var req = new MatcapWriter.ApplyRequest(token, plans, edits, maskTemp, flatTemp);
-        return new Prepared(req, "", "", skipped, alphaTested, cut);
+        return new Prepared(req, "", "", skipped, alphaTested, cut) { RowHoles = rowHoles, CutAlphaSet = cutAlphaSet };
+    }
+
+    /// <summary>
+    /// The row triangles of <paramref name="parts"/>, read from <paramref name="mdl"/> as given: those whose UV footprint
+    /// touches the row in any of the cut's bakes. <paramref name="holes"/>: an alpha-tested bake has an off-row cut-out
+    /// inside one of them (it will show the matcap beneath).
+    /// </summary>
+    private static HashSet<ModelMaterialWriter.TriangleKey> RowTriangles(byte[] mdl, IReadOnlyList<ModelPart> parts,
+                                                                       MatcapRowCut.Plan plan, out bool holes)
+    {
+        var keep = new HashSet<ModelMaterialWriter.TriangleKey>();
+        holes = false;
+        foreach (var t in ModelMaterialWriter.TriangleUvs(mdl, parts))
+        {
+            if (!MatcapRowCut.Touches(t, plan.Bakes)) continue;
+            keep.Add(t.Key);
+            if (!holes && MatcapRowCut.HoleInside(t, plan.Bakes)) holes = true;
+        }
+        return keep;
+    }
+
+    /// <summary>A texture the mod draws at <paramref name="gamePath"/> (its default data first), else the game's, decoded.</summary>
+    private static (byte[] Rgba, int W, int H)? LoadTex(string modRoot, List<PenumbraModMeta.Redirect> redirects, Environment env,
+                                                        string? gamePath)
+    {
+        if (string.IsNullOrEmpty(gamePath)) return null;
+        var gp = gamePath.Replace('\\', '/');
+        byte[]? bytes = null;
+        foreach (var r in redirects.Where(r => string.Equals(r.GamePath.Replace('\\', '/'), gp, StringComparison.OrdinalIgnoreCase))
+                                   .OrderBy(r => r.Source.Length == 0 ? 0 : 1))
+        {
+            try { var full = MatcapWriter.Full(modRoot, r.File); if (File.Exists(full)) { bytes = File.ReadAllBytes(full); break; } }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* the next redirect, else the game */ }
+        }
+        bytes ??= env.ReadGameFile(gp);
+        if (bytes == null) return null;
+        var t = env.Loader.LoadTexBytesAsRgba(bytes, gp);
+        return t is { } x ? (x.rgba, x.width, x.height) : null;
+    }
+
+    /// <summary>What the Matcaps tool's row picker shows for one material: its rows, the rows (and the one sub-row,
+    /// when all agree) its index map selects, null when unknown, and the leaf the game loads it by.</summary>
+    public sealed record RowInfo(List<ColorTableRowPreset> Rows, HashSet<int>? UsedRows, string? UsedSubRow, string Leaf);
+
+    /// <summary>
+    /// <see cref="RowInfo"/> for <paramref name="materialName"/> as the model at <paramref name="modelRel"/> draws it, or
+    /// null when the material has no colour table. Reads files and decodes the index map: call off the framework thread.
+    /// </summary>
+    public static RowInfo? ReadRowInfo(string modRoot, string modelRel, string modelGamePath, string materialName, Environment env)
+    {
+        if (MatcapPlan.TargetOf(modelGamePath, out _) is not { } target) return null;
+        var redirects = PenumbraModMeta.ReadAllRedirects(modRoot);
+        if (SourceMaterial(modRoot, target, materialName, redirects, env, modelRel) is not { } mtrl) return null;
+        if (GearMaterialWriter.ReadRows(mtrl) is not { } rows) return null;
+        var leaf = materialName.Replace('\\', '/');
+        leaf = leaf[(leaf.LastIndexOf('/') + 1)..];
+        HashSet<int>? used = null;
+        string? sub = null;
+        if (MatcapMaterial.ReadHeader(mtrl) is { } sh)
+        {
+            var idPath = sh.TextureOf(ShaderUpgradePlan.SamplerIndex);
+            if (!string.IsNullOrEmpty(idPath))
+            {
+                if (LoadTex(modRoot, redirects, env, idPath) is { } id)
+                    (used, sub) = UsedRows(id.Rgba, p => p[0], p => p[1] > 127);
+            }
+            else if (LoadTex(modRoot, redirects, env, sh.TextureOf(MatcapMaterial.SamplerNormal)) is { } n)
+                // No index map: the normal's alpha picks the row (legacy materials), one column only.
+                (used, _) = UsedRows(n.Rgba, p => p[3], null);
+        }
+        return new RowInfo(rows, used, sub, leaf);
+    }
+
+    /// <summary>A row (or sub-row column) needs this share of the texels to count as used.</summary>
+    internal const double RowUseShare = 0.005;
+
+    /// <summary>
+    /// The rows a row map selects, keeping only rows with at least <see cref="RowUseShare"/> of the texels: block
+    /// compression blends neighbouring rows' values along every edge between them, which reads as a sprinkle of rows
+    /// nothing was painted with (a jacket of rows 1 and 16 shows 8 and 12 at 0.1–0.2%). The sub-row is "A" or "B"
+    /// when the used rows' texels all but agree on one column, else null. Null rows when nothing qualifies.
+    /// </summary>
+    internal static (HashSet<int>? Rows, string? SubRow) UsedRows(byte[] rgba, Func<ReadOnlySpan<byte>, byte> rowByte,
+                                                                  Func<ReadOnlySpan<byte>, bool>? isA)
+    {
+        var counts = new long[17];
+        var aCounts = new long[17];
+        long total = 0;
+        for (int i = 0; i + 3 < rgba.Length; i += 4)
+        {
+            var px = rgba.AsSpan(i, 4);
+            int row = ContentIndexTexture.RowOf(rowByte(px));
+            counts[row]++;
+            if (isA != null && isA(px)) aCounts[row]++;
+            total++;
+        }
+        if (total == 0) return (null, null);
+        long need = (long)Math.Ceiling(total * RowUseShare);
+        var rows = new HashSet<int>();
+        long inRows = 0, aInRows = 0;
+        for (int r = 1; r <= 16; r++)
+            if (counts[r] >= need) { rows.Add(r); inRows += counts[r]; aInRows += aCounts[r]; }
+        if (rows.Count == 0) return (null, null);
+        string? sub = null;
+        if (isA != null)
+        {
+            if (aInRows <= inRows * RowUseShare) sub = "B";
+            else if (inRows - aInRows <= inRows * RowUseShare) sub = "A";
+        }
+        return (rows, sub);
     }
 
     /// <summary>
@@ -393,7 +609,7 @@ internal static class MatcapStudio
             var template = env.ReadGameFile(MatcapMaterial.VanillaTemplatePath);
             if (template == null)
                 return (null, null, null, "no-template", ProteusLoc.Localize("Matcap.Refused.NoTemplate", "The game's reflection material could not be read, so no matcap material could be made."));
-            mtrl = MatcapMaterial.Build(template, entry.Normal, MatcapWriter.MaskGamePath(record.Token), lib.Texture, entry.AlphaThreshold);
+            mtrl = MatcapMaterial.Build(template, entry.Normal, MatcapWriter.MaskGamePath(record.Token.Length > 0 ? record.Token : MatcapPlan.TokenFor(Path.GetFileName(modRoot.TrimEnd('\\', '/')))), lib.Texture, entry.AlphaThreshold);
         }
         return (src, mtrl, null, "", "");
     }
@@ -500,8 +716,11 @@ internal static class MatcapStudio
     /// </summary>
     private static bool EditedSinceWritten(string modRoot, string rel, string sha8)
     {
-        var full = MatcapWriter.Full(modRoot, rel);
-        try { return File.Exists(full) && sha8.Length > 0 && HairPortPlan.Sha8(File.ReadAllBytes(full)) != sha8; }
+        try
+        {
+            var full = MatcapWriter.Full(modRoot, rel);   // outside the mod: throws, and counts as edited
+            return File.Exists(full) && sha8.Length > 0 && HairPortPlan.Sha8(File.ReadAllBytes(full)) != sha8;
+        }
         catch { return true; }
     }
 }

@@ -711,3 +711,45 @@ This is commit `4f535282`.
 - **Phase C blame at `4f535282`:**
   - `-w -M -C`: contributor non-trivial 0, no per-file change.
   - `-w -M -C -C`: contributor non-trivial 0. The one new change since the Phase B tip is `XivLiveMesh/HavokSkeleton.cs` `using` +1, with the reason "Phase C SPDX": the line-1 edit shifted copy detection onto an existing import.
+
+## Agent A3 (self-report)
+
+The step-8 merge of `test` (T8 = `1e2c5cc6`) into the branch (P8 = `d9d8f7d4`), left staged and uncommitted for the orchestrator. Merge base `d4734c54`.
+
+Folder: C:\Users\solon\AppData\Local\Temp\claude\861b008b34a06d0d\5936bcc1-21b0-4a70-8eb3-e82d4006af47\scratchpad-agentA\ (reused; still holds my stage 1 and 2 scratch, see Agent A's stage 2 note)
+Opened:
+- W/Proteus/Plugin.cs (lines 33–38, the conflict hunk)
+- W/docs/contrib-clean-room-log.md (lines 710–713, before appending)
+Shell commands:
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room status --short` (before the merge, after staging)
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room rev-parse HEAD test`
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room merge --no-commit --no-ff test`
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room diff --name-only --diff-filter=U`
+- `grep -n -E "^(<<<<<<<|=======|>>>>>>>)" E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Plugin.cs`
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room merge-base HEAD test`
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room diff --stat --cached HEAD`
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room diff HEAD -- Proteus/Gui/StatusWindow.cs Proteus/Plugin.cs`
+- `comm -12 <(git -C E:/orca/workspaces/Proteus/licence-clean-room diff --name-only d4734c54 d9d8f7d4 | sort) <(git -C E:/orca/workspaces/Proteus/licence-clean-room diff --name-only d4734c54 test | sort)` (refused by the worktree guard; replaced by the next two)
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room diff --name-only d4734c54 d9d8f7d4`
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room diff --name-only d4734c54 test`
+- `python C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/closure.py test C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/closure_t8.tsv C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/events_t8.tsv C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/seeds_r2.tsv`
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room log --format="%h %s" a25a3b56..test -- Proteus/Gui/StatusWindow.cs Proteus/Plugin.cs Proteus/Gui/ModsTab.cs Proteus/Services/CompositorService.cs Proteus/Services/CompositorService.Carriers.cs Proteus/Services/SidecarDiscoveryService.cs Proteus/Interop/PenumbraBridge.cs Proteus/Interop/GlamourerBridge.cs`
+- `grep -c -E "^(fef434a7|31a00c0d|fea86dd5|dd53194b|91336ab4)" C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/events_t8.tsv`
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room diff -U0 d4734c54 d9d8f7d4 -- Proteus/Plugin.cs Proteus/Gui/StatusWindow.cs AGENTS.md`
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room diff -U0 d4734c54 test -- AGENTS.md`
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room add Proteus/Plugin.cs`
+- `dotnet build E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Proteus.csproj -c Release > C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/build_m8.out 2>&1`
+- `grep -c -E "error CS|warning CS" C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/build_m8.out`
+- `grep -E "Build succeeded|Warning\(s\)|Error\(s\)" C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/build_m8.out`
+- `tail -n 2 E:/orca/workspaces/Proteus/licence-clean-room/docs/contrib-clean-room-log.md`; `wc -l E:/orca/workspaces/Proteus/licence-clean-room/docs/contrib-clean-room-log.md`
+Sub-agents: none
+Conflicts: 1, in `Proteus/Plugin.cs` (the BuildNumber line only). Resolved with the branch's line (the larger number, 1474 against test's 1473). No other resolution line, no new code. AGENTS.md and StatusWindow.cs auto-merged: their test hunks and branch hunks do not overlap.
+Files changed on both sides since the merge base: AGENTS.md, `Proteus/Gui/StatusWindow.cs`, `Proteus/Plugin.cs`.
+The "other" commits:
+- fef434a7, 31a00c0d (merge), fea86dd5, 91336ab4 (merge): each touched `StatusWindow.cs` or `Plugin.cs` only in Solona's own regions (StatusWindow's colour-window highlight handling, Plugin's import list and the log-export construction). None removed or edited a contributor or derived line.
+- dd53194b: touched `Plugin.cs` only in the log-export construction and one import line (already on `test` at a25a3b56, so measured in stage 1). No contributor or derived line.
+- Closure over `test` to T8 with the stage-1 seeds: identical to the stage-1 result (same 20 replacement events, none from these five commits; 0 tainted merge-resolution lines). Lines arriving from `test` that are contributor or derived: 0. Arriving lines added to the set: 0.
+Holes left: none.
+B/B2 regions touched by `test`: none. Test's hunks in `StatusWindow.cs` sit in the colour-window drawing (around lines 703–743 of the branch tip), away from B's rebuilt import line and content-index block; test's hunks in `Plugin.cs` (an import line near the top, the log-export construction near line 297) are away from B's and B2's lines (the provider wiring, the refresh parser and handler, the IPC log attach and detach). The BuildNumber line is the only shared line.
+Build of the merged tree (`dotnet build W/Proteus/Proteus.csproj -c Release`): succeeded, 0 errors, 0 warnings.
+Identifier-grep hits: 0 (this section quotes no code or strings of the removal set)

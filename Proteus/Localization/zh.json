@@ -6670,5 +6670,157 @@
   "Parts.Matcap.PortKept": {
     "message": "该模型是 Proteus 移植的发型之一。在它带有 matcap 期间，Proteus 会让它保持原样，也不会自动重新生成与它共用材质的其他种族的移植，直到你撤销 matcap。在工作室中手动移植这些种族时，仍会重新生成。",
     "description": ""
+  },
+  "Matcap.Refused.RowFileSwap.Fmt": {
+    "message": "{0} 将此部件的材质换成了另一个文件，因此单行 matcap 无法跟随。",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoNormal": {
+    "message": "此部件的材质没有法线贴图，而单行 matcap 依靠它来裁切。",
+    "description": ""
+  },
+  "Matcap.Refused.RowAmbiguousOption.Fmt": {
+    "message": "组“{0}”有两个名为“{1}”的选项，因此单行 matcap 无法区分它们。",
+    "description": ""
+  },
+  "Matcap.Refused.RowShader.Fmt": {
+    "message": "单行 matcap 需要部件使用 character.shpk，而 {0} 使用的是 {1}。",
+    "description": ""
+  },
+  "Matcap.Refused.RowOwnedByFeature.Fmt": {
+    "message": "{0} 已被 Proteus 的装备着色器升级改写。请先撤销它，再添加单行 matcap。",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Fmt": {
+    "message": "无法裁切该行：{0}。",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Normal": {
+    "message": "无法读取法线贴图",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Index": {
+    "message": "无法读取索引贴图",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Write": {
+    "message": "无法写入裁切后的材质",
+    "description": ""
+  },
+  "Matcap.Refused.RowTextureVaries.Fmt": {
+    "message": "{0} 会替换此部件的法线或索引贴图，因此一次裁切无法适配所有选项。",
+    "description": ""
+  },
+  "Matcap.Refused.RowEmpty.Fmt": {
+    "message": "此部件没有像素使用第 {0} 行。",
+    "description": ""
+  },
+  "Matcap.Refused.RowNothingLeft": {
+    "message": "使用此材质的所有部件都已有 matcap。",
+    "description": ""
+  },
+  "Matcap.Refused.RowNotGear": {
+    "message": "单个颜色行的 matcap 只适用于装备和饰品。",
+    "description": ""
+  },
+  "Matcap.Refused.RowOneMaterial": {
+    "message": "单个颜色行的 matcap 一次只能用于一种材质。请只勾选同一材质的部件。",
+    "description": ""
+  },
+  "Matcap.Refused.RowMixedThreshold": {
+    "message": "此部件的各选项对裁切方式不一致，且其顶点色会将其裁掉。单行 matcap 无法同时适配。",
+    "description": ""
+  },
+  "Matcap.Refused.RowVertexAlpha": {
+    "message": "此部件的顶点色会裁掉单行 matcap，且无法更改。",
+    "description": ""
+  },
+  "Matcap.Refused.RowGameGear": {
+    "message": "单个颜色行的 matcap 适用于模组自带的装备，不适用于游戏本身的装备。",
+    "description": ""
+  },
+  "Matcap.Row.GameFile": {
+    "message": "游戏自带的文件",
+    "description": ""
+  },
+  "Matcap.Row.DefaultData": {
+    "message": "模组的默认文件",
+    "description": ""
+  },
+  "Matcap.Row.Option.Fmt": {
+    "message": "“{0}”的选项“{1}”",
+    "description": ""
+  },
+  "Matcap.Row.Container.Fmt": {
+    "message": "“{0}”的条目 {1}",
+    "description": ""
+  },
+  "Parts.Matcap.RowOnly": {
+    "message": "仅限一个颜色行",
+    "description": ""
+  },
+  "Parts.Matcap.RowOnlyTip": {
+    "message": "只把 matcap 放在部件材质某一颜色行的像素上，例如蕾丝或饰边图案。不勾选任何部件即可覆盖使用此材质的所有部件。",
+    "description": ""
+  },
+  "Parts.Matcap.RowReading": {
+    "message": "正在读取颜色行…",
+    "description": ""
+  },
+  "Parts.Matcap.RowNoRows": {
+    "message": "此部件的材质没有可选的颜色行。",
+    "description": ""
+  },
+  "Parts.Matcap.RowSub": {
+    "message": "子行",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubBoth": {
+    "message": "A 和 B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubA": {
+    "message": "仅 A",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubB": {
+    "message": "仅 B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubOnly.Fmt": {
+    "message": "此材质只使用子行 {0}。",
+    "description": ""
+  },
+  "Parts.Matcap.RowMaterial": {
+    "message": "材质",
+    "description": ""
+  },
+  "Parts.Matcap.RowAll.Fmt": {
+    "message": "覆盖所有用 {0} 绘制的部件。",
+    "description": ""
+  },
+  "Parts.Matcap.RowFollowWarn": {
+    "message": "此材质在 Proteus 中设置了颜色。加了 matcap 的行像素由材质副本绘制，不会跟随这些颜色。",
+    "description": ""
+  },
+  "Parts.Matcap.RowHolesWarn": {
+    "message": "此部件的部分镂空孔位于该行的三角形内，因此会露出 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.RowStale": {
+    "message": "制作此单行 matcap 后，作者的材质已更改。请撤销后重新应用。",
+    "description": ""
+  },
+  "Matcap.Refused.RowManifestUnreadable": {
+    "message": "无法读取模组的文件列表（meta.json），因此未做任何更改。",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoSource": {
+    "message": "Proteus 在模组和游戏中都找不到此部件的材质，因此没有可裁切的内容。",
+    "description": ""
+  },
+  "Matcap.Refused.RowMapSwap.Fmt": {
+    "message": "{0} 将此部件的法线或索引贴图换成了另一个文件，因此单行 matcap 无法跟随。",
+    "description": ""
   }
 }

@@ -36,4 +36,35 @@ public class LogAnonymizerTests
     public void ARedirectedProfileOutsideUsersIsReplaced()
         => Assert.Equal(@"cfg at D:\Profiles\<USER>\AppData and D:/Profiles/<USER>/x",
             LogAnonymizer.Scrub(@"cfg at D:\Profiles\jane\AppData and D:/Profiles/jane/x", @"D:\Profiles\jane"));
+
+    // [AC-mod-path-containment-7][EDGE-mod-path-containment-26] The harness's rules: whole tokens, any case, longest
+    // first; short names and the built-in collection left; a name that is both is a collection.
+    [Theory]
+    [InlineData("Jane Doe drew c0801", "<CHARACTER> drew c0801")]
+    [InlineData("JANE DOE and jane doe", "<CHARACTER> and <CHARACTER>")]
+    [InlineData("Rue is true, Rue_S and Rues stay", "<COLLECTION> is true, Rue_S and Rues stay")]
+    [InlineData("Rue Mod over Rue", "<COLLECTION> over <COLLECTION>")]
+    [InlineData("Ab and Default stay", "Ab and Default stay")]
+    [InlineData("My (Main)+ collection", "<COLLECTION> collection")]
+    public void CharacterAndCollectionNamesAreReplaced(string input, string expected)
+        => Assert.Equal(expected, LogAnonymizer.Scrub(input, null, ["Rue", "Rue Mod", "Ab", "Default", "My (Main)+"], "Jane Doe"));
+
+    [Fact]
+    public void ANameThatIsBothIsACollection()
+        => Assert.Equal("<COLLECTION> is both", LogAnonymizer.Scrub("Twin is both", null, ["Twin"], "Twin"));
+
+    // [AC-mod-path-containment-7][EDGE-mod-path-containment-26] A collection named after a log tag keeps the tag; one
+    // named after a body is still the user's, and goes.
+    [Fact]
+    public void LogTagNamedCollectionKeepsTheTag()
+    {
+        Assert.Equal("[Proteus] refresh", LogAnonymizer.Scrub("[Proteus] refresh", null, ["Proteus", "penumbra"], "Glamourer"));
+        Assert.Equal("<COLLECTION> body", LogAnonymizer.Scrub("Rue body", null, ["Rue"], (string?)null));
+    }
+
+    // [EDGE-mod-path-containment-27]
+    [Fact]
+    public void UserNameIsStillScrubbedWithNames()
+        => Assert.Equal(@"C:\Users\<USER>\x <CHARACTER>",
+            LogAnonymizer.Scrub(@"C:\Users\jane\x Jane Doe", null, null, "Jane Doe"));
 }

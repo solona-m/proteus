@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using CheapLoc;
 using Dalamud.Interface.Windowing;
@@ -294,7 +295,11 @@ public sealed class Plugin : IDalamudPlugin
             presets, editRouter, uvMapDl, uvRemap,
             modCreation, onionImport, contentImport, luminisImport, emissiveImport, eyeImport, modExport,
             textureLoader, partsPanel, hatCompat, hairPort, autoRefit, shaderUpgrade, variantRepoint, modMoves,
-            new LogExportService(capture, compositor, penumbra, config, dataDir));
+            new LogExportService(capture, compositor, penumbra, config, dataDir,
+                // The names Copy Logs must keep out of the file, read where ObjectTable may be read.
+                () => Framework.RunOnFrameworkThread(() => (
+                    (IReadOnlyCollection<string>?)penumbra.GetCollections()?.Values.ToList() ?? [],
+                    ObjectTable.LocalPlayer?.Name.TextValue))));
 
         liveMesh = new Gui.LiveMeshOverlay(ObjectTable, DataManager, penumbra, ChatGui, log);
 

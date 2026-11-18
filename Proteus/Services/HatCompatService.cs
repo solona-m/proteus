@@ -52,7 +52,7 @@ public static class HatCompatService
     /// <summary>
     /// The one spelling of a mod-relative path this class compares, records and looks up by: forward slashes.
     /// Every comparison here is a plain string compare, so one file under two spellings would be two files.
-    /// Not <see cref="Native"/>, which goes the other way.
+    /// Joined onto the mod only through <see cref="ModPath"/>, which keeps it inside.
     /// </summary>
     internal static string Rel(string rel) => rel.Replace('\\', '/');
 
@@ -199,7 +199,9 @@ public static class HatCompatService
     public static List<string> SiblingFiles(string modRoot, string gamePath, string rel)
     {
         // Canonicalised on the way in AND per manifest entry, or the dedupe misses. See Rel.
-        var found = new List<string> { Rel(rel) };
+        // A redirect is the author's to write: one outside the mod is never probed, listed or fitted (ModPath).
+        var found = new List<string>();
+        if (ModPath.TryResolve(modRoot, Rel(rel), out _)) found.Add(Rel(rel));
         try
         {
             foreach (var r in PenumbraModMeta.ReadAllRedirects(modRoot))
@@ -207,7 +209,7 @@ public static class HatCompatService
                 if (!r.GamePath.Equals(gamePath, StringComparison.OrdinalIgnoreCase)) continue;
                 var sibling = Rel(r.File);
                 if (found.Contains(sibling, StringComparer.OrdinalIgnoreCase)) continue;
-                if (File.Exists(Path.Combine(modRoot, Native(sibling)))) found.Add(sibling);
+                if (ModPath.TryResolve(modRoot, sibling, out var full) && File.Exists(full)) found.Add(sibling);
             }
         }
         catch (IOException) { /* the one we were given is still worth patching */ }
@@ -268,7 +270,8 @@ public static class HatCompatService
         rel = Rel(rel);
         var record = ReadRecord(modRoot);
         if (record == null) return null;
-        var backup = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, BackupSubdir, Native(rel));
+        // A path outside the mod was never ours: nothing to forget (and the reader already dropped it).
+        if (!ModPath.TryBackup(modRoot, BackupSubdir, rel, out var backup)) return null;
         try { if (File.Exists(backup)) File.Delete(backup); }
         catch (Exception ex) { return $"the old backup {backup} could not be deleted: {ex.Message}"; }
 
@@ -316,7 +319,7 @@ public static class HatCompatService
         }
 
         byte[]? current = null;
-        try { current = File.ReadAllBytes(Path.Combine(modRoot, Native(rel))); }
+        try { if (ModPath.TryResolve(modRoot, rel, out var file)) current = File.ReadAllBytes(file); }
         catch (IOException) { /* gone or locked: let Revert speak for it */ }
         catch (UnauthorizedAccessException) { }
 
@@ -445,8 +448,11 @@ public static class HatCompatService
         // ── from here on the mod is being changed ───────────────────────────
         try
         {
+            // Both resolved before anything is copied: a rel outside the mod throws here, with nothing on disk.
+            var target = ModPath.Resolve(modRoot, proposal.Rel);
+            ModPath.Backup(modRoot, BackupSubdir, proposal.Rel);
             Backup(modRoot, proposal.Rel);
-            PenumbraModMeta.AtomicWrite(Path.Combine(modRoot, Native(proposal.Rel)), patched);
+            PenumbraModMeta.AtomicWrite(target, patched);
 
             var record = ReadRecord(modRoot) ?? new HatCompatRecord();
             if (!record.Files.Contains(proposal.Rel, StringComparer.OrdinalIgnoreCase))
@@ -494,13 +500,19 @@ public static class HatCompatService
 
         var restoredFrom = new List<string>();
         var skipped = new List<string>();
+        // Every target and backup classified before the first write: one outside the mod is skipped, never touched.
+        var paths = new Dictionary<string, (string Target, string Backup)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rel in wanted)
+            if (ModPath.TryResolve(modRoot, rel, out var file) && ModPath.TryBackup(modRoot, BackupSubdir, rel, out var bak))
+                paths[rel] = (file, bak);
         foreach (var rel in wanted)
         {
-            var backup = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, BackupSubdir, Native(rel));
+            if (!paths.TryGetValue(rel, out var at)) { skipped.Add(rel); continue; }
+            var backup = at.Backup;
             if (!File.Exists(backup)) { skipped.Add(rel); continue; }
             try
             {
-                PenumbraModMeta.AtomicWrite(Path.Combine(modRoot, Native(rel)), File.ReadAllBytes(backup));
+                PenumbraModMeta.AtomicWrite(at.Target, File.ReadAllBytes(backup));
                 restoredFrom.Add(backup);
                 record.Files.RemoveAll(f => f.Equals(rel, StringComparison.OrdinalIgnoreCase));
                 record.Hidden.Remove(rel);
@@ -618,24 +630,36 @@ public static class HatCompatService
             var record = JsonSerializer.Deserialize<HatCompatRecord>(File.ReadAllText(path));
             if (record == null) return null;
 
+            // The record ships inside the mod, so its author controls it: an entry naming a path outside the mod is
+            // dropped (ModPath), counted once.
+            int dropped = 0;
+            bool Inside(string rel)
+            {
+                if (ModPath.TryResolve(modRoot, rel, out _)) return true;
+                dropped++;
+                return false;
+            }
+
             // Distinct AFTER canonicalising, so two spellings of one file collapse to one entry.
-            record.Files = record.Files.Select(Rel).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            record.Replaced = (record.Replaced ?? []).Select(Rel).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            record.Files = record.Files.Select(Rel).Where(Inside).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            record.Replaced = (record.Replaced ?? []).Select(Rel).Where(Inside).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
             var hidden = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-            foreach (var (k, v) in record.Hidden) hidden[Rel(k)] = v;
+            foreach (var (k, v) in record.Hidden ?? []) if (Inside(Rel(k))) hidden[Rel(k)] = v;
             record.Hidden = hidden;
 
             // The LOWEST of two colliding stamps: wrongly refitting a current patch is harmless, wrongly
             // keeping a stale one is permanent.
             var versions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            foreach (var (k, v) in record.Versions)
+            foreach (var (k, v) in record.Versions ?? [])
             {
                 var key = Rel(k);
+                if (!Inside(key)) continue;
                 versions[key] = versions.TryGetValue(key, out var had) ? Math.Min(had, v) : v;
             }
             record.Versions = versions;
 
+            ModPath.NoteDropped("hat compat", modRoot, dropped);
             return record;
         }
         catch { return null; }
@@ -655,11 +679,9 @@ public static class HatCompatService
     /// </summary>
     private static void Backup(string modRoot, string rel)
     {
-        var backup = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, BackupSubdir, Native(rel));
+        var backup = ModPath.Backup(modRoot, BackupSubdir, rel);
         if (File.Exists(backup)) return;
         Directory.CreateDirectory(Path.GetDirectoryName(backup)!);
-        File.Copy(Path.Combine(modRoot, Native(rel)), backup);
+        File.Copy(ModPath.Resolve(modRoot, rel), backup);
     }
-
-    private static string Native(string rel) => rel.Replace('/', Path.DirectorySeparatorChar);
 }

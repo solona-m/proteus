@@ -513,8 +513,18 @@ internal static class VariantRepointWriter
                                             MaterialId = w.Folder };
                     r.Items.Add(entry);
                 }
+                // Only keys this write actually adds are recorded as ours: a key the container already holds (the author's,
+                // a row matcap's pre-published cut, or added since the plan was made) is skipped by EditContainers, and
+                // recording it would let our undo take out a redirect we never wrote.
+                if (PenumbraModMeta.TryReadContainerRedirects(modRoot) is not { } held)
+                {
+                    left.Add((w.Item, RepointReason.WriteFailed));
+                    continue;
+                }
                 var add = w.Copies.Where(c => !entry.Redirects.Any(e => e.Container.Ref.SameAs(c.Copy.Container)
-                                                                         && PenumbraModMeta.SameFile(e.GamePath, c.Copy.GamePath)))
+                                                                         && PenumbraModMeta.SameFile(e.GamePath, c.Copy.GamePath))
+                                              && !held.Any(h => h.Container.SameAs(c.Copy.Container)
+                                                                && PenumbraModMeta.SameFile(h.GamePath, c.Copy.GamePath)))
                                   .ToList();
                 if (add.Count == 0) continue;
                 entry.Pending = true;

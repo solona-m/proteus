@@ -242,6 +242,34 @@ public sealed class MatcapStrings
 
     public readonly string Edited = ProteusLoc.Localize("Parts.Matcap.Edited", "The model was changed since.");
 
+    // ── a matcap on one colour row ──
+    public readonly string RowOnly = ProteusLoc.Localize("Parts.Matcap.RowOnly", "Only on one colour row");
+    public readonly string RowOnlyTip = ProteusLoc.Localize("Parts.Matcap.RowOnlyTip",
+        "Put the matcap only on the pixels of one colour row of the part's material, such as a lace or trim pattern. Leave everything unticked to cover every part with this material.");
+    public readonly string RowReading = ProteusLoc.Localize("Parts.Matcap.RowReading", "Reading the colour rows…");
+    public readonly string RowNoRows = ProteusLoc.Localize("Parts.Matcap.RowNoRows", "This part's material has no colour rows to pick from.");
+    public readonly string RowSub = ProteusLoc.Localize("Parts.Matcap.RowSub", "Sub-row");
+    public readonly string RowSubBoth = ProteusLoc.Localize("Parts.Matcap.RowSubBoth", "A and B");
+    public readonly string RowSubA = ProteusLoc.Localize("Parts.Matcap.RowSubA", "A only");
+    public readonly string RowSubB = ProteusLoc.Localize("Parts.Matcap.RowSubB", "B only");
+    public readonly string RowSubOnlyFmt = ProteusLoc.Localize("Parts.Matcap.RowSubOnly.Fmt", "This material only uses sub-row {0}.");
+    public readonly string RowMaterial = ProteusLoc.Localize("Parts.Matcap.RowMaterial", "Material");
+    public readonly string RowAllFmt = ProteusLoc.Localize("Parts.Matcap.RowAll.Fmt", "Covers every part drawn with {0}.");
+    public readonly string RowFollowWarn = ProteusLoc.Localize("Parts.Matcap.RowFollowWarn",
+        "This material has colours set in Proteus. The matcapped row's pixels draw from a copy of the material and won't follow them.");
+    public readonly string RowHolesWarn = ProteusLoc.Localize("Parts.Matcap.RowHolesWarn",
+        "Some cut-out holes in this part sit inside the row's triangles, so they will show the matcap.");
+    public readonly string RowStale = ProteusLoc.Localize("Parts.Matcap.RowStale",
+        "The author's material changed since this row matcap was made. Undo it and apply it again.");
+    public readonly string RowOneMaterial = ProteusLoc.Localize("Matcap.Refused.RowOneMaterial",
+        "A matcap on one colour row works on one material at a time. Tick parts of a single material.");
+    public readonly string RowNothingLeft = ProteusLoc.Localize("Matcap.Refused.RowNothingLeft",
+        "Every part with this material already has a matcap.");
+    public readonly string RowGameGear = ProteusLoc.Localize("Matcap.Refused.RowGameGear",
+        "A matcap on one colour row works on a mod's own gear, not the game's own pieces.");
+    public readonly string RowNotGear = ProteusLoc.Localize("Matcap.Refused.RowNotGear",
+        "A matcap on one colour row works on gear and accessories only.");
+
     public readonly string Superseded = ProteusLoc.Localize("Parts.Matcap.Superseded",
         "The model no longer uses this matcap (the mod was updated).");
 
