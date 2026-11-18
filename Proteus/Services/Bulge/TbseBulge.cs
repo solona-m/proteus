@@ -36,10 +36,21 @@ internal sealed class TbseBulge
     public required Vector3[] Hole { get; init; }
     public required Vector3[] Positions { get; init; }
 
-    private static readonly Lazy<TbseBulge?> shared = new(() => Load(null, out _));
+    private static readonly Lazy<(TbseBulge? Bulge, string? Why)> shared = new(() => (Load(null, out var why), why));
 
-    /// <summary>The embedded bulge, or null when there is none (it ships only once the owner's sculpt exists).</summary>
-    internal static TbseBulge? Shared => shared.Value;
+    /// <summary>The embedded bulge, or null when it is missing or damaged (see <see cref="LoadFailure"/>).</summary>
+    internal static TbseBulge? Shared => shared.Value.Bulge;
+
+    /// <summary>Why the embedded bulge could not be loaded, or null when it was.</summary>
+    internal static string? LoadFailure => shared.Value.Bulge == null ? shared.Value.Why : null;
+
+    private static int said;
+
+    /// <summary>Say <paramref name="why"/> once a session: a damaged or missing asset switches the bulge off, and says so.</summary>
+    internal static void SayOnce(string why, Action<string>? to)
+    {
+        if (to != null && System.Threading.Interlocked.Exchange(ref said, 1) == 0) to($"bulge: switched off — {why}");
+    }
 
     internal static TbseBulge? Load(string? json, out string? why)
     {

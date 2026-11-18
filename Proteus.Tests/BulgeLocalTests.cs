@@ -134,6 +134,27 @@ public partial class BulgeLocalTests(ITestOutputHelper output)
             output.WriteLine($"{name}: featureless in {sw.ElapsedMilliseconds} ms — {swapped.Collapsed} triangles collapsed; penis read after: "
                              + $"{reading?.Penis}; drawn skin vertices on penis bones {onPenis}");
             Assert.False(reading?.Penis ?? false, $"{name} still reads as having a penis");
+            // The bulge faces outward on the real body: each face at its rim turns the way the body's skin does there.
+            var before = ModelPartReader.Read(bytes)!;
+            var bt = bulge.Data.triangles;
+            int rimFaces = 0, inward = 0;
+            float worstCos = 1f;
+            for (int f = 0; f + 2 < bt.Length; f += 3)
+            {
+                int r = Enumerable.Range(0, 3).Select(k => bt[f + k]).FirstOrDefault(v => bulge.Data.rim[v] >= 0, -1);
+                if (r < 0) continue;
+                var pa = At(parts, swapped.SlotOf[bt[f]]); var pb = At(parts, swapped.SlotOf[bt[f + 1]]); var pc = At(parts, swapped.SlotOf[bt[f + 2]]);
+                var rp = At(parts, swapped.SlotOf[r]);
+                int bv = before.Parts.Where(q => q.Island < 0 && q.AttributeMask == 0 && q.Label == "1.1").SelectMany(q => q.Triangles).Distinct()
+                               .MinBy(v => Vector3.Distance(At(before, v), rp));
+                var n = Vector3.Normalize(new Vector3(before.Normals[bv * 3], before.Normals[bv * 3 + 1], before.Normals[bv * 3 + 2]));
+                float cos = Vector3.Dot(Vector3.Normalize(Vector3.Cross(pb - pa, pc - pa)), n);
+                rimFaces++;
+                if (cos < 0f) { inward++; worstCos = MathF.Min(worstCos, cos); }
+            }
+            output.WriteLine($"   {name}: {rimFaces} rim faces, {inward} turned past 90 deg from the skin's normal (worst cos {worstCos:0.00})");
+            // A reversed winding would turn nearly all of them; a steep wall out of the hole turns a few just past 90 deg.
+            Assert.True(inward * 4 < rimFaces, $"{name}: {inward} of {rimFaces} rim faces face into the body");
             Assert.Equal(0, onPenis);
             Assert.True(sw.ElapsedMilliseconds < 3000, $"{name}: {sw.ElapsedMilliseconds} ms");
         }

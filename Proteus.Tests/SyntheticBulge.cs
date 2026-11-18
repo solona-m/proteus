@@ -21,7 +21,7 @@ internal static class SyntheticBulge
     /// <param name="outerRings">Rings of main skin beyond the first two (each a little further out): a big body, so the bulge's
     /// own vertices are a small share of it (as on a real body, where a same-mesh landing reads as identity).</param>
     internal static byte[] Body(IReadOnlyList<Vector3>? hole = null, float height = 0.06f, int rings = 5, string? domeBone = null,
-                                int outerRings = 0)
+                                int outerRings = 0, string? ringBone = null)
     {
         hole ??= TbseBulge.Shared!.Hole;
         int h = hole.Count;
@@ -42,6 +42,8 @@ internal static class SyntheticBulge
         var w = new List<(string, float)[]?>();
         // The main skin: the hole, and two rings outward from it, 6 and 12 cm out.
         var bodyW = new (string, float)[] { ("j_kosi", 0.6f), ("j_asi_a_l", 0.2f), ("j_asi_a_r", 0.2f) };
+        // With ringBone, the hole ring carries a share on that bone (TBSE-X weights its crotch skin a little to the penis).
+        var ringW = ringBone == null ? bodyW : new (string, float)[] { ("j_kosi", 0.4f), ("j_asi_a_l", 0.2f), ("j_asi_a_r", 0.2f), (ringBone, 0.2f) };
         var ringsOut = new List<float> { 0f, 1.5f, 3f };
         for (int r = 1; r <= outerRings; r++) ringsOut.Add(3f + r * 0.05f);
         // The extra outer rings hang on the hips alone, so the crotch is found where it was.
@@ -53,7 +55,7 @@ internal static class SyntheticBulge
                 var d = p - centre;
                 pos.Add(centre + d * (1f + k) - normal * (k * 0.01f));
                 nrm.Add(normal);
-                w.Add(r < 3 ? bodyW : hipsW);
+                w.Add(r == 0 ? ringW : r < 3 ? bodyW : hipsW);
             }
         var skinTris = new List<int>();
         for (int r = 0; r < ringsOut.Count - 1; r++)
@@ -72,7 +74,7 @@ internal static class SyntheticBulge
             {
                 pos.Add(centre + (p - centre) * (1f - t) + normal * (height * MathF.Sin(t * MathF.PI / 2)));
                 nrm.Add(normal);
-                w.Add(r == 0 ? bodyW : domeW);
+                w.Add(r == 0 ? ringW : domeW);
             }
         }
         int apex = pos.Count;

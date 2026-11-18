@@ -25,7 +25,8 @@ public partial class BulgeRefitTests
     /// over the dome (a garment made on a body with a penis, carrying it).
     /// </summary>
     internal static byte[] Garment(byte[] body, Func<ModelPart, bool> keep, bool genitalMaterial = false, bool pouch = false,
-                                   bool genitalSkin = false, Func<Vector3, bool>? where = null)
+                                   bool genitalSkin = false, Func<Vector3, bool>? where = null, bool pubes = false,
+                                   bool liftedSkin = false)
     {
         var parts = ModelPartReader.Read(body)!;
         var skin = ModelSkinReader.Read(body, null, null)!;
@@ -64,7 +65,18 @@ public partial class BulgeRefitTests
         where = null;   // the extras sit over the dome whatever the cloth's band
         if (genitalMaterial) meshes.Add(MeshOf(Benis, dome, 0.0005f));
         if (pouch) meshes.Add(MeshOf(Pouch, dome, 0.008f));
-        if (genitalSkin) meshes.Add(MeshOf(SyntheticBulge.Skin, dome, 0f));
+        if (genitalSkin && !liftedSkin) meshes.Add(MeshOf(SyntheticBulge.Skin, dome, 0f));
+        if (genitalSkin && liftedSkin)
+        {
+            // One skin mesh: the dome on the body, and the main skin lifted 4 cm off it.
+            var on = MeshOf(SyntheticBulge.Skin, dome, 0f);
+            var off = MeshOf(SyntheticBulge.Skin, parts.Parts.Where(p => p.Island < 0 && p.Label == "1.1"), 0.04f);
+            int n0 = on.Positions.Length;
+            meshes.Add(new SyntheticModel.SurfaceMesh(SyntheticBulge.Skin, [.. on.Positions, .. off.Positions], [.. on.Normals, .. off.Normals],
+                [.. on.Uv, .. off.Uv], [.. on.Weights, .. off.Weights],
+                [(0u, [.. on.Submeshes[0].Triangles, .. off.Submeshes[0].Triangles.Select(i => i + n0)])]));
+        }
+        if (pubes) meshes.Add(MeshOf("/mt_c0101b0001_bibopube.mtrl", dome, 0.003f));
         return SyntheticModel.BuildSurface([], [.. meshes]);
     }
 
@@ -337,5 +349,69 @@ public partial class BulgeRefitTests
         Assert.NotNull(why1);
         Assert.Null(TbseBulge.Load("{\"source\":\"x\",\"hole\":[],\"positions\":[],\"uv\":[],\"land\":[],\"weights\":[],\"rim\":[],\"triangles\":[]}", out var why2));
         Assert.Equal("the TBSE bulge file is malformed", why2);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-featureless-bulge-3")]
+    public void Carried_pubes_are_not_cloth_covering_the_crotch()
+    {
+        // Crotchless cloth, and a body mod's pubic hair mesh over the dome: the pubes cover nothing.
+        var body = SyntheticBulge.Body();
+        var source = Source();
+        var hole = TbseBulge.Shared!.Hole;
+        var centre = hole.Aggregate(Vector3.Zero, (s, p) => s + p) / hole.Length;
+        float radius = hole.Max(p => Vector3.Distance(p, centre));
+        var garment = Garment(source, p => p.Label == "1.1", pubes: true, where: p => Vector3.Distance(p, centre) >= 2f * radius);
+        var (plan, log) = Run(garment, Pair(source, body));
+        var (plain, _) = Run(garment, Pair(source, body), noBulge: true);
+        Assert.Contains(log, l => l.Contains("crotch not covered", StringComparison.Ordinal));
+        Assert.Equal(Hash(plain.Model), Hash(plan.Model));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-featureless-bulge-18")]
+    public void A_shoe_or_glove_limb_refit_is_today()
+    {
+        // swapSlot set (the automatic refit of shoes and gloves): the hook is passed by entirely.
+        var body = SyntheticBulge.Body();
+        var source = Source();
+        var garment = Garment(source, _ => true);
+        var log = new List<string>();
+        var limb = BodyRetarget.Plan(ModelPartReader.Read(garment)!, (byte[])garment.Clone(), [Pair(source, body)], "_sho",
+                                     replaceSkin: true, swapSlot: "_dwn", log: log.Add);
+        var plain = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoBulge: true), () =>
+            BodyRetarget.Plan(ModelPartReader.Read(garment)!, (byte[])garment.Clone(), [Pair(source, body)], "_sho",
+                              replaceSkin: true, swapSlot: "_dwn"));
+        Assert.DoesNotContain(log, l => l.StartsWith("bulge:", StringComparison.Ordinal));
+        Assert.Equal(Hash(plain.Model), Hash(limb.Model));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-featureless-bulge-7")]
+    [Trait("Plan", "EDGE-featureless-bulge-2")]
+    public void A_body_without_a_penis_through_the_factory_is_today()
+    {
+        // The hook entered (the pair has its factory), the body no penis: byte for byte today's refit.
+        var body = SyntheticBulge.Body(height: 0.004f);
+        var source = SyntheticBulge.Body(height: 0.0045f);
+        var garment = Garment(source, _ => true);
+        var (plan, _) = Run(garment, Pair(source, body));
+        var (plain, _) = Run(garment, Pair(source, body), noBulge: true);
+        Assert.Equal(Hash(plain.Model), Hash(plan.Model));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-featureless-bulge-35")]
+    public void Genital_skin_in_a_kept_skin_mesh_is_today()
+    {
+        // The garment's skin holds the old body's genitals and, in the same mesh, skin lifted far off the body: the rebuild
+        // keeps that mesh whole, so its collapsed genitals would show as a hole. Today's refit instead.
+        var body = SyntheticBulge.Body();
+        var source = Source();
+        var garment = Garment(source, p => p.Label == "1.1", genitalSkin: true, liftedSkin: true);
+        var (plan, log) = Run(garment, Pair(source, body), replaceSkin: true);
+        var (plain, _) = Run(garment, Pair(source, body), replaceSkin: true, noBulge: true);
+        Assert.Contains(log, l => l.Contains("garment carries genitals and this refit keeps its skin", StringComparison.Ordinal));
+        Assert.Equal(Hash(plain.Model), Hash(plan.Model));
     }
 }

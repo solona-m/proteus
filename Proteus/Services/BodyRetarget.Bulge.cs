@@ -28,6 +28,92 @@ internal static partial class BodyRetarget
     private static readonly Regex BodyModMaterial = new(@"(^|/)mt_c\d{4}b\d{4}_", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex NotGenital = new("pube|pierc|nail", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    /// <summary>One planning run, its log and warn lines into <c>sink</c> (warn = true), its trace kept when <c>traced</c>.</summary>
+    internal delegate Planned PlanRun(ModelParts garment, byte[] bytes, IReadOnlyList<SlotPair> pairs, Action<bool, string> sink, bool traced);
+
+    /// <summary>
+    /// The refit with the featureless bulge (plan featureless-bulge): <see cref="FitBulges"/> makes the pairs the garment
+    /// covers featureless; the refit onto them is planned, and today's beside it (in the background, for the guard). Each
+    /// run's lines are held back and only the refit returned writes its own. It never fails a refit: a refusal, an exception
+    /// or the guard (the featureless refit folds more than its residual and more than today's) returns today's, saying why.
+    /// </summary>
+    internal static Planned PlanFeatureless(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs, bool replaceSkin,
+                                            Action<string>? log, Action<string>? warn, PlanRun run)
+    {
+        var featLines = new List<(bool Warn, string Line)>();
+        var todayLines = new List<(bool Warn, string Line)>();
+        void Replay(List<(bool Warn, string Line)> lines)
+        {
+            lock (lines)
+                foreach (var (isWarn, line) in lines) (isWarn ? warn ?? log : log)?.Invoke(line);
+        }
+        static Action<bool, string> Into(List<(bool, string)> lines) => (w, l) => { lock (lines) lines.Add((w, l)); };
+
+        Planned? featureless = null;
+        System.Threading.Tasks.Task<Planned>? today = null;
+        try
+        {
+            var fitted = FitBulges(garment, garmentBytes, pairs, replaceSkin, log, out var fitGarment, out var fitBytes,
+                                   out bool bulged, out bool garmentSkinCollapsed, warn);
+            if (bulged)
+            {
+                if (Tuned.BulgeFault) throw new InvalidOperationException("bulge fault (test)");
+                // Today's refit, planned beside the featureless one for the guard below, so the guard costs no wall time.
+                var tuned = Tuned;
+                today = System.Threading.Tasks.Task.Run(() => WithTuning(tuned, () => run(garment, garmentBytes, pairs, Into(todayLines), false)));
+                today.ContinueWith(t => _ = t.Exception, System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted);
+                featureless = run(fitGarment, fitBytes, fitted, Into(featLines), true);
+                // The garment's own genital skin was collapsed, yet the rebuild kept a skin mesh of the garment's: its
+                // collapsed triangles would show as a hole. Today's refit instead.
+                if (garmentSkinCollapsed && featureless.Report.Swap is { Kept: > 0 })
+                {
+                    log?.Invoke("bulge: _dwn left as it is — garment carries genitals and this refit keeps its skin");
+                    featureless = null;
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            (warn ?? log)?.Invoke($"bulge: _dwn left as it is — failed: {e.Message}");
+            featureless = null;
+        }
+        if (featureless != null)
+        {
+            // The guard compares the whole garment's folds: the bulge changes the landing at the crotch alone (away from it
+            // the correspondence is today's), so a fold it adds there counts in the whole garment's. BulgeForceGuard (tests
+            // only) counts the featureless refit as folding without end, to drive the guard.
+            int folded = Tuned.BulgeForceGuard ? int.MaxValue : featureless.Report.Folded;
+            if (folded > BulgeResidual)
+            {
+                var plain = TodayOr();
+                if (folded > plain.Report.Folded)
+                {
+                    log?.Invoke($"bulge: _dwn penis kept: guard — featureless {featureless.Report.Folded} folds, NoBulge {plain.Report.Folded}");
+                    return plain;
+                }
+            }
+            Replay(featLines);
+            return featureless;
+        }
+        return TodayOr();
+
+        // Today's refit: the one planned beside the featureless one where there is one and it finished (its lines replayed),
+        // else planned now with the refit's own log.
+        Planned TodayOr()
+        {
+            Planned? planned = null;
+            try { planned = today?.GetAwaiter().GetResult(); }
+            catch (Exception e)
+            {
+                (warn ?? log)?.Invoke($"bulge: today's refit planned beside it failed ({e.Message}); planned again");
+                planned = null;
+            }
+            if (planned == null) return run(garment, garmentBytes, pairs, (w, l) => (w ? warn ?? log : log)?.Invoke(l), true);
+            Replay(todayLines);
+            return planned;
+        }
+    }
+
     /// <summary>
     /// The featureless bulge (plan featureless-bulge): for each legs pair onto a body with a penis that the garment covers,
     /// the pair onto that body made featureless (<see cref="SlotPair.Featureless"/>). The garment's own genitals — a body
@@ -40,7 +126,8 @@ internal static partial class BodyRetarget
     /// <param name="garmentSkinCollapsed">Whether any of the garment's own skin triangles were collapsed as genitals.</param>
     internal static IReadOnlyList<SlotPair> FitBulges(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                                       bool replaceSkin, Action<string>? log, out ModelParts fitGarment,
-                                                      out byte[] fitBytes, out bool any, out bool garmentSkinCollapsed)
+                                                      out byte[] fitBytes, out bool any, out bool garmentSkinCollapsed,
+                                                      Action<string>? warn = null)
     {
         fitGarment = garment;
         fitBytes = garmentBytes;
@@ -71,7 +158,8 @@ internal static partial class BodyRetarget
                 var (fp, why) = pair.Featureless();
                 if (fp is not { } made)
                 {
-                    log?.Invoke($"bulge: {slot} left as it is — {why}");
+                    // A failure is a bug, said as one; every other reason is the body's.
+                    (why.StartsWith("failed", StringComparison.Ordinal) ? warn ?? log : log)?.Invoke($"bulge: {slot} left as it is — {why}");
                     continue;
                 }
                 // The caller's pair, onto the featureless body: whatever the caller set on it after BuildPair stays.
@@ -100,7 +188,7 @@ internal static partial class BodyRetarget
             }
             catch (Exception e)
             {
-                log?.Invoke($"bulge: {slot} left as it is — failed: {e.Message}");
+                (warn ?? log)?.Invoke($"bulge: {slot} left as it is — failed: {e.Message}");
             }
         }
         if (!any) return result;
@@ -192,7 +280,9 @@ internal static partial class BodyRetarget
                               .Where(p => briefs.Any(p, BulgeBriefsReach)));
         if (crotch.Count == 0) return false;
         var crotchSet = new SpatialSet(crotch, BulgeCoverReach);
-        int covering = garment.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material))
+        // Cloth only: a body mod's pubic hair, piercings or genital material the garment carries covers nothing.
+        int covering = garment.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material)
+                                                && !IsBodyExtraMaterial(p.Material) && !BodyModMaterial.IsMatch(p.Material))
                               .SelectMany(p => p.Triangles).Distinct()
                               .Count(v => crotchSet.Any(PointOf(garment, v), BulgeCoverReach));
         return covering >= BulgeCoverPoints;

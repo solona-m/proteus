@@ -51,8 +51,8 @@ internal sealed class BulgeAsset
 
     private static readonly Lazy<BulgeAsset?> shared = new(() => Load(null, out _));
 
-    /// <summary>The asset embedded in Proteus.dll, or null when it is missing or does not match its footprint (logged
-    /// once by whoever asks first through <see cref="Load"/>).</summary>
+    /// <summary>The asset embedded in Proteus.dll, or null when it is missing or does not match its footprint (the reason
+    /// comes back from <see cref="Load"/>; no production path reads this asset yet — the women's-body bulge will).</summary>
     internal static BulgeAsset? Shared => shared.Value;
 
     /// <summary>Load the asset from <paramref name="bytes"/> and <paramref name="footprintJson"/>, or the embedded ones

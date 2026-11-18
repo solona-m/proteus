@@ -56,7 +56,8 @@ public class BulgeTransplantTests
     public void Rim_takes_the_bodys_weights_and_no_penis_bone_remains()
     {
         var bulge = TbseBulge.Shared!;
-        var body = SyntheticBulge.Body(domeBone: "iv_funyachin_phy_a");
+        // The hole ring itself on a penis bone too (as TBSE-X), so the rim's and the skin's genital share must both go.
+        var body = SyntheticBulge.Body(domeBone: "iv_funyachin_phy_a", ringBone: "iv_funyachin_phy_a");
         var swapped = BulgeSwap.Featureless(body, bulge, out var why);
         Assert.True(swapped != null, why);
         var skin = ModelSkinReader.Read(swapped!.Model, null, null)!;
@@ -70,11 +71,15 @@ public class BulgeTransplantTests
                                   .Select(k => skin.BoneNames[skin.BoneIndices[v * 8 + k]]).ToList();
             Assert.DoesNotContain(bones, GenitalParts.IsPenisBone);
             if (bulge.Data.rim[i] < 0) continue;
+            Assert.Contains("j_kosi", bones);   // the rim's penis share went to the hips
             // The body's own vertex at that hole point, on the main skin.
             var main = parts.Parts.Single(p => p.Island < 0 && p.Label == "1.1").Triangles.Distinct()
                             .MinBy(u => Vector3.Distance(At(parts, u), bulge.Hole[bulge.Data.rim[i]]));
+            // The rim and the main skin beside it move as one: the same weights, read back from the written body.
             for (int k = 0; k < 4; k++)
-                Assert.Equal(before.BoneWeights[main * 8 + k], skin.BoneWeights[v * 8 + k], 2);
+                Assert.Equal(skin.BoneWeights[main * 8 + k], skin.BoneWeights[v * 8 + k], 2);
+            Assert.DoesNotContain(Enumerable.Range(0, 4).Where(k => skin.BoneWeights[main * 8 + k] > 0f)
+                                            .Select(k => skin.BoneNames[skin.BoneIndices[main * 8 + k]]), GenitalParts.IsPenisBone);
         }
     }
 
@@ -221,5 +226,33 @@ public class BulgeTransplantTests
         var (made, why) = pair.Featureless!();
         Assert.True(made != null, why);
         Assert.IsNotType<IdentityCorrespondence>(made!.Value.Correspondence);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-featureless-bulge-1")]
+    public void The_bulge_faces_outward()
+    {
+        // Every bulge face at the rim turns the way the body's skin there does: a reversed winding would be culled.
+        var bulge = TbseBulge.Shared!;
+        var body = SyntheticBulge.Body();
+        var swapped = BulgeSwap.Featureless(body, bulge, out var why)!;
+        Assert.True(swapped != null, why);
+        var before = ModelPartReader.Read(body)!;
+        var after = ModelPartReader.Read(swapped.Model)!;
+        var t = bulge.Data.triangles;
+        int checkedFaces = 0;
+        for (int f = 0; f + 2 < t.Length; f += 3)
+        {
+            int r = Enumerable.Range(0, 3).Select(k => t[f + k]).FirstOrDefault(v => bulge.Data.rim[v] >= 0, -1);
+            if (r < 0) continue;
+            var a = At(after, swapped.SlotOf[t[f]]); var b = At(after, swapped.SlotOf[t[f + 1]]); var c = At(after, swapped.SlotOf[t[f + 2]]);
+            var face = Vector3.Cross(b - a, c - a);
+            var hole = bulge.Hole[bulge.Data.rim[r]];
+            int bv = before.Parts.Single(p => p.Island < 0 && p.Label == "1.1").Triangles.Distinct().MinBy(v => Vector3.Distance(At(before, v), hole));
+            var n = new Vector3(before.Normals[bv * 3], before.Normals[bv * 3 + 1], before.Normals[bv * 3 + 2]);
+            Assert.True(Vector3.Dot(face, n) > 0f, $"bulge face {f / 3} at the rim faces into the body");
+            checkedFaces++;
+        }
+        Assert.True(checkedFaces > 0);
     }
 }
