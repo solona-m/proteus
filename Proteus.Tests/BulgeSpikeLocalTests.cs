@@ -16,7 +16,7 @@ namespace Proteus.Tests;
 /// log of what the rules were fixed from. S0.1 is the genital inventory.
 /// </summary>
 [Trait("Speed", "Slow")]
-public class BulgeSpikeLocalTests(ITestOutputHelper output)
+public partial class BulgeSpikeLocalTests(ITestOutputHelper output)
 {
     private const string M = LocalData.Mods + ":";
     private const string TbseOpt = M + "The Body SE/p2/step 6- smallclothes options/";
