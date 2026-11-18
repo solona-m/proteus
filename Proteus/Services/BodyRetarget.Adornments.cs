@@ -124,8 +124,9 @@ internal static partial class BodyRetarget
             var own = parts.Parts.Where(p => p.Island >= 0 && p.Mesh == sub.Mesh && p.Submesh == sub.Submesh)
                                  .Select(p => p.Triangles).ToList();
             if (own.Count == 0) own.Add(sub.Triangles);
-            // A pube is judged on the skin and the cloth alone — unless the piercings box carries it as a piercing.
-            bool byAuthor = !IsBodyPubeMaterial(sub.Material) || (carryPiercings && IsBodyPiercingMaterial(sub.Material));
+            // Only what the pubes box alone brings in is judged on the skin and the cloth alone: anything the nail or
+            // piercing rule carries (a "_pubepierce" with the piercings box on, a "_pubenails") keeps the author's say-so.
+            bool byAuthor = IsBodyAdornmentMaterial(sub.Material) && (carryPiercings || !IsBodyPiercingMaterial(sub.Material));
             islands.AddRange(own.Select(tris => (sub, tris, Carried(tris, byAuthor))));
         }
 

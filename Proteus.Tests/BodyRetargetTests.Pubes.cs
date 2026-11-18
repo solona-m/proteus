@@ -239,6 +239,20 @@ public partial class BodyRetargetTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-refit-keep-pubes-7")]
+    [Trait("Plan", "EDGE-refit-keep-pubes-8")]
+    public void A_nail_named_pube_keeps_the_author_s_say_so_either_way()
+    {
+        // [AC-refit-keep-pubes-7] [EDGE-refit-keep-pubes-8] A nail whose name also says pube is a nail first: under cloth
+        // beside the author's own nail it comes in, as it always did, with the pubes box off and on.
+        const string PubeNails = "/mt_c0201b0001_pubenails.mtrl";
+        var garment = OpaqueOver(new SyntheticModel.Mesh(TreNails, new SyntheticModel.Sub(0, OffsetZ: 0.001f)));
+        var body = BareSkin(new SyntheticModel.Mesh(PubeNails, new SyntheticModel.Sub(0, OffsetZ: 0.001f)));
+        Assert.Equal(1, DrawnOf(BodyRetarget.SwapSkin(garment, [Resized("_dwn", body)], out _), PubeNails));
+        Assert.Equal(1, DrawnOf(BodyRetarget.SwapSkin(garment, [Resized("_dwn", body)], out _, carryPubes: true), PubeNails));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-refit-keep-pubes-23")]
     [Trait("Plan", "EDGE-refit-keep-pubes-5")]
     public void Another_race_s_copy_of_the_same_pubes_gives_way()
