@@ -154,6 +154,7 @@ public sealed class ShaderUpgradeWatcher : IDisposable
         LeftReason.UnsupportedPlacement => "unsupported-placement",
         LeftReason.ProteusPack => "proteus-pack",
         LeftReason.Declined => "declined",
+        LeftReason.RowMatcap => "row-matcap",
         _ => "write-failed",
     };
 

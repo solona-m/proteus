@@ -6095,6 +6095,10 @@
     "message": "あなたが元に戻した",
     "description": ""
   },
+  "Settings.GearShaders.Reason.RowMatcap": {
+    "message": "以前のアップグレードから行マットキャップが切り出されています（先にマットキャップを元に戻してください）",
+    "description": ""
+  },
   "Settings.GearShaders.UpgradeNow": {
     "message": "着ている装備を今すぐ更新",
     "description": ""
@@ -6117,6 +6121,22 @@
   },
   "Settings.GearShaders.Edited.Fmt": {
     "message": "{0} はシェーダーのアップグレード後に編集されたため、元に戻すでは変更しません。作者のオリジナルは Proteus/shaderupgrade-backup/{0} に保存されています。元に戻すには、それをファイルに上書きコピーしてください。",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcap.Fmt": {
+    "message": "{0} のアップグレード済みマテリアルから行マットキャップが切り出されているため、元に戻すはそのままにします。先にそのマットキャップを元に戻し（{1}）、その後でこれを元に戻してください。",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapKept.Fmt": {
+    "message": "{0} のアップグレード済みマテリアルから切り出された行マットキャップを、{1} から作ったリフィットや髪の移植がまだ描画しています。それらを作り直すか元に戻し、マットキャップをもう一度元に戻してから、これを元に戻してください。",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapEdited.Fmt": {
+    "message": "{0} のアップグレード済みマテリアルから行マットキャップが切り出されており、そのマットキャップの後で {1} が変更されたため、マットキャップもまだ元に戻せません。先に後の変更を元に戻し（または Proteus/matcap-backup のコピーを戻し）、次にマットキャップ、最後にこれを元に戻してください。",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapLater.Fmt": {
+    "message": "{0} のアップグレード済みマテリアルから行マットキャップが切り出されており、そのマットキャップの後で {1} が {2} を変更しました。先に {1} を元に戻し、次にマットキャップ、最後にこれを元に戻してください。",
     "description": ""
   },
   "Settings.GearShaders.Busy": {
@@ -6683,8 +6703,16 @@
     "message": "行マットキャップにはパーツが character.shpk である必要がありますが、{0} は {1} を使っています。",
     "description": ""
   },
-  "Matcap.Refused.RowOwnedByFeature.Fmt": {
-    "message": "{0} は Proteus の装備シェーダーアップグレードで書き換えられています。先にそれを元に戻してから行マットキャップを追加してください。",
+  "Matcap.Refused.RowLegacyWear.Fmt": {
+    "message": "{0} はまだ古いシェーダー（characterlegacy.shpk）のままで、行マットキャップには character.shpk が必要です。一度装備して装備シェーダーで character.shpk {1} の件数にカーソルを合わせると理由が分かります。",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyDeclined.Fmt": {
+    "message": "{0} はアップグレードを元に戻したため古いシェーダー（characterlegacy.shpk）のままで、行マットキャップには character.shpk が必要です。装備して {2} の「{1}」を押してから、行マットキャップを追加してください。",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyOff.Fmt": {
+    "message": "{0} はまだ古いシェーダー（characterlegacy.shpk）のままで、行マットキャップには character.shpk {2} の「{1}」をオンにして一度装備してから、行マットキャップを追加してください。",
     "description": ""
   },
   "Matcap.Refused.RowBake.Fmt": {

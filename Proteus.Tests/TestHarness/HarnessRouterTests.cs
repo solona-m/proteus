@@ -230,6 +230,41 @@ public class HarnessRouterTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-upgrade-vs-matcap-6")]
+    [Trait("Plan", "EDGE-upgrade-vs-matcap-23")]
+    public async Task State_shader_upgrade_last_run_carries_the_scrubbed_refusal()
+    {
+        // The session's character name inside a refusal (a mod folder can be named anything) comes out scrubbed.
+        var hold = new Proteus.Services.Matcap.MatcapRowCut.RowHold(Proteus.Services.Matcap.MatcapRowCut.RowHoldKind.Active, "model/wrs.mdl", null);
+        var msg = Proteus.Services.ShaderUpgradeWriter.RowMatcapMessage("Hidden Person bracelet/mt_c0201a0153_wrs_a.mtrl", hold);
+        f.Game.ShaderUpgradeView = new Proteus.Services.ShaderUpgradeWatcher.View(
+            Enabled: false, LastRun: new("undo-worn", 0, 0, 0, 0, 1, false, false, DateTime.UtcNow, msg));
+        f.Names.Add("Hidden Person", NameKind.Character);
+        var (status, b) = await f.Get("/state");
+        Assert.Equal(200, status);
+        var run = b.GetProperty("shaderUpgrade").GetProperty("lastRun");
+        Assert.Equal(1, run.GetProperty("refused").GetInt32());
+        var text = run.GetProperty("message").GetString()!;
+        Assert.Contains("bracelet/mt_c0201a0153_wrs_a.mtrl", text);
+        Assert.DoesNotContain("Hidden Person", text);
+        Assert.Contains("<CHARACTER>", text);
+        Assert.DoesNotContain(":\\", text);
+
+        // One /state call site, and it passes the session's names.
+        var src = File.ReadAllText(Path.Combine(RepoRoot(), "Proteus", "TestHarness", "HarnessRouter.cs"));
+        var calls = System.Text.RegularExpressions.Regex.Matches(src, @"ShaderUpgradeBlock\(([^)]*\))?[^)]*\)").Select(m => m.Value).ToList();
+        Assert.Equal(2, calls.Count);   // the definition and the one call
+        Assert.All(calls, c => Assert.Contains("names", c));
+    }
+
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        return dir!.FullName;
+    }
+
+    [Fact]
     [Trait("Plan", "AC-dt-shader-upgrade-10")]
     [Trait("Plan", "EDGE-dt-shader-upgrade-69")]
     [Trait("Plan", "EDGE-issue-sweep-a-11")]

@@ -6095,6 +6095,10 @@
     "message": "deshecho por ti",
     "description": ""
   },
+  "Settings.GearShaders.Reason.RowMatcap": {
+    "message": "se recortó un matcap de fila de su mejora anterior (deshaz primero el matcap)",
+    "description": ""
+  },
   "Settings.GearShaders.UpgradeNow": {
     "message": "Actualizar lo que llevo puesto",
     "description": ""
@@ -6117,6 +6121,22 @@
   },
   "Settings.GearShaders.Edited.Fmt": {
     "message": "{0} se editó después de su actualización de shader, así que Deshacer lo deja como está. El original del autor se conserva en Proteus/shaderupgrade-backup/{0}: cópialo sobre el archivo para deshacer.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcap.Fmt": {
+    "message": "Del material mejorado de {0} se recortó un matcap de fila, así que Deshacer lo deja como está. Deshaz primero ese matcap ({1}) y después esto.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapKept.Fmt": {
+    "message": "Del material mejorado de {0} se recortó un matcap de fila que los reajustes o adaptaciones de pelo hechos a partir de {1} aún dibujan. Rehazlos o deshazlos, deshaz otra vez el matcap y después esto.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapEdited.Fmt": {
+    "message": "Del material mejorado de {0} se recortó un matcap de fila, y {1} cambió después de ese matcap, así que tampoco se puede deshacer aún el matcap. Deshaz primero el cambio posterior (o vuelve a poner la copia de Proteus/matcap-backup), después el matcap y después esto.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapLater.Fmt": {
+    "message": "Del material mejorado de {0} se recortó un matcap de fila, y {1} cambió {2} después de ese matcap. Deshaz primero {1}, después el matcap y después esto.",
     "description": ""
   },
   "Settings.GearShaders.Busy": {
@@ -6683,8 +6703,16 @@
     "message": "Un matcap de fila necesita la pieza en character.shpk, y {0} usa {1}.",
     "description": ""
   },
-  "Matcap.Refused.RowOwnedByFeature.Fmt": {
-    "message": "{0} fue reescrito por la mejora de shader de equipo de Proteus. Deshazla primero y luego añade el matcap de fila.",
+  "Matcap.Refused.RowLegacyWear.Fmt": {
+    "message": "{0} sigue con el shader antiguo (characterlegacy.shpk), y un matcap de fila necesita character.shpk. Póntelo una vez para que los shaders del equipo lo pasen a character.shpk y después añade el matcap de fila. Si sigue con el shader antiguo, pasa el ratón por el recuento en {1} para ver por qué.",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyDeclined.Fmt": {
+    "message": "{0} sigue con el shader antiguo (characterlegacy.shpk) porque deshiciste su mejora, y un matcap de fila necesita character.shpk. Póntelo y pulsa «{1}» en {2}; después añade el matcap de fila.",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyOff.Fmt": {
+    "message": "{0} sigue con el shader antiguo (characterlegacy.shpk), y un matcap de fila necesita character.shpk. Activa «{1}» en {2} y póntelo una vez; después añade el matcap de fila.",
     "description": ""
   },
   "Matcap.Refused.RowBake.Fmt": {

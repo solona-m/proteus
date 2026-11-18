@@ -105,7 +105,9 @@ public sealed partial class PartsPanel
 
     private MatcapStudio.Environment MatcapEnv() =>
         new(path => textureLoader.LoadRawFile(null, path), textureLoader, matcapConfig.EnableCompression,
-            Path.Combine(Path.GetTempPath(), "Proteus", "matcap"), RowOnly: matcapRowOnly, RowSub: matcapRowSub);
+            Path.Combine(Path.GetTempPath(), "Proteus", "matcap"), RowOnly: matcapRowOnly, RowSub: matcapRowSub,
+            // Shapes a row matcap's refusal for a part still on the old shader (switch Gear shaders on, or wear it once).
+            GearShadersOn: matcapConfig.PluginEnabled && matcapConfig.AutoUpgradeLegacyShaders);
 
     /// <summary>The colour-table row pair a matcap is cut to (0: the whole part), and its sub-row.</summary>
     private int matcapRowOnly;

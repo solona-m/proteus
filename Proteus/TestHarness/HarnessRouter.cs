@@ -151,7 +151,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                 enabled = qa.AutoRefitEnabled,
                 bodyIndex = qa.BodyIndex,
             },
-            shaderUpgrade = ShaderUpgradeBlock(Game.ShaderUpgrade()),
+            shaderUpgrade = ShaderUpgradeBlock(Game.ShaderUpgrade(), names),
             variantRepoint = VariantRepointBlock(Game.VariantRepoint()),
             hairPort = HairPortBlock(Game.HairPort(), names),
             job = jobs.Current?.View(),
@@ -174,7 +174,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
         }).ToList();
 
     /// <summary>The gear shader upgrade in <c>/state</c>: read-only, scrubbed with the rest.</summary>
-    internal static object ShaderUpgradeBlock(ShaderUpgradeWatcher.View v) => new
+    internal static object ShaderUpgradeBlock(ShaderUpgradeWatcher.View v, SessionNames names) => new
     {
         enabled = v.Enabled, busy = v.Busy, waiting = v.Waiting, awaitingRedraw = v.AwaitingRedraw, maskGloss = v.MaskGloss,
         upgraded = v.UpgradedList.Select(u => new
@@ -187,7 +187,9 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
         lastRun = v.LastRun is { } r
             ? new { kind = r.Kind, modsChanged = r.ModsChanged, filesChanged = r.FilesChanged, restored = r.Restored,
                     kept = r.Kept, refused = r.Refused, reloaded = r.Reloaded, redrawRequested = r.RedrawRequested,
-                    atUtc = r.AtUtc }
+                    atUtc = r.AtUtc,
+                    // An undo's refusals (mod-relative paths only); free text, so scrubbed like autoRefit's.
+                    message = names.Scrub(r.Message) }
             : null,
     };
 

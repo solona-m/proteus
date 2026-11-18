@@ -1529,6 +1529,8 @@ public sealed class SettingsStrings
         "a Proteus pack (Proteus draws it itself)");
     public readonly string GearShadersReasonDeclined = ProteusLoc.Localize("Settings.GearShaders.Reason.Declined",
         "undone by you");
+    public readonly string GearShadersReasonRowMatcap = ProteusLoc.Localize("Settings.GearShaders.Reason.RowMatcap",
+        "a row matcap was cut from its earlier upgrade (undo the matcap first)");
     public readonly string GearShadersUpgradeNow = ProteusLoc.Localize("Settings.GearShaders.UpgradeNow",
         "Upgrade what I'm wearing now") + "###shaderUpgradeNow";
     public readonly string GearShadersUpgradeNowTip = ProteusLoc.Localize("Settings.GearShaders.UpgradeNow.Tip",

@@ -92,6 +92,7 @@ internal sealed class ShaderUpgradePanel(ShaderUpgradeWatcher watcher, Configura
             "unsupported-placement" => s.GearShadersReasonUnsupportedPlacement,
             "proteus-pack" => s.GearShadersReasonProteusPack,
             "declined" => s.GearShadersReasonDeclined,
+            "row-matcap" => s.GearShadersReasonRowMatcap,
             _ => s.GearShadersReasonWriteFailed,
         };
     }

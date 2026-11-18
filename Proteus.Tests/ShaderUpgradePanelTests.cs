@@ -53,12 +53,28 @@ public class ShaderUpgradePanelTests
 
     [Fact]
     [Trait("Plan", "EDGE-dt-shader-upgrade-71")]
+    [Trait("Plan", "AC-upgrade-vs-matcap-7")]
     public void Left_tooltip_names_every_reason()
     {
         string[] reasons = ["old-table", "unsupported-form", "unreadable", "compositor", "write-failed", "legacy-mod",
-                            "mixed-specular", "specular-from-other-mod", "unsupported-placement", "proteus-pack", "declined"];
+                            "mixed-specular", "specular-from-other-mod", "unsupported-placement", "proteus-pack", "declined",
+                            "row-matcap"];
         var texts = reasons.Select(ShaderUpgradePanel.ReasonText).ToList();
         Assert.Equal(reasons.Length, texts.Distinct().Count());
         Assert.Equal(reasons.Order(), Enum.GetValues<LeftReason>().Select(ShaderUpgradeWatcher.ReasonName).Order());
+        Assert.Equal(Strings.Settings.GearShadersReasonRowMatcap, ShaderUpgradePanel.ReasonText("row-matcap"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-upgrade-vs-matcap-6")]
+    public void Undo_result_shows_the_row_matcap_refusal()
+    {
+        var hold = new Proteus.Services.Matcap.MatcapRowCut.RowHold(Proteus.Services.Matcap.MatcapRowCut.RowHoldKind.Active, "model/wrs.mdl", null);
+        var msg = ShaderUpgradeWriter.RowMatcapMessage("mat/wrs_a.mtrl", hold);
+        var undo = new ShaderUpgradeWatcher.RunInfo("undo-worn", 0, 0, 0, 0, 1, false, false, DateTime.UtcNow, msg);
+        var text = ShaderUpgradePanel.ResultText(new ShaderUpgradeWatcher.View(LastRun: undo))!;
+        Assert.Contains(string.Format(Strings.Settings.GearShadersResultFmt, 0, 0, 1), text);
+        Assert.Contains(msg, text);
+        Assert.Contains("mat/wrs_a.mtrl", msg);
     }
 }

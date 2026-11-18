@@ -6095,6 +6095,10 @@
     "message": "已由你撤销",
     "description": ""
   },
+  "Settings.GearShaders.Reason.RowMatcap": {
+    "message": "已从其先前的升级中切出行材质捕获（请先撤销该材质捕获）",
+    "description": ""
+  },
   "Settings.GearShaders.UpgradeNow": {
     "message": "立即升级身上装备",
     "description": ""
@@ -6117,6 +6121,22 @@
   },
   "Settings.GearShaders.Edited.Fmt": {
     "message": "{0} 在着色器升级后被编辑过，因此撤销不会改动它。作者的原始文件保存在 Proteus/shaderupgrade-backup/{0}：将其复制回去覆盖该文件即可撤销。",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcap.Fmt": {
+    "message": "{0} 的升级材质中切出了行材质捕获，因此撤销会保持原样。请先撤销该材质捕获（{1}），然后再撤销这个。",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapKept.Fmt": {
+    "message": "{0} 的升级材质中切出的行材质捕获，仍被由 {1} 制作的重新适配或发型移植所绘制。请重新制作或撤销它们，再次撤销该材质捕获，然后再撤销这个。",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapEdited.Fmt": {
+    "message": "{0} 的升级材质中切出了行材质捕获，而 {1} 在该材质捕获之后被修改过，因此该材质捕获目前也无法撤销。请先撤销之后的修改（或放回 Proteus/matcap-backup 中的副本），再撤销该材质捕获，然后再撤销这个。",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapLater.Fmt": {
+    "message": "{0} 的升级材质中切出了行材质捕获，而 {1} 在该材质捕获之后修改了 {2}。请先撤销 {1}，再撤销该材质捕获，然后再撤销这个。",
     "description": ""
   },
   "Settings.GearShaders.Busy": {
@@ -6683,8 +6703,16 @@
     "message": "单行 matcap 需要部件使用 character.shpk，而 {0} 使用的是 {1}。",
     "description": ""
   },
-  "Matcap.Refused.RowOwnedByFeature.Fmt": {
-    "message": "{0} 已被 Proteus 的装备着色器升级改写。请先撤销它，再添加单行 matcap。",
+  "Matcap.Refused.RowLegacyWear.Fmt": {
+    "message": "{0} 仍在使用旧着色器（characterlegacy.shpk），而行材质捕获需要 character.shpk。请穿戴一次，让装备着色器将其改为 character.shpk，然后再添加行材质捕获。如果仍停留在旧着色器，请将鼠标悬停在 {1} 下的计数上查看原因。",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyDeclined.Fmt": {
+    "message": "{0} 因为你撤销了它的升级而仍在使用旧着色器（characterlegacy.shpk），而行材质捕获需要 character.shpk。请穿戴它并在 {2} 中点击“{1}”，然后再添加行材质捕获。",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyOff.Fmt": {
+    "message": "{0} 仍在使用旧着色器（characterlegacy.shpk），而行材质捕获需要 character.shpk。请在 {2} 中开启“{1}”并穿戴一次，然后再添加行材质捕获。",
     "description": ""
   },
   "Matcap.Refused.RowBake.Fmt": {
