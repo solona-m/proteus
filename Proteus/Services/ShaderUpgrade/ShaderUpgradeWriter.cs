@@ -188,6 +188,12 @@ internal static class ShaderUpgradeWriter
         if (!Matcap.MatcapRecord.Exists(modRoot)) return false;
         var deps = Matcap.MatcapRowCut.Dependencies(modRoot, classify);
         if (deps.Unreadable) { message = Matcap.MatcapWriter.RecordUnreadableMessage; return true; }
+        if (deps.ManifestUnreadable)
+        {
+            message = ProteusLoc.Localize("Matcap.Refused.RowManifestUnreadable",
+                "The mod's list of files (meta.json) could not be read, so nothing was changed.");
+            return true;
+        }
         if (deps.HoldOf(e.Rel, e.Mask?.Rel, e.Mask?.GamePath) is not { } hold) return false;
         message = RowMatcapMessage(e.Rel, hold);
         return true;

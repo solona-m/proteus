@@ -420,9 +420,13 @@ internal static class MatcapRowCut
     internal sealed record RowEntryDeps(HashSet<string> Files, HashSet<string> CutTextures, IReadOnlyList<string> Models);
 
     /// <summary>What every recorded row matcap depends on; <see cref="Unreadable"/> holds everything.</summary>
-    internal sealed class RowDependencies(bool unreadable, IReadOnlyList<RowEntryDeps> entries, Func<RowEntryDeps, RowHold> hold)
+    internal sealed class RowDependencies(bool unreadable, IReadOnlyList<RowEntryDeps> entries, Func<RowEntryDeps, RowHold> hold,
+                                          bool manifestUnreadable = false)
     {
         public bool Unreadable { get; } = unreadable;
+        /// <summary>Row matcaps are recorded but the mod's meta.json can't be read, so which option files their cuts follow
+        /// can't be told: hold everything, as for an unreadable record.</summary>
+        public bool ManifestUnreadable { get; } = manifestUnreadable;
         public IReadOnlyList<RowEntryDeps> Entries { get; } = entries;
 
         /// <summary>
@@ -529,7 +533,7 @@ internal static class MatcapRowCut
 
             entries.Add(new RowEntryDeps(files, textures, models));
         }
-        return new RowDependencies(false, entries, Hold);
+        return new RowDependencies(false, entries, Hold, manifestUnreadable: redirects == null);
     }
 
     /// <summary>The hold's kind from the entry's own models, by priority: a later feature, edited on top, every model

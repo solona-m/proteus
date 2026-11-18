@@ -592,6 +592,42 @@ public class MatcapUpgradedRowTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-upgrade-vs-matcap-8")]
+    public void Source_gone_between_prepare_and_apply_refuses_the_apply()
+    {
+        using var f = new UpgradedRowFixture();
+        var p = f.Prepare();
+        Assert.True(p.Ok, p.Message);
+        File.Delete(MatcapWriter.Full(f.ModRoot, f.MatRel));
+        var before = f.Snapshot();
+        var o = MatcapWriter.Apply(f.ModRoot, p.Request!);
+        Assert.Equal(MatcapWriter.CodeEdited, o.Code);
+        Assert.Contains(f.MatRel, o.Message.Replace('\\', '/'));
+        UpgradedRowFixture.SameAs(before, f.Snapshot());
+        Assert.False(MatcapRecord.Exists(f.ModRoot));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-upgrade-vs-matcap-5")]
+    public void Unreadable_manifest_with_a_row_matcap_holds()
+    {
+        using var f = new UpgradedRowFixture(layout: UpgradedRowFixture.Layout.TwoOptions);
+        f.Apply();
+        var meta = Path.Combine(f.ModRoot, "meta.json");
+        var text = File.ReadAllText(meta);
+        File.WriteAllText(meta, "{ not json");
+        var before = ShaderUpgradeTestKit.Hashes(f.ModRoot);
+        // Which option files the cut follows can't be told: both are held, the second one included.
+        Assert.Equal(ShaderUpgradeWriter.Undone.Refused, f.RevertUpgrade(f.MatRels[1]));
+        Assert.Contains("meta.json", f.LastMessage);
+        Assert.Equal(before, ShaderUpgradeTestKit.Hashes(f.ModRoot));
+        Assert.Equal("{ not json", File.ReadAllText(meta));
+        File.WriteAllText(meta, text);
+        Assert.Equal(ShaderUpgradeWriter.Undone.Refused, f.RevertUpgrade(f.MatRels[1]));
+        Assert.Contains(f.MatRels[1], f.LastMessage);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-upgrade-vs-matcap-24")]
     public void Apply_recheck_hashes_only_on_size_or_mtime_change()
     {
@@ -839,7 +875,13 @@ public class MatcapUpgradedRowTests
         var before = f.Snapshot();
         var p = f.Prepare(f.Env(gearShadersOn: true));
         Assert.Equal(MatcapRowCut.CodeShader, p.Code);
-        Assert.Equal(MatcapRowCut.ShaderRefusal(Blue, MatcapRowCut.LegacyShader, f.MatRels[1], true, []), p.Message);
+        // Built here from the Wear key itself, not by the function under test.
+        var wear = string.Format(ProteusLoc.Localize("Matcap.Refused.RowLegacyWear.Fmt",
+            "{0} is still on the old shader (characterlegacy.shpk), and a row matcap needs character.shpk. Wear it once so Gear shaders moves it to character.shpk, then add the row matcap. If it stays on the old shader, hover the count under {1} to see why."),
+            Blue, SettingsPath);
+        Assert.Equal(char.ToUpperInvariant(wear[0]) + wear[1..], p.Message);
+        Assert.DoesNotContain(ProteusLoc.Localize("Settings.GearShaders.AutoUpgrade.Label", "Upgrade old gear to Dawntrail shaders"), p.Message);
+        Assert.DoesNotContain(ProteusLoc.Localize("Settings.GearShaders.UpgradeNow", "Upgrade what I'm wearing now"), p.Message);
         Assert.Contains(Blue[1..], p.Message);
         Assert.Contains(SettingsPath, p.Message);
         UpgradedRowFixture.SameAs(before, f.Snapshot());
