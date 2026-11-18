@@ -307,7 +307,7 @@ internal static partial class RefitCore
         var (vertices, positions, coverage) = BodyRetarget.SeamVertices(garment, skin, top.Points);
         if (coverage < BodyRetarget.SeamCover)
             return (null, null, $"it meets {positions} of {top.Points.Count} places of {top.File}'s split ({coverage:P0}), "
-                                + "another waist");
+                                + "another waist, or the same places rigged otherwise");
         string label = $"{top.File} on {top.BodyDir}";
         return (new BodyRetarget.SharedSeam(vertices, positions, label), SeamKey(chestDir, legsDir, top.File), "");
     }

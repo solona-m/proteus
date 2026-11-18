@@ -1601,7 +1601,9 @@ public sealed partial class AutoRefitWatcher : IDisposable
         BodyRetarget.SharedSeam? sharedSeam = null;
         string? seamKey = null;
         bool compareSeam = false;
+        // Nor for a group the player switched away from its refit: that piece is left as chosen below, unread.
         if (r.ModRoot != null && root != null && !route.Any && primary is "_top" or "_dwn"
+            && (r.Forced || !ChoseOtherwise(g, root, group))
             && (r.Forced || RecordedEntry(root, group, option, savePath) is not { Seam: null }))
         {
             compareSeam = true;

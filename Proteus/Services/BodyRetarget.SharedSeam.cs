@@ -207,6 +207,9 @@ internal static partial class BodyRetarget
         return edges;
     }
 
+    /// <summary>The open edges of the models <see cref="SplitPoints"/> has read, kept while the model is.</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ModelParts, OpenEdges> OpenEdgesCache = new();
+
     /// <summary>
     /// The split places of a top file against a set of legs files: each a node on the top's open edge that lies within
     /// <see cref="SnapEps"/> of a legs file's open-edge node with a vertex pair there weighted alike
@@ -217,12 +220,19 @@ internal static partial class BodyRetarget
                                             IEnumerable<(ModelParts Model, XivLiveMesh.SkinnedMesh Skin)> legs)
     {
         if (topSkin.VertexCount * 3 != top.Positions.Length) return null;
+        var legsEdges = legs.Where(l => l.Skin.VertexCount * 3 == l.Model.Positions.Length)
+                            .Select(l => OpenEdgesCache.GetValue(l.Model, m => OpenEdgesOf(m))).ToList();
+        // Most tops share no place with any legs file at all: counted on the raw cloth positions first, before the top's
+        // own edges are built.
+        if (!CoincidesAtLeast(top, legsEdges, LeastSeamPoints)) return null;
         var t = OpenEdgesOf(top);
         var split = new bool[t.Count];
         foreach (var (model, skin) in legs)
         {
             if (skin.VertexCount * 3 != model.Positions.Length) continue;
-            var l = OpenEdgesOf(model);
+            // Each legs file's edges once, however many tops are tried against it: built per top, a mod with 39 tops and
+            // 21 legs files (Farfalla) took 32 s and 16 GB to find it had no split.
+            var l = OpenEdgesCache.GetValue(model, m => OpenEdgesOf(m));
 
             // A face of the top lying on a face of the legs file corner for corner is a surface both carry.
             var copied = new bool[t.Count];
@@ -261,6 +271,27 @@ internal static partial class BodyRetarget
             weights.Add([.. t.VertsOf[n].Select(v => Influences(topSkin, v))]);
         }
         return at.Count >= LeastSeamPoints ? new SeamPoints([.. at], [.. weights]) : null;
+    }
+
+    /// <summary>Whether at least <paramref name="least"/> of the model's cloth vertices lie within <see cref="SnapEps"/> of a
+    /// node of any of <paramref name="others"/>.</summary>
+    private static bool CoincidesAtLeast(ModelParts model, IReadOnlyList<OpenEdges> others, int least)
+    {
+        if (others.Count == 0) return false;
+        int vc = model.Positions.Length / 3, found = 0;
+        var seen = new bool[vc];
+        foreach (var part in model.Parts)
+        {
+            if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            foreach (int v in part.Triangles)
+            {
+                if (v < 0 || v >= vc || seen[v]) continue;
+                seen[v] = true;
+                var p = new Vector3(model.Positions[v * 3], model.Positions[v * 3 + 1], model.Positions[v * 3 + 2]);
+                if (others.Any(o => o.Near(p).Any()) && ++found >= least) return true;
+            }
+        }
+        return false;
     }
 
     private static bool WeightedAlike(List<int> a, XivLiveMesh.SkinnedMesh aSkin, List<int> b, XivLiveMesh.SkinnedMesh bSkin)

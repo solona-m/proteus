@@ -66,4 +66,28 @@ public class SharedSeamCorpusLocalTests(ITestOutputHelper output)
             ? (opened.Model, skin)
             : null;
     }
+
+    private const string Farfalla = LocalData.Mods + ":Farfalla - by Solona";
+
+    /// <summary>
+    /// A big mod with no split (Farfalla: 39 chest and 21 legs files) answers quickly cold: each legs file's edges are built
+    /// once, not once per top. In game it took 32 s and 16 GB before, holding the redraws past their timeout; measured
+    /// 6.6 s and 2.5 GB cold after (2026-11-18; reading the 30 files is 1.0 s of it), off the framework thread and cached.
+    /// </summary>
+    [LocalDataFact(Farfalla, LocalData.TreMod)]
+    [Trait("Plan", "EDGE-split-waist-seam-34")]
+    public void Gate_BigModWithoutSplit_IsQuickCold()
+    {
+        string root = LocalData.Path(Farfalla);
+        var files = RefitCore.SeamFilesOf(PenumbraModMeta.ReadAllRedirects(root), BodyRetargetWriter.ReadRecord(root), Race)!;
+        var tre = BodySizeCatalog.Read(LocalData.Path(LocalData.TreMod));
+        long allocated = GC.GetTotalAllocatedBytes();
+        var clock = Stopwatch.StartNew();
+        var gate = RefitCore.ResolveSeamGate(root, files, Race, "Tre", tre, "Tre", tre, (_, _, _, _) => null);
+        clock.Stop();
+        long mb = (GC.GetTotalAllocatedBytes() - allocated) >> 20;
+        output.WriteLine($"{files.Tops.Count} chest, {files.Legs.Count} legs files: {gate.Refusal} in {clock.Elapsed.TotalSeconds:0.0} s, {mb} MB");
+        Assert.True(gate.NoSplit);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(8), $"{clock.Elapsed.TotalSeconds:0.0} s");
+    }
 }
