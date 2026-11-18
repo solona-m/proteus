@@ -413,6 +413,24 @@ are not covered by the Proteus Licence and stay the property of their owner.
 
 -------------------------------------------------------------------------------
 
+lava_bulge — featureless bulge mesh (carved out; not covered by the Proteus Licence)
+
+Proteus.dll embeds Resources/lava_bulge.mdl: a legs model sculpted on the
+LavaBod+ 2.2 legs model, its crotch shaped into a smooth, featureless bulge.
+LavaBod+ is its author's work, and its own terms stay as they are; nothing here
+grants any right to it.
+
+The sculpted bulge is the Proteus owner's own contribution, shipped by her
+decision (2026-11-18). For that contribution, the owner permits its geometry,
+as Proteus refits it onto a body, inside every model Proteus writes, and inside
+the users' and authors' mods that carry those models. It is not covered by the
+Proteus Licence.
+
+Resources/lava_bulge.footprint.json (the sculpted vertices, by index) is
+Proteus's own and is covered by the Proteus Licence.
+
+-------------------------------------------------------------------------------
+
 Files in the repository that are not part of the plugin
 
 - Git submodules, used only to build the tests (IpcContractTests reads the two
