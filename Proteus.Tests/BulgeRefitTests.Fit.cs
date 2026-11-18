@@ -414,4 +414,21 @@ public partial class BulgeRefitTests
         Assert.Contains(log, l => l.Contains("garment carries genitals and this refit keeps its skin", StringComparison.Ordinal));
         Assert.Equal(Hash(plain.Model), Hash(plan.Model));
     }
+
+    [Fact]
+    [Trait("Plan", "EDGE-featureless-bulge-3")]
+    public void A_carried_genital_material_is_not_cloth_covering_the_crotch()
+    {
+        // Crotchless cloth, and a body mod's genital material over the dome: it covers nothing.
+        var body = SyntheticBulge.Body();
+        var source = Source();
+        var hole = TbseBulge.Shared!.Hole;
+        var centre = hole.Aggregate(Vector3.Zero, (s, p) => s + p) / hole.Length;
+        float radius = hole.Max(p => Vector3.Distance(p, centre));
+        var garment = Garment(source, p => p.Label == "1.1", genitalMaterial: true, where: p => Vector3.Distance(p, centre) >= 2f * radius);
+        var (plan, log) = Run(garment, Pair(source, body));
+        var (plain, _) = Run(garment, Pair(source, body), noBulge: true);
+        Assert.Contains(log, l => l.Contains("crotch not covered", StringComparison.Ordinal));
+        Assert.Equal(Hash(plain.Model), Hash(plan.Model));
+    }
 }
