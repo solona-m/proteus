@@ -180,6 +180,14 @@ Confirmation counts (test `a25a3b56` and branch `71d450fb` give the same result)
 Tripwire (rev 10 definition): not fired. Condition 1: 51 + 19 + 13 = 83 (92 with IpcProvider.cs's derived lines) against 2 × (268 whole-file + 29 non-trivial direct) = 594. Condition 2: 0 Sensitive-Area files beyond the known Interop files once the class is excluded (21 before).
 Identifier-grep hits: 0
 
+### Stage 1c (spec gap for step 2: bridge construction facts)
+
+Opened: W/Proteus/Interop/PenumbraBridge.cs (lines 315–334); Grep tool, content mode, `void CheckAvailability|public Guid\? GetPlayerCollectionId|GetModSettings\(Guid|OnMainThread\(` in W/Proteus/Interop/PenumbraBridge.cs (-A 22, first 120 lines). Shell commands: `python C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/idcheck.py`; `git -C E:/orca/workspaces/Proteus/licence-clean-room status --short`. Added three interface-fact rows to spec §9.3 (both bridge constructors, and how a substitute plugin interface makes Penumbra absent). Sub-agents: none. Identifier-grep hits: 0.
+
+### Stage 1d (gated failure `ContribSpecTests.Glamourer_lock_warnings_name_the_item_and_slot`)
+
+Opened: W/Proteus.Tests/ContribSpecTests.cs (lines 150–233); Grep tool, content mode, `Glamourer_lock_warnings_name_the_item_and_slot` in W/Proteus.Tests/ContribSpecTests.cs. Shell commands: `python -c "import re,sys;sys.stdout.reconfigure(encoding='utf-8');t=open(r'C:\Users\solon\AppData\Local\Temp\claude\861b008b34a06d0d\5936bcc1-21b0-4a70-8eb3-e82d4006af47\scratchpad\step2.trx',encoding='utf-8').read();i=t.find('Glamourer_lock_warnings_name_the_item_and_slot\" ');j=t.find('</UnitTestResult>',i);print(t[i:j][:4000])"`; `python C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/idcheck.py`; `git -C E:/orca/workspaces/Proteus/licence-clean-room status --short`. Answer: spec error, §8.2 and §9.3 amended (the accessory setter's accepted slot codes, and the earlier refusal of any other slot argument, were missing). Sub-agents: none. Identifier-grep hits: 0.
+
 
 ## Orchestrator
 
@@ -215,3 +223,30 @@ Identifier-grep hits: 0
   - Condition 2: 0 Sensitive-Area files beyond the known ones (21 before the class was excluded). Not fired.
   - **Tripwire: fired at step 1, re-planned (rev 10); not fired at 1b.**
 - **Mixed set after 1b:** the six original files, `Proteus/Gui/ModsTab.cs`, `Proteus/Services/CompositorService.Carriers.cs`, `Proteus/Services/CompositorService.cs`, `proteus.slnx` and the sample folder.
+
+### Step 2: tests from the spec, proven on the old code
+
+- **Tests written by the orchestrator from the spec alone:**
+  - `Proteus.Tests/IpcProviderSpecTests.cs`;
+  - `Proteus.Tests/ContribSpecTests.cs`;
+  - the `Proteus.Tests/ContribCleanRoomRecordTests.cs` skeleton.
+- **Spec gaps returned to A, both answered as "spec error, amended" (A's stages 1c and 1d):**
+  - 1c: the bridge constructors, and how a test makes Penumbra absent;
+  - 1d: the accessory setter accepts only the four game slot codes, which led to a one-line test fix (slot code `nek`).
+- **Gated vs NewSeam test methods, per class:**
+  - `IpcProviderSpecTests`: 7 gated (registration, version, thread, dispose, the guard paths of R5/R6, the R6 master switch) and 7 NewSeam (R2, R3, R4, R5, R6, R11, R12), all citing §9.1. The NewSeam share is 7 of 14, above one third, so **AC-1's proof on the old code is weaker**: the registration and guard paths are proven on both codes, the lookups on the clean code only.
+  - `ContribSpecTests`: 6 gated (opening a mod with Penumbra absent, multi-select no-selection, the resolved-overlay record's shape, the body-shape signature with 5 cases, lock logging ×2) and 1 NewSeam theory (the refresh parse, 16 cases, citing §9.4).
+- **Not unit-reachable, so no test was written:**
+  - the Mods-tab click and the priority drag (§6.1, §6.2);
+  - the colour-index block (§6.3);
+  - the equip cooldown charged at the attempt (§8.1);
+  - the plugin wiring order (R9).
+
+  The existing `StutterFixesWiringTests` and `StutterFixesPureTests` cover the carrier helpers. The rest is left to the critics' §12 and spec review, and is UNVERIFIED in game where QA has no route.
+- **Seams the tests require of B:**
+  - `internal IpcProvider(IDalamudPluginInterface, Func<List<OverlayEntry>>, Func<OverlayEntry, List<ResolvedOverlay>>, Func<OverlayEntry, bool>, Action<string>, Configuration, IPluginLog)`;
+  - `internal static (bool Full, bool Silent) Plugin.ParseRefreshArguments(string)`.
+- **The gate**, run through D5: TRX output, console output never opened and then deleted, results read with `trx-summary.ps1`. Filter: WIDE-A plus the §10 classes (`ContentPieceSelectionTests`, `FaceUvDoublingTests`, `ShellMensLayoutTests`, `WomensArtOnMenTests`, `StutterFixesWiringTests`), `&CleanRoom!=NewSeam&CleanRoom!=NewBehaviour&FullyQualifiedName!~ContribCleanRoomRecordTests&Speed!=Slow`.
+  - Run 1: 1008 passed, 1 failed (`Glamourer_lock_warnings_name_the_item_and_slot`, `Assert.Contains()`, hash `e39328fca658ac0c`). It went to A, who answered "spec error" (1d), and the test now uses the game slot code.
+  - Run 2: **1009 passed, 0 failed, 0 skipped.** There are no baselines and no skips to carry forward. That TRX is kept as `step2-gate.trx` in the session scratchpad.
+- **`norm` (D5):** CRLF becomes LF, then trim; paths become `<path>`; GUIDs become `<guid>`; digit runs become `<n>`. The hash is the first 16 hex digits of SHA-256.
