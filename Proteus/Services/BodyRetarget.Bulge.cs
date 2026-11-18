@@ -54,6 +54,7 @@ internal static partial class BodyRetarget
             string slot = pair.Slot;
             try
             {
+                if (!MayTakeBulge(pair.Target)) continue;   // no piece the bulge could replace: today's refit, at no cost
                 var targetSkin = pair.TargetModel != null ? ModelSkinReader.Read(pair.TargetModel, null, null) : null;
                 var targetReading = targetSkin != null ? GenitalParts.Read(pair.Target, targetSkin) : null;
                 if (targetReading is not { Penis: true }) continue;   // no penis: today's refit, said nowhere — every women's refit
@@ -131,6 +132,22 @@ internal static partial class BodyRetarget
     }
 
     private static Vector3 PointOf(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
+
+    /// <summary>
+    /// The cheap gate before any reading: the body has two untagged skin submeshes or more (its main skin and a piece beside
+    /// it), one with room for the bulge (as many triangles) whose bounds lie about the bulge's hole (within 15 cm of its
+    /// centre). Every other legs refit — a body whose untagged skin is its main skin alone, as every bibo women's body's
+    /// is — passes by at the cost of a bounds test.
+    /// </summary>
+    internal static bool MayTakeBulge(ModelParts body)
+    {
+        if (TbseBulge.Shared is not { } bulge) return false;
+        var untagged = body.Parts.Where(p => p.Island < 0 && p.AttributeMask == 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)).ToList();
+        if (untagged.Count < 2) return false;   // one untagged skin submesh: the main skin alone, no piece beside it
+        var centre = bulge.Hole.Aggregate(Vector3.Zero, (s, p) => s + p) / bulge.Hole.Length;
+        return untagged.Any(p => p.Triangles.Length / 3 >= bulge.Data.triangles.Length / 3
+                                 && Vector3.Distance((p.Min + p.Max) / 2, centre) < 0.15f);
+    }
 
     /// <summary>
     /// Whether the garment covers the new body's genitals: the old body's skin points that land within
