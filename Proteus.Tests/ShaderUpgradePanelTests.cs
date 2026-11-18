@@ -67,6 +67,21 @@ public class ShaderUpgradePanelTests
 
     [Fact]
     [Trait("Plan", "AC-upgrade-vs-matcap-6")]
+    public void Undo_result_survives_the_walk_its_redraw_starts()
+    {
+        // QA: with Gear shaders on, the undo's redraw walks at once and its run used to replace the undo's refusal.
+        var undo = new ShaderUpgradeWatcher.RunInfo("undo-worn", 1, 1, 1, 0, 1, true, true, DateTime.UtcNow, "held by a row matcap");
+        var walk = new ShaderUpgradeWatcher.RunInfo("upgrade", 0, 0, 0, 0, 0, false, false, DateTime.UtcNow);
+        var now = new ShaderUpgradeWatcher.RunInfo("upgrade-now", 1, 1, 0, 0, 0, true, true, DateTime.UtcNow);
+        var kept = ShaderUpgradeWatcher.View.NextUndo(ShaderUpgradeWatcher.View.NextUndo(null, undo), walk);
+        Assert.Same(undo, kept);
+        Assert.Contains("held by a row matcap", ShaderUpgradePanel.ResultText(new ShaderUpgradeWatcher.View(LastRun: walk, LastUndo: kept))!);
+        Assert.Null(ShaderUpgradeWatcher.View.NextUndo(kept, now));
+        Assert.Null(ShaderUpgradePanel.ResultText(new ShaderUpgradeWatcher.View(LastRun: now, LastUndo: null)));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-upgrade-vs-matcap-6")]
     public void Undo_result_shows_the_row_matcap_refusal()
     {
         var hold = new Proteus.Services.Matcap.MatcapRowCut.RowHold(Proteus.Services.Matcap.MatcapRowCut.RowHoldKind.Active, "model/wrs.mdl", null);

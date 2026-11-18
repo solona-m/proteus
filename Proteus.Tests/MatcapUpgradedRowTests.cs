@@ -840,7 +840,7 @@ public class MatcapUpgradedRowTests
         var p = f.Prepare(f.Env(gearShadersOn: true));
         Assert.Equal(MatcapRowCut.CodeShader, p.Code);
         Assert.Equal(MatcapRowCut.ShaderRefusal(Blue, MatcapRowCut.LegacyShader, f.MatRels[1], true, []), p.Message);
-        Assert.Contains(Blue, p.Message);
+        Assert.Contains(Blue[1..], p.Message);
         Assert.Contains(SettingsPath, p.Message);
         UpgradedRowFixture.SameAs(before, f.Snapshot());
     }
@@ -855,6 +855,7 @@ public class MatcapUpgradedRowTests
         Assert.Equal(MatcapRowCut.CodeShader, p.Code);
         Assert.Contains(ProteusLoc.Localize("Settings.GearShaders.AutoUpgrade.Label", "Upgrade old gear to Dawntrail shaders"), p.Message);
         Assert.Contains(SettingsPath, p.Message);
+        Assert.True(char.IsUpper(p.Message[0]), p.Message);   // the place leads the sentence ("The option …")
     }
 
     [Fact]

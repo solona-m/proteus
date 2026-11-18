@@ -566,6 +566,14 @@ internal static class MatcapRowCut
     /// </summary>
     internal static string ShaderRefusal(string where, string? shader, string? file, bool? gearShadersOn, IReadOnlyCollection<string> declined)
     {
+        var text = LegacyShaderRefusal(where, shader, file, gearShadersOn, declined);
+        // The place leads these sentences and reads "the option …": a sentence starts with a capital.
+        return text.Length > 0 && char.IsLower(text[0])
+            ? char.ToUpper(text[0], System.Globalization.CultureInfo.CurrentCulture) + text[1..] : text;
+    }
+
+    private static string LegacyShaderRefusal(string where, string? shader, string? file, bool? gearShadersOn, IReadOnlyCollection<string> declined)
+    {
         if (file != null && gearShadersOn is { } on && string.Equals(shader, LegacyShader, StringComparison.OrdinalIgnoreCase))
         {
             // "Settings > Gear shaders" in the user's language, from the tab and section names themselves.

@@ -184,14 +184,18 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
         }),
         left = v.LeftList.Select(l => new { gamePath = l.GamePath, source = l.Source, reason = l.Reason }),
         masks = new { memoHits = v.MemoHits, decodes = v.Decodes },
-        lastRun = v.LastRun is { } r
-            ? new { kind = r.Kind, modsChanged = r.ModsChanged, filesChanged = r.FilesChanged, restored = r.Restored,
-                    kept = r.Kept, refused = r.Refused, reloaded = r.Reloaded, redrawRequested = r.RedrawRequested,
-                    atUtc = r.AtUtc,
-                    // An undo's refusals (mod-relative paths only); free text, so scrubbed like autoRefit's.
-                    message = names.Scrub(r.Message) }
-            : null,
+        lastRun = RunBlock(v.LastRun, names),
+        // The last "Undo for what I'm wearing", kept through the walks after it (what the Settings result line shows).
+        lastUndo = RunBlock(v.LastUndo, names),
     };
+
+    private static object? RunBlock(ShaderUpgradeWatcher.RunInfo? run, SessionNames names) => run is { } r
+        ? new { kind = r.Kind, modsChanged = r.ModsChanged, filesChanged = r.FilesChanged, restored = r.Restored,
+                kept = r.Kept, refused = r.Refused, reloaded = r.Reloaded, redrawRequested = r.RedrawRequested,
+                atUtc = r.AtUtc,
+                // An undo's refusals (mod-relative paths only); free text, so scrubbed like autoRefit's.
+                message = names.Scrub(r.Message) }
+        : null;
 
     /// <summary>The automatic hair path in <c>/state</c>: read-only, folder names only, scrubbed with the rest.</summary>
     internal static object HairPortBlock(HairPortInfo h, SessionNames names) => new

@@ -237,8 +237,8 @@ public class HarnessRouterTests : IDisposable
         // The session's character name inside a refusal (a mod folder can be named anything) comes out scrubbed.
         var hold = new Proteus.Services.Matcap.MatcapRowCut.RowHold(Proteus.Services.Matcap.MatcapRowCut.RowHoldKind.Active, "model/wrs.mdl", null);
         var msg = Proteus.Services.ShaderUpgradeWriter.RowMatcapMessage("Hidden Person bracelet/mt_c0201a0153_wrs_a.mtrl", hold);
-        f.Game.ShaderUpgradeView = new Proteus.Services.ShaderUpgradeWatcher.View(
-            Enabled: false, LastRun: new("undo-worn", 0, 0, 0, 0, 1, false, false, DateTime.UtcNow, msg));
+        var undo = new Proteus.Services.ShaderUpgradeWatcher.RunInfo("undo-worn", 0, 0, 0, 0, 1, false, false, DateTime.UtcNow, msg);
+        f.Game.ShaderUpgradeView = new Proteus.Services.ShaderUpgradeWatcher.View(Enabled: false, LastRun: undo, LastUndo: undo);
         f.Names.Add("Hidden Person", NameKind.Character);
         var (status, b) = await f.Get("/state");
         Assert.Equal(200, status);
@@ -249,6 +249,10 @@ public class HarnessRouterTests : IDisposable
         Assert.DoesNotContain("Hidden Person", text);
         Assert.Contains("<CHARACTER>", text);
         Assert.DoesNotContain(":\\", text);
+        // The kept undo (what the Settings line shows) carries the same scrubbed text.
+        var kept = b.GetProperty("shaderUpgrade").GetProperty("lastUndo");
+        Assert.Equal("undo-worn", kept.GetProperty("kind").GetString());
+        Assert.Equal(text, kept.GetProperty("message").GetString());
 
         // One /state call site, and it passes the session's names.
         var src = File.ReadAllText(Path.Combine(RepoRoot(), "Proteus", "TestHarness", "HarnessRouter.cs"));

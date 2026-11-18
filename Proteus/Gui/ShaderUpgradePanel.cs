@@ -69,10 +69,13 @@ internal sealed class ShaderUpgradePanel(ShaderUpgradeWatcher watcher, Configura
         return string.Format(Strings.Settings.GearShadersLeftTipFmt, string.Join("\n", lines));
     }
 
-    /// <summary>What the last "Undo for what I'm wearing" did; null after any other run.</summary>
+    /// <summary>
+    /// What the last "Undo for what I'm wearing" did — kept through the automatic walks after it (its refusals must stay
+    /// readable), gone after "Upgrade what I'm wearing now".
+    /// </summary>
     internal static string? ResultText(ShaderUpgradeWatcher.View view)
     {
-        if (view.LastRun is not { Kind: "undo-worn" } r) return null;
+        if ((view.LastUndo ?? (view.LastRun is { Kind: "undo-worn" } lr ? lr : null)) is not { } r) return null;
         var line = string.Format(Strings.Settings.GearShadersResultFmt, r.Restored, r.Kept, r.Refused);
         return r.Message.Length > 0 ? line + "\n" + r.Message : line;
     }

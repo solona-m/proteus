@@ -480,8 +480,10 @@ lastHeal: healed|gave-up}` and `moveFault {patterns, movesLeft}`.
   `{enabled, busy, waiting: none|penumbra, awaitingRedraw, maskGloss,
   upgraded:[{gamePath, modDir, file, form: index-mask|diffuse}],
   left:[{gamePath, source, reason: old-table|unsupported-form|unreadable|compositor|write-failed|legacy-mod|mixed-specular|specular-from-other-mod|unsupported-placement|proteus-pack|declined|row-matcap}],
-  masks:{memoHits, decodes}, lastRun:{kind: upgrade|undo-worn|upgrade-now, modsChanged, filesChanged, restored, kept, refused, reloaded, redrawRequested, atUtc, message}}`
-  (`message`: an undo's refusals, mod-relative paths only, scrubbed; `row-matcap`: a row matcap was cut from the file's
+  masks:{memoHits, decodes}, lastRun:{kind: upgrade|undo-worn|upgrade-now, modsChanged, filesChanged, restored, kept, refused, reloaded, redrawRequested, atUtc, message}, lastUndo: the same shape}`
+  (`message`: an undo's refusals, mod-relative paths only, scrubbed; `lastUndo`: the last undo-worn run, kept through the
+  automatic walks after it — read the undo's outcome there, since its own redraw's walk replaces `lastRun` — and cleared by
+  upgradeWornNow; `row-matcap`: a row matcap was cut from the file's
   earlier upgrade, so a changed file is left alone under it).
   After switching it on or equipping, wait for `shaderUpgrade.busy == false` before you assert. **Clean up everything
   you caused:** hash every file of each mod you will touch first; afterwards undo every row matcap you added on an
