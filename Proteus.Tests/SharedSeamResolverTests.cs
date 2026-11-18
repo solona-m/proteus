@@ -197,6 +197,8 @@ public sealed class SharedSeamResolverTests : IDisposable
         var withOurs = Mod();
         withOurs.Add(new(TopPath, "Body Retarget/Tre M/" + TopPath, "Top Size / Tre M"));      // under the refit folder
         withOurs.Add(new(TopPath, "elsewhere/tre s.mdl", "Top Size / Tre S"));                  // a recorded option
+        withOurs.Add(new(TopPath, "..\\..\\outside.mdl", "Top Size / Escape"));                // never read outside the mod
+        withOurs.Add(new(TopPath, "C:\\elsewhere\\top.mdl", "Top Size / Rooted"));
         var filtered = RefitCore.SeamFilesOf(withOurs, record, Race)!;
         Assert.Equal(plain.Tops.Select(t => t.File), filtered.Tops.Select(t => t.File));
         Assert.Equal(RefitCore.CandidateListHash(plain), RefitCore.CandidateListHash(filtered));

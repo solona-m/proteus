@@ -86,7 +86,8 @@ internal static partial class RefitCore
             var seen = new HashSet<string>(StringComparer.Ordinal);
             foreach (var d in redirects)
             {
-                if (ours.Contains(d.Source) || !path.IsMatch(d.GamePath)) continue;
+                // A path from the mod's own redirects, which a third-party mod controls, is read only inside the mod.
+                if (ours.Contains(d.Source) || !path.IsMatch(d.GamePath) || !ModPath.IsSafeRel(d.File)) continue;
                 string file = Normal(d.File);
                 if (file.StartsWith(retarget, StringComparison.Ordinal) || !seen.Add(file)) continue;
                 found.Add(new SeamFile(d.GamePath, d.File, d.Source));
