@@ -178,6 +178,14 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.PiercingsTip);
 
+            bool pubes = config.SizeSetPubes;
+            if (ImGui.Checkbox(s.Pubes, ref pubes))
+            {
+                config.SizeSetPubes = pubes;
+                config.Save();
+            }
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.PubesTip);
+
             bool keepSkin = config.SizeSetKeepHiddenSkin;
             if (ImGui.Checkbox(s.KeepHiddenSkin, ref keepSkin))
             {
@@ -310,7 +318,7 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         var prepared = SizeSetLaunch.Prepare(mods, modsRoot, penumbra.ResolvePlayerPaths, modRoot, keys, config.SizeSetYas,
                                              remake, config.SizeSetEnds, config.SizeSetPiercings,
                                              config.SizeSetKeepHiddenSkin, madeOn.Dir,
-                                             readGameFile, log);
+                                             readGameFile, log, pubes: config.SizeSetPubes);
         cancel = new CancellationTokenSource();
         var ct = cancel.Token;
         runningFor = modDir;

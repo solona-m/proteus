@@ -45,6 +45,14 @@ internal sealed partial class FakeGame
 
     public void SetAutoRefitOverride(bool? enabled) => AutoRefitOverrideValue = enabled;
 
+    public bool AutoRefitPubesConfig { get; set; }
+    public bool? AutoRefitPubesOverrideValue { get; set; }
+
+    public (bool Config, bool? Override, bool Effective) AutoRefitPubes()
+        => (AutoRefitPubesConfig, AutoRefitPubesOverrideValue, AutoRefitPubesOverrideValue ?? AutoRefitPubesConfig);
+
+    public void SetAutoRefitPubesOverride(bool? pubes) => AutoRefitPubesOverrideValue = pubes;
+
     // ── shell output failures (issue sweep D) ──
     public string OutputDir { get; set; } = Path.Combine(Path.GetTempPath(), "proteus-fake-output");
     public string ManagedOutputDir() => OutputDir;
