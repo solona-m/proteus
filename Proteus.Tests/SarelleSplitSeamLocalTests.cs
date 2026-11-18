@@ -161,6 +161,57 @@ public class SarelleSplitSeamLocalTests(ITestOutputHelper output)
         return (topPlan, legsPlan);
     }
 
+    /// <summary>The gate on the installed mod onto <paramref name="body"/>, reading over Tre, Bibo+ and Rue.</summary>
+    internal static RefitCore.SeamGate Gate(string body, out RefitCore.SeamFiles files, List<string> notes, out int reads,
+                                            bool bellyCheck = true)
+    {
+        var bodies = new[] { Body(LocalData.TreMod), Body(LocalData.BiboPlusMod), Body(LocalData.RueMod) }.ToList();
+        var target = bodies.First(b => string.Equals(b.Dir, Path.GetFileName(LocalData.Path(body)), StringComparison.OrdinalIgnoreCase));
+        string root = LocalData.Path(LocalData.SarelleMod);
+        files = RefitCore.SeamFilesOf(PenumbraModMeta.ReadAllRedirects(root), BodyRetargetWriter.ReadRecord(root), Race, notes.Add)!;
+        int count = 0;
+        var gate = RefitCore.ResolveSeamGate(root, files, Race, target.Dir, target.Catalog, target.Dir, target.Catalog,
+                                             (_, _, parts, bones) =>
+                                             {
+                                                 count++;
+                                                 return RefitCore.DetectSource(parts, bones, "_top", Race, bodies, target.Dir, _ => true);
+                                             }, notes.Add, bellyCheck);
+        reads = count;
+        return gate;
+    }
+
+    [LocalDataFact(LocalData.SarelleMod, LocalData.TreMod, LocalData.BiboPlusMod, LocalData.RueMod)]
+    [Trait("Plan", "EDGE-split-waist-seam-7")]
+    [Trait("Plan", "EDGE-split-waist-seam-12")]
+    public void Gate_SarelleOntoTre_PicksTheMainWaist()
+    {
+        var notes = new List<string>();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var gate = Gate(LocalData.TreMod, out var files, notes, out int reads);
+        output.WriteLine($"Step 0(a): {files.Tops.Count} chest files, {files.Legs.Count} legs files");
+        output.WriteLine($"gate onto Tre in {clock.Elapsed.TotalSeconds:0.0} s, {reads} readings: "
+                         + $"{gate.Top?.File ?? "none"} ({gate.Top?.Points.Count ?? 0} places) {gate.Refusal}");
+        notes.ForEach(output.WriteLine);
+        var noBelly = Gate(LocalData.TreMod, out _, [], out _, bellyCheck: false);
+        output.WriteLine($"without the belly check: {noBelly.Top?.File ?? noBelly.Refusal}");
+        Assert.All(files.Tops.Concat(files.Legs), f => Assert.DoesNotContain("body retarget", f.File, StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(gate.Top);
+        Assert.Equal(133, gate.Top!.Points.Count);
+        Assert.All(gate.Top.Points.At, p => Assert.InRange(p.Y, 1.025f, 1.070f));
+    }
+
+    [LocalDataFact(LocalData.SarelleMod, LocalData.TreMod, LocalData.BiboPlusMod, LocalData.RueMod)]
+    [Trait("Plan", "EDGE-split-waist-seam-2")]
+    public void Gate_SarelleOntoBibo_HoldsNothing()
+    {
+        var notes = new List<string>();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var gate = Gate(LocalData.BiboPlusMod, out _, notes, out int reads);
+        output.WriteLine($"Step 0(h): all-miss gate onto Bibo+ in {clock.Elapsed.TotalSeconds:0.0} s cold, {reads} readings: {gate.Refusal}");
+        Assert.Null(gate.Top);
+        Assert.Contains("made on", gate.Refusal, StringComparison.Ordinal);
+    }
+
     [LocalDataFact(LocalData.SarelleMod, LocalData.TreMod, LocalData.BiboPlusMod)]
     [Trait("Plan", "EDGE-split-waist-seam-35")]
     public void Sarelle_OpenEdges_WithAndWithoutMerge()

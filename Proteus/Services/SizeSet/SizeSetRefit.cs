@@ -576,6 +576,9 @@ internal static partial class SizeSetRefit
         // Which of the author's sizes each option of a group was cut from, by the piece that made it first — the chest,
         // pieces running chests first — so the legs, shoes and gloves joining it are cut from that same size.
         var leadSources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        // Which seam a waist split's pieces share, per body, worked out once for the run (see RefitCore.ResolveSeamGate):
+        // never kept between runs.
+        var seamGates = new RefitCore.SeamCache();
         foreach (var piece in pieces)
         {
             ct.ThrowIfCancellationRequested();
@@ -583,7 +586,7 @@ internal static partial class SizeSetRefit
             {
                 made += IsEnd(piece.Slot) ? RunEndsPiece(request, piece, uvRemap, log, progress, runLog, readings, leadSources, ct)
                                           : RunPiece(request, piece, uvRemap, log, progress, runLog, readings, madeOnReadings,
-                                                     leadSources, ct);
+                                                     leadSources, ct, seamGates);
             }
             catch (OperationCanceledException)
             {
@@ -658,7 +661,8 @@ internal static partial class SizeSetRefit
                                 Action<string> progress, RunLog runLog,
                                 Dictionary<string, AutoRefitDecisions.Pick?> readings,
                                 Dictionary<string, SourceReading> madeOnReadings,
-                                Dictionary<string, string> leadSources, CancellationToken ct)
+                                Dictionary<string, string> leadSources, CancellationToken ct,
+                                RefitCore.SeamCache? seamGates = null)
     {
         var notes = runLog.Notes;
         string root = request.ModRoot;
@@ -976,12 +980,24 @@ internal static partial class SizeSetRefit
                                     piece.Label, option, chestTo.Label);
                 }
 
+                // The seam the piece shares with the other piece of a mod split at the waist, held where the author put
+                // it — the same answer every size of either piece gets (see RefitCore.ResolveSeamGate).
+                var sharedSeam = SharedSeamFor(request, piece, chosen.Garment, chosen.Bytes, target.Dir, targetCat, race,
+                                               redirects, mods, readings, seamGates,
+                                               line => log.Information("[Proteus] size set: {0} {1} (cut from \"{2}\"): {3}",
+                                                                       piece.Label, option, sourceOption ?? chosen.Name, line));
                 var plan = BodyRetarget.Plan(chosen.Garment, chosen.Bytes, pairs, piece.Slot, held: new HashSet<int>(),
                                              replaceSkin: true, acrossBodies: across, clearBody: false,
                                              cutHidden: !request.KeepHiddenSkin,
                                              keepShape: chosen.Shape, log: line => log.Debug("[Proteus] size set: {0}", line),
                                              warn: line => log.Warning("[Proteus] size set: {0}", line),
-                                             carryPiercings: request.Piercings);
+                                             carryPiercings: request.Piercings, sharedSeam: sharedSeam);
+                if (sharedSeam != null)
+                    log.Information("[Proteus] size set: {0} {1}: shared seam {2}", piece.Label, option,
+                                    plan.Report.SeamDropped is { } droppedSeam
+                                        ? $"not held — {droppedSeam}"
+                                        : $"held: {plan.Report.SeamPinnedNodes} positions ({plan.Report.SeamPinnedVertices} "
+                                          + $"vertices) where the author put them ({sharedSeam.Label})");
                 plan = RefitCore.MatchSkinToBody(plan, chosen.SourcePath, targetPath, uvRemap, male, log);
                 // Folds are said, never refused (cross-sex-tops-yas).
                 // The body's skin triangles put in and left out where the author cut theirs (Keep hidden skin).
@@ -1021,6 +1037,45 @@ internal static partial class SizeSetRefit
         var (indexed, bytes, _, _, _) = BodySizeMatch.NearCacheSize();
         Note($"nearness cache: {indexed} bodies, {bytes / 1024} KB");
         return group.Saved;
+    }
+
+    /// <summary>
+    /// The garment's side of the seam a waist split's pieces share on <paramref name="targetDir"/> (see
+    /// <see cref="RefitCore.ResolveSeamGate"/>), or null (said through <paramref name="note"/>). Chest and legs are both
+    /// that body here. With "Made on" set to another body, none: the seam top counts only when made on the body sized for.
+    /// </summary>
+    internal static BodyRetarget.SharedSeam? SharedSeamFor(Request request, Piece piece, ModelParts garment, byte[] bytes,
+                                                         string targetDir, BodySizeCatalog targetCat, string race,
+                                                         IReadOnlyList<PenumbraModMeta.Redirect> redirects,
+                                                         List<(string Dir, BodySizeCatalog Catalog)> mods,
+                                                         Dictionary<string, AutoRefitDecisions.Pick?> readings,
+                                                         RefitCore.SeamCache? seamGates, Action<string> note)
+    {
+        if (piece.Slot is not ("_top" or "_dwn")) return null;
+        if (request.MadeOn != null && !string.Equals(request.MadeOn, targetDir, StringComparison.OrdinalIgnoreCase))
+        {
+            note("shared seam: not held — \"Made on\" names another body");
+            return null;
+        }
+        if (RefitCore.SeamFilesOf(redirects, BodyRetargetWriter.ReadRecord(request.ModRoot), race, note) is not { } files)
+            return null;
+        seamGates ??= new RefitCore.SeamCache();
+        string key = RefitCore.CandidateListHash(files) + "|" + targetDir.ToLowerInvariant() + "|" + race;
+        var gate = seamGates.GetOrAdd(key, () => RefitCore.ResolveSeamGate(
+            request.ModRoot, files, race, targetDir, targetCat, targetDir, targetCat,
+            (f, _, parts, bones) =>
+            {
+                string reading = ReadingKey(f.File, "_top", race, targetDir);
+                if (!readings.TryGetValue(reading, out var pick))
+                    readings[reading] = pick = RefitCore.DetectSource(parts, bones, "_top", race, mods, targetDir,
+                                                                      request.KnownBody, note);
+                return pick;
+            },
+            note,
+            chestName: request.Bodies.FirstOrDefault(b => string.Equals(b.Dir, targetDir, StringComparison.OrdinalIgnoreCase))?.Name));
+        var (seam, _, why) = RefitCore.SeamForGarment(gate, garment, bytes, targetDir, targetDir);
+        if (seam == null) note($"shared seam: not held — {why}");
+        return seam;
     }
 
     /// <summary>
