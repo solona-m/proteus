@@ -188,6 +188,53 @@ Opened: W/Proteus/Interop/PenumbraBridge.cs (lines 315–334); Grep tool, conten
 
 Opened: W/Proteus.Tests/ContribSpecTests.cs (lines 150–233); Grep tool, content mode, `Glamourer_lock_warnings_name_the_item_and_slot` in W/Proteus.Tests/ContribSpecTests.cs. Shell commands: `python -c "import re,sys;sys.stdout.reconfigure(encoding='utf-8');t=open(r'C:\Users\solon\AppData\Local\Temp\claude\861b008b34a06d0d\5936bcc1-21b0-4a70-8eb3-e82d4006af47\scratchpad\step2.trx',encoding='utf-8').read();i=t.find('Glamourer_lock_warnings_name_the_item_and_slot\" ');j=t.find('</UnitTestResult>',i);print(t[i:j][:4000])"`; `python C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/idcheck.py`; `git -C E:/orca/workspaces/Proteus/licence-clean-room status --short`. Answer: spec error, §8.2 and §9.3 amended (the accessory setter's accepted slot codes, and the earlier refusal of any other slot argument, were missing). Sub-agents: none. Identifier-grep hits: 0.
 
+### Stage 2 (removal)
+
+Base: branch HEAD 233424a0 (mixed-set files identical to 71d450fb, where the §1 set was measured). Committed by the orchestrator as R0 = 7ce8851b.
+Opened: no file with Read; the Read and Write tools touched only my own folder (the scripts `headset.py`, `remove.py`, `verify_manifest.py` and the draft of this sub-part).
+Shell commands:
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room diff --stat 71d450fb HEAD -- Proteus proteus.slnx samples`
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room status --short` (before the removal, after it, and at the end)
+- `python C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/headset.py`
+- `python C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/remove.py`
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room rm -q -r Proteus/Interop/IpcProvider.cs proteus.slnx samples/ExampleMultiGroupOverlayMod`
+- `git -C E:/orca/workspaces/Proteus/licence-clean-room diff --numstat`
+- `dotnet build E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Proteus.csproj -c Release > C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/build_r.out 2>&1`
+- `python C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/verify_manifest.py C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/build_r.out`
+- `grep -o -E "[A-Za-z.]+\.cs\([0-9]+,[0-9]+\): error CS[0-9]+" C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA/build_r.out | sort -u | grep -o -E "CS[0-9]+" | sort | uniq -c`
+- `grep -n -o -E "CLEAN-ROOM HOLE: spec §[0-9]+" E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Interop/PenumbraBridge.cs E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Interop/GlamourerBridge.cs E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Plugin.cs E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Services/SidecarDiscoveryService.cs E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Gui/StatusWindow.cs E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Gui/ModsTab.cs E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Services/CompositorService.Carriers.cs E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Services/CompositorService.cs`
+- Appending this sub-part: `tail -n 3 E:/orca/workspaces/Proteus/licence-clean-room/docs/contrib-clean-room-log.md`; `grep -n -E "^## |^### " E:/orca/workspaces/Proteus/licence-clean-room/docs/contrib-clean-room-log.md`; Read of the log lines 187–192 and of my draft; then the folder deletion `rm -rf "C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentA"`, which the permission system denied (not retried).
+Counts per file (removed / restored / markers):
+- `Proteus/Interop/IpcProvider.cs`: whole file deleted (git rm), 150 lines
+- `proteus.slnx`: whole file deleted (git rm), 10 lines; non-C# hole, regenerated per D23 from §1's list (Glamourer.Api and Penumbra.Api, each with an x64 platform mapping; Proteus; XivLiveMesh)
+- `samples/ExampleMultiGroupOverlayMod/**`: 6 files deleted (git rm), 108 blame lines; non-C#, not remade
+- `Proteus/Interop/PenumbraBridge.cs`: 9 direct → 9 / 0 / 3
+- `Proteus/Interop/GlamourerBridge.cs`: 12 direct + 8 derived → 20 / 0 / 4
+- `Proteus/Plugin.cs`: 6 direct + 1 derived → 7 / 1 / 5
+- `Proteus/Services/SidecarDiscoveryService.cs`: 6 direct + 8 derived → 14 / 4 / 5
+- `Proteus/Gui/StatusWindow.cs`: 4 direct + 28 derived → 32 / 0 / 2
+- `Proteus/Gui/ModsTab.cs`: 1 direct + 11 carried over → 12 / 4 / 3
+- `Proteus/Services/CompositorService.Carriers.cs`: 2 direct + 2 derived + 8 carried over → 12 / 4 / 4
+- `Proteus/Services/CompositorService.cs`: 4 derived → 4 / 0 / 1
+- Totals in the partial files: 110 removed, 13 restored (manifest rows), 27 markers. The 212 trivial-class lines outside the mixed set are untouched.
+- Not restored (no fit): the ring-cooldown stamp line of `08cd11b2`'s parent (`CompositorService.cs` line 2837); the field it stamped no longer exists.
+- One restored line in `ModsTab.cs` (from `78bd004a`'s parent, `StatusWindow.cs` line 121) is identical to the removed line at the same spot, so the diff shows it as unchanged; it is in the manifest (hence 39 added lines against 27 markers + 13 restores).
+Holes (file:line at R → spec section):
+- `Proteus/Interop/PenumbraBridge.cs`:40, :133, :851 → §7
+- `Proteus/Interop/GlamourerBridge.cs`:199, :228, :338, :436 → §8
+- `Proteus/Plugin.cs`:73 → §3; :183 → §3; :553 → §4; :557 → §4; :635 → §3
+- `Proteus/Services/SidecarDiscoveryService.cs`:57, :67, :473, :523, :531 → §5
+- `Proteus/Gui/StatusWindow.cs`:12, :1374 → §6
+- `Proteus/Gui/ModsTab.cs`:3, :164, :175 → §6
+- `Proteus/Services/CompositorService.Carriers.cs`:3, :326, :328, :508 → §8
+- `Proteus/Services/CompositorService.cs`:739 → §6
+- Non-C# holes: `proteus.slnx` (whole file) and `samples/ExampleMultiGroupOverlayMod/**` (deleted, not remade).
+Manifest: `scratchpad-handover/contrib-restored-manifest.tsv`, 13 rows, each verified word for word and blamed to `solonamods@gmail.com` at the source commit's parent.
+Build (`dotnet build W/Proteus/Proteus.csproj -c Release`): failed, as expected. Unique errors by code: CS0106 47, CS1519 8, CS1022 5, CS0116 3, CS1026 2, CS8124 2, CS1002 1, CS1003 1, CS1031 1, CS1524 1, CS1525 1, CS8641 1, CS8803 1.
+Folder: `scratchpad-agentA\` NOT deleted: the deletion command was denied by the permission system. It still holds my scripts, blame lists and removal-set list, and must be deleted by the owner or orchestrator.
+Sub-agents: none
+Identifier-grep hits: 0
+
 
 ## Orchestrator
 
