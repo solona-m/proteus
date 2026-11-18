@@ -404,6 +404,8 @@ public sealed partial class PartsPanel
         }
         if (!built.Ok)
         {
+            matcapRowGlass = false;   // nothing built: no glass line about a cut that isn't shown
+            matcapRowGlassTriangles = 0;
             matcapPreview.Failed(key, built.Message);
             log.Information("[Proteus] matcap preview: not shown ({0}): {1}", built.Code, built.Message);
             // What is on the character no longer matches what is ticked: take it down.
@@ -829,7 +831,9 @@ public sealed partial class PartsPanel
         var (_, panel, chat) = MatcapPanelModel.Report(new MatcapPanelModel.JobReport(r.Outcome.Message, r.IsApply, r.ModelCount, r.RowHoles,
                                                                                       r.SiblingsSkipped, r.AlphaTested, r.Lod0Cut, extra, r.PortKept,
                                                                                       r.RowGlass, r.RowGlassTriangles));
-        if (r.IsApply) { matcapRowGlass = r.RowGlass; matcapRowGlassTriangles = r.RowGlassTriangles; }
+        // An Apply says whether it converted glass; an Undo or Forget took any conversion away.
+        matcapRowGlass = r.IsApply && r.RowGlass;
+        matcapRowGlassTriangles = matcapRowGlass ? r.RowGlassTriangles : 0;
         status = panel;
         statusIsError = false;
         matcapError = null;

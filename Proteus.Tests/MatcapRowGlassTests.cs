@@ -19,9 +19,10 @@ internal static class GlassKit
     /// <summary>A characterglass material bound to N/M/ID on three textures, Dawntrail table, 4-byte additional data.</summary>
     public static byte[] Glass(float? threshold = null, int tableBytes = 2048, int dyeBytes = 0, uint additional = 0x1C53D,
                                int additionalSize = 4, uint flags = 0x11, string normal = RowFixture.NormalPath,
-                               string index = RowFixture.IndexPath, string? layout = null, byte tint = 0)
+                               string index = RowFixture.IndexPath, string? layout = null, byte tint = 0,
+                               string mask = "chara/x/glass_m.tex")
     {
-        var textures = new List<string> { normal, "chara/x/glass_m.tex", index };
+        var textures = new List<string> { normal, mask, index };
         var samplers = new List<(uint, int)> { (MatcapMaterial.SamplerNormal, 0), (MatcapMaterial.SamplerMask, 1), (ShaderUpgradePlan.SamplerIndex, 2) };
         var sflags = new List<uint> { NormalFlags, OtherFlags, OtherFlags };
         switch (layout)
@@ -124,6 +125,11 @@ public class MatcapRowGlassTests
         Assert.True(built.Ok, built.Code + ": " + built.Message);
         Assert.True(built.RowGlass);
         Assert.Equal(2, built.RowGlassTriangles);
+        // The preview pushes the converted cut at the cut's own path, and nothing at the author's material path.
+        var cutName = built.Files.SelectMany(x => x.GamePaths).First(gp => gp.Contains("_mcut") && gp.EndsWith(".mtrl"));
+        var cutFile = built.Files.First(x => x.GamePaths.Contains(cutName));
+        Assert.Equal(CharacterShaderUpgrade.Character, CharacterShaderUpgrade.ShaderOf(cutFile.Bytes));
+        Assert.DoesNotContain(built.Files.SelectMany(x => x.GamePaths), gp => PenumbraModMeta.SameFile(gp, RowFixture.MatPath()));
         Assert.Equal(before, f.Snapshot());       // neither Prepare nor the preview writes into the mod
 
         using var plain = new RowFixture();
@@ -193,6 +199,7 @@ public class MatcapRowGlassTests
     [InlineData("diffuse")]
     [InlineData("no-threshold")]
     [InlineData("add-8")]
+    [InlineData("constant-past-block")]
     public void Missing_or_wrong_template_refuses(string kind)
     {
         byte[]? template = kind switch
@@ -201,8 +208,15 @@ public class MatcapRowGlassTests
             "diffuse" => GlassKit.Template(diffuse: true),
             "no-threshold" => GlassKit.Template(threshold: false),
             "add-8" => GlassKit.Template(additionalSize: 8),
+            "constant-past-block" => PastBlock(GlassKit.Template()),
             _ => null,
         };
+        static byte[] PastBlock(byte[] t)
+        {
+            var l = MatcapGlassCut.Walk(t)!;
+            BitConverter.TryWriteBytes(t.AsSpan(l.ConstsAt + 6), (ushort)400);
+            return t;
+        }
         using var f = GlassKit.Fixture(template: template, withTemplate: template != null);
         var before = f.Snapshot();
         var p = f.Prepare();
@@ -303,15 +317,16 @@ public class MatcapRowGlassTests
     [Trait("Plan", "EDGE-row-matcap-glass-6")]
     public void Unsound_conversion_refuses_as_row_bake()
     {
-        // A template whose constant runs past its value block: the template check refuses it; an unsound result never ships.
-        var t = GlassKit.Template();
-        var l = MatcapGlassCut.Walk(t)!;
-        BitConverter.TryWriteBytes(t.AsSpan(l.ConstsAt + 6), (ushort)400);
-        using var f = GlassKit.Fixture(template: t);
+        // A valid glass so large that the converted copy would pass the format's 16-bit file size: the conversion is
+        // unsound (never written), and the refusal is the plain "couldn't be written" one.
+        int baseLength = GlassKit.Glass().Length;
+        var glass = GlassKit.Glass(mask: "chara/x/" + new string('m', 65_500 - baseLength) + ".tex");
+        Assert.InRange(glass.Length, 65_400, ushort.MaxValue);
+        Assert.Equal(MatcapGlassCut.Failure.Unsound, MatcapGlassCut.Convert(glass, GlassKit.Template()).Why);
+        using var f = GlassKit.Fixture(glass);
         var before = f.Snapshot();
         var p = f.Prepare();
-        Assert.False(p.Ok);
-        Assert.Contains(p.Code, new[] { MatcapRowCut.CodeGlassTemplate, MatcapRowCut.CodeBake });
+        Assert.Equal(MatcapRowCut.CodeBake, p.Code);
         Assert.Equal(before, f.Snapshot());
     }
 

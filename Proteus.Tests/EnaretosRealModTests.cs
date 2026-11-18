@@ -129,6 +129,11 @@ public class EnaretosRealModTests : IDisposable
         Assert.Equal(glassBefore, File.ReadAllBytes(MatcapWriter.Full(mod, glassRel)));   // the author's glass untouched
         Assert.Equal(MatcapGlassCut.GlassShader, CharacterShaderUpgrade.ShaderOf(glassBefore));
 
+        // The whole row was moved: no triangle still drawn as glass touches a row texel of any bake.
+        var bakes = p.Request!.Materials.Single().Row!.Cut.Bakes;
+        foreach (var part in ModelPartReader.Read(drawn)!.Parts.Where(x => x.Island < 0 && x.Material == glassMat))
+            Assert.DoesNotContain(ModelMaterialWriter.TriangleUvs(drawn, [part]), t => MatcapRowCut.Touches(t, bakes));
+
         Assert.True(MatcapWriter.Undo(mod, ModelRel).Ok);
         var after = Hashes(mod);
         Assert.Equal(baseline.Keys.Order(), after.Keys.Where(k => !k.Contains("-superseded")).Order());

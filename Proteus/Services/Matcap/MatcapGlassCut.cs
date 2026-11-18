@@ -236,6 +236,7 @@ internal static class MatcapGlassCut
             // Constants: the template's ids and values, but the movement constants 0 and the threshold the cut's.
             var cv = ConstantValues(converted, c);
             var tv = ConstantValues(template, t);
+            if (cv.Count != c.ConstCount) return false;   // a duplicate constant id
             if (!cv.Keys.ToHashSet().SetEquals(tv.Keys.Append(MeshVolumeService.VertexMovementScaleId)
                                                       .Append(MeshVolumeService.VertexMovementMaxLengthId)
                                                       .Append(MatcapMaterial.ConstAlphaThreshold))) return false;

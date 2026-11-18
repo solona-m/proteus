@@ -65,6 +65,19 @@ public class MatcapGlassCutTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-row-matcap-glass-6")]
+    public void Second_gate_checks_the_retargeted_normal()
+    {
+        var (g, t, c) = Make();
+        var h = MatcapMaterial.ReadHeader(c)!;
+        int ni = h.Textures.ToList().FindIndex(x => x == h.TextureOf(MatcapMaterial.SamplerNormal));
+        var cut = MatcapMaterial.RetargetByIndex(c, new System.Collections.Generic.Dictionary<int, string> { [ni] = "chara/x/cut1.tex" })!;
+        Assert.True(MatcapGlassCut.IsSound(g, cut, t, "chara/x/cut1.tex"));
+        Assert.False(MatcapGlassCut.IsSound(g, cut, t, "chara/x/wrong.tex"));   // not the bake it names
+        Assert.False(MatcapGlassCut.IsSound(g, c, t, "chara/x/cut1.tex"));      // the normal was never retargeted
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-row-matcap-glass-8")]
     public void Keeps_source_sampler_flags_and_uv_sets()
     {
