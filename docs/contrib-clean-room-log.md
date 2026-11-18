@@ -499,3 +499,57 @@ Phases delivered: A
   - No rewrite was needed, so this first measurement is also the last.
 - **One command is missing from D's own list** because it ran after D's append: `git -C E:/orca/workspaces/Proteus/licence-clean-room status --short`. D reported it.
 - **`T_A`** is the commit holding this section.
+
+## Agent C (self-report)
+
+Opened:
+- docs/contrib-clean-room-plan.md (Grep for D24-D26/B1/Agent C; Read lines 130-159 and 290-329)
+- Proteus/Interop/PenumbraBridge.cs
+- Proteus/Interop/GlamourerBridge.cs
+- Proteus/TestHarness/GameHarnessAdapter.cs (lines 285-334, plus Grep matches)
+- Proteus/**, Proteus.Tests/** (Grep only: API usings, IpcSubscribers/GetIpcSubscriber/subscriber-type references, enum-name usage)
+- Penumbra.Api/BasePenumbraSubscriber.cs
+- Penumbra.Api/GlobalUsings.cs
+- Penumbra.Api/IpcSubscribers/Mods.cs
+- Penumbra.Api/IpcSubscribers/PluginState.cs
+- Penumbra.Api/IpcSubscribers/Collection.cs
+- Penumbra.Api/IpcSubscribers/ModSettings.cs
+- Penumbra.Api/IpcSubscribers/Temporary.cs
+- Penumbra.Api/IpcSubscribers/Resolve.cs
+- Penumbra.Api/IpcSubscribers/Redraw.cs
+- Penumbra.Api/IpcSubscribers/Ui.cs
+- Penumbra.Api/IpcSubscribers/ResourceTree.cs (Grep match, class GetGameObjectResourcePaths)
+- Penumbra.Api/IpcSubscribers/Meta.cs (Grep match, class GetPlayerMetaManipulations)
+- Penumbra.Api/IpcSubscribers/Legacy/*.cs (Grep only: namespace lines; ResourceTree.cs GetGameObjectResourcePaths match)
+- Penumbra.Api/Enums/ModSettingChange.cs
+- Penumbra.Api/Enums/PenumbraApiEc.cs
+- Penumbra.Api/Enums/RedrawType.cs
+- Penumbra.Api/Enums/TabType.cs
+- Glamourer/Glamourer.Api/IpcSubscribers/Designs.cs
+- Glamourer/Glamourer.Api/IpcSubscribers/State.cs
+- Glamourer/Glamourer.Api/IpcSubscribers/Items.cs
+- Glamourer/Glamourer.Api/IpcSubscribers/PluginState.cs
+- Glamourer/Glamourer.Api/Enums/ApplyFlag.cs
+- Glamourer/Glamourer.Api/Enums/GlamourerApiEc.cs
+- Glamourer/Glamourer.Api/Enums/ApiEquipSlot.cs
+- Glamourer/Glamourer.Api/Enums/ApiBonusSlot.cs
+- Glamourer/Glamourer.Api/Enums/StateChangeType.cs
+- Glamourer/Glamourer.Api/Enums/StateFinalizationType.cs
+- Glamourer/LICENSE (lines 1-15, and Grep for "Copyright")
+- Luna/Luna/Ipc/FuncSubscriber.cs
+- Luna/Luna/Ipc/EventSubscriber.cs
+- Luna/Luna/Ipc/ActionSubscriber.cs
+- Glamourer/Luna/Luna/Ipc/FuncSubscriber.cs
+- Glamourer/Luna/Luna/Ipc/EventSubscriber.cs (lines 110-167)
+- Luna/ and Glamourer/Luna/ (Grep only, files-with-matches for the four subscriber class declarations, to locate the files)
+- docs/contrib-clean-room-log.md (Grep for headings; Read lines 470-502, to append)
+Shell commands:
+- git -C E:/orca/workspaces/Proteus/licence-clean-room/Penumbra.Api ls-files
+- git -C E:/orca/workspaces/Proteus/licence-clean-room/Glamourer ls-files Glamourer.Api LICENSE NOTICE NOTICE.md NOTICE.txt
+- git -C E:/orca/workspaces/Proteus/licence-clean-room/Glamourer ls-files ":(glob,icase)NOTICE*"
+- git -C E:/orca/workspaces/Proteus/licence-clean-room/Glamourer/Glamourer.Api ls-files
+- git -C E:/orca/workspaces/Proteus/licence-clean-room/Penumbra.Api ls-files ":(glob,icase)LICENSE*" ":(glob,icase)NOTICE*"
+Sub-agents: none
+Identifier-grep hits: 0
+Luna files read (facts only): Luna/Luna/Ipc/FuncSubscriber.cs, Luna/Luna/Ipc/EventSubscriber.cs, Luna/Luna/Ipc/ActionSubscriber.cs, Glamourer/Luna/Luna/Ipc/FuncSubscriber.cs, Glamourer/Luna/Luna/Ipc/EventSubscriber.cs (lines 110-167)
+Glamourer NOTICE file: none
