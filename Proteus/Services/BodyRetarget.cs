@@ -233,6 +233,9 @@ internal static partial class BodyRetarget
     /// <param name="TargetSwitched">The drawn tags of the new body its mod's options switch (<see cref="BodyDraw.Switched"/>):
     /// dropped from the skin and smallclothes the swap brings in, which would vanish when the user picks another option —
     /// the garment's skin is the only skin under a worn top. Null when its options switch nothing.</param>
+    /// <param name="Featureless">The same pair onto the new body made featureless — its genitals out and the owner's bulge
+    /// drawn in their place (see <see cref="Bulge.BulgeSwap"/>) — built on first call, or why it cannot be; null for a
+    /// pair that is not a legs pair, or when no bulge ships (see <see cref="FitBulges"/>).</param>
     /// <param name="SourceIsGameChest">The old body is the game's own chest, byte for byte (see
     /// <see cref="VanillaBodyCatalog.IsGameModel"/>): its bust is its bra, read with its skin (see
     /// <see cref="SmallclothesOverHoles"/>).</param>
@@ -242,7 +245,8 @@ internal static partial class BodyRetarget
                                              Func<string, byte[]?>? TargetMaterial = null,
                                              IReadOnlyDictionary<string, string>? Smallclothes = null,
                                              bool SourceIsGameChest = false,
-                                             IReadOnlySet<string>? TargetSwitched = null)
+                                             IReadOnlySet<string>? TargetSwitched = null,
+                                             Func<(SlotPair? Pair, string Why)>? Featureless = null)
     {
         /// <summary>Whether the swap puts this slot's body skin in: it carries the body's file, and is not
         /// <see cref="ShapeOnly"/>.</summary>
@@ -803,6 +807,21 @@ internal static partial class BodyRetarget
                                bool rebuildSwapsShapeOnly = false, IReadOnlySet<string>? swappedSkinTags = null,
                                bool carryPubes = false, SharedSeam? sharedSeam = null)
     {
+        // The featureless bulge, first: a legs pair onto a body with a penis the garment covers goes onto that body made
+        // featureless (see PlanFeatureless). Every run it plans goes back through here with the bulge switched off.
+        if (!Tuned.NoBulge && swapSlot == null && pairs.Any(p => p.Featureless != null))
+            return PlanFeatureless(garment, garmentBytes, pairs, replaceSkin, log, warn, (g, b, p, sink, traced)
+                => WithTuning(Tuned with { NoBulge = true }, () => Plan(g, b, p, garmentSlot: garmentSlot, pushOut: pushOut,
+                    held: held, replaceSkin: replaceSkin, acrossBodies: acrossBodies, clearBody: clearBody, cutHidden: cutHidden,
+                    keepShape: keepShape, swapSlot: swapSlot, log: l => sink(false, l), warn: l => sink(true, l),
+                    chestSlot: chestSlot, trace: traced ? trace : null,
+                    outfit: outfit, tuckSlot: tuckSlot, deepClear: deepClear, keepStandoff: keepStandoff,
+                    carryPiercings: carryPiercings, liftUnderbust: liftUnderbust, seeInside: seeInside,
+                    relaxSinkGuard: relaxSinkGuard, openSkin: openSkin, rebuildSwapsShapeOnly: rebuildSwapsShapeOnly,
+                    swappedSkinTags: swappedSkinTags, carryPubes: carryPubes, sharedSeam: sharedSeam)));
+        if (!Tuned.NoBulge && pairs.Any(p => p.Slot == "_dwn") && Bulge.TbseBulge.LoadFailure is { } broken)
+            Bulge.TbseBulge.SayOnce(broken, warn ?? log);
+
         // The pairs that go in for their shape only as asked — not one ReadySmallclothes turns so below, which keeps the
         // garment's own skin because its new body's smallclothes could not be brought in. A pair asked so is never readied
         // for smallclothes itself: the one caller, a glove's men's hands (TBSE, TBSE-X), draws none.

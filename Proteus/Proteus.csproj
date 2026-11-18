@@ -121,6 +121,14 @@
          accident. Separate from the images\icon.png None item below, which must keep landing on disk
          because that is where Dalamud reads a dev-loaded plugin's installer icon from. -->
     <EmbeddedResource Include="Resources\header.png" />
+    <!-- The featureless bulge: the owner's sculpt on a LavaBod+ 2.2 legs model, transplanted onto a body with a penis
+         when a refitted garment covers its crotch. Carved out of the Proteus Licence (THIRD_PARTY_NOTICES.txt,
+         "lava_bulge"). Its footprint is ours: the sculpted vertices, by index, with the asset's hash. -->
+    <EmbeddedResource Include="Resources\lava_bulge.mdl" />
+    <EmbeddedResource Include="Resources\lava_bulge.footprint.json" />
+    <!-- The owner's featureless bulge for The Body SE: her mesh, drawn in place of its genital piece, and the 28 points
+         of the hole it plugs (THIRD_PARTY_NOTICES.txt, "tbse_bulge"). The Body SE's own mesh is not in it. -->
+    <EmbeddedResource Include="Resources\tbse_bulge.json" />
   </ItemGroup>
 
   <ItemGroup>

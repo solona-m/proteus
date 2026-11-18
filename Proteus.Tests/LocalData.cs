@@ -28,6 +28,14 @@ internal static class LocalData
     internal const string ModPacks = "PROTEUS_MODPACKS";
     internal const string Game = "PROTEUS_GAME";
 
+    /// <summary><c>PROTEUS_BULGE_REF</c>: the user's own copy of <c>lava_bulge.mdl</c>, the file the plugin embeds — only
+    /// read, to prove the embedded copy is it byte for byte.</summary>
+    internal const string BulgeReference = "PROTEUS_BULGE_REF";
+
+    /// <summary><c>PROTEUS_TBSE_BULGE_REF</c>: the owner's TBSE bulge as she exported it (an FBX, one mesh "bulge 0.3") —
+    /// only read, to generate and verify the embedded <c>tbse_bulge.json</c>.</summary>
+    internal const string TbseBulgeReference = "PROTEUS_TBSE_BULGE_REF";
+
     /// <summary>The game's data, under <see cref="Game"/>: what Lumina opens.</summary>
     internal const string GameData = Game + ":game/sqpack";
 

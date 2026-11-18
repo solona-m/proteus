@@ -155,6 +155,7 @@ public class LicencePublicationTests
     [Trait("Plan", "AC-contrib-clean-room-13")]
     [Trait("Plan", "EDGE-contrib-clean-room-52")]
     [Trait("Plan", "AC-proteus-licence-2-7")]
+    [Trait("Plan", "AC-featureless-bulge-11")]
     public void Package_inventory_classifies_every_entry()   // [AC-contrib-clean-room-13] [EDGE-contrib-clean-room-52] [AC-proteus-licence-2-7]
     {
         var notices = Read("THIRD_PARTY_NOTICES.txt");
@@ -172,6 +173,11 @@ public class LicencePublicationTests
         Assert.All(rows.Where(r => r[0].StartsWith("Meshes\\", StringComparison.Ordinal)), r => Assert.Equal("own", r[1]));
         Assert.Contains(rows, r => r[0].EndsWith("Resources/sphere_d_array.png", StringComparison.Ordinal) && r[1] == "carved-out");
         Assert.Contains(rows, r => r[0].EndsWith("Resources/tile_norm_array.png", StringComparison.Ordinal) && r[1] == "carved-out");
+        // [AC-featureless-bulge-11] the shipped bulge is carved out under its own block, never under the Proteus Licence.
+        Assert.Contains(rows, r => r[0] == "(embedded) Resources/lava_bulge.mdl" && r[1] == "carved-out" && r[2] == "lava_bulge");
+        Assert.Matches(new Regex("^lava_bulge — featureless bulge mesh \\(carved out; not covered by the Proteus Licence\\)", RegexOptions.Multiline), notices);
+        Assert.Contains(rows, r => r[0] == "(embedded) Resources/tbse_bulge.json" && r[1] == "carved-out" && r[2] == "tbse_bulge");
+        Assert.Matches(new Regex("^tbse_bulge — featureless bulge for The Body SE \\(carved out; not covered by the Proteus Licence\\)", RegexOptions.Multiline), notices);
         Assert.DoesNotContain(rows, r => r[0] is "Luna.dll" or "Penumbra.Api.dll" or "Glamourer.Api.dll");
     }
 
