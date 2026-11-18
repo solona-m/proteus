@@ -146,6 +146,23 @@ public partial class BodyRetargetTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-refit-keep-pubes-1")]
+    public void Studio_plan_carries_pubes_when_asked()
+    {
+        // [AC-refit-keep-pubes-1] Through the Studio's own plan call.
+        var legs = BareSkin(PubesOn());
+        var bare = BareSkin();
+        var parts = ModelPartReader.Read(bare)!;
+        var rule = RetargetInputs.StudioSkin(replaceSkin: true, cutHidden: true, clearBody: false, gameGear: false, "_dwn",
+                                             crossSex: false);
+        byte[] Plan(bool pubes) => RetargetInputs.StudioPlan(parts, bare, [Resized("_dwn", legs)], "_dwn", null, layOnBody: true,
+                                                             acrossBodies: true, rule, cut: true, pieces: null,
+                                                             carryPiercings: false, liftUnderbust: true, carryPubes: pubes).Model;
+        Assert.Equal(1, DrawnOf(Plan(true), BiboPube));
+        Assert.Equal(0, DrawnOf(Plan(false), BiboPube));
+    }
+
+    [Fact]
     [Trait("Plan", "AC-refit-keep-pubes-5")]
     public void Pubes_and_piercings_are_independent()
     {
