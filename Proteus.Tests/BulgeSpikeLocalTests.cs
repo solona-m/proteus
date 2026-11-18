@@ -349,4 +349,77 @@ public class BulgeSpikeLocalTests(ITestOutputHelper output)
                              + $"worst move {planned.Report.WorstMove * 1000f:0} mm; extent {lo} .. {hi}; {sw.ElapsedMilliseconds} ms");
         }
     }
+
+    /// <summary>
+    /// S0.2′ (rev7/8): is lava's bulge a graph over the crotch chart? The chart: a cylinder about an axis parallel to X
+    /// through (MidX, anchor.Y + h·s, anchor.Z + d·s); u = (x − MidX)/s, θ the angle about it. The bulge core is the
+    /// bulge copy moved more than <paramref name="threshold"/> off the base, plus two rings; a triangle FLIPS when its
+    /// signed (u, θ) area is below −1% of the core's mean |area| (the majority's sign taken as forward). Logged over a
+    /// small grid of axis heights, depths and pitch tilts.
+    /// </summary>
+    [Fact]
+    public void Lava_chart_flips()
+    {
+        var asset = Proteus.Services.Bulge.BulgeAsset.Load(null, out var why);
+        Assert.True(asset != null, why);
+        var lava = asset!.Lava;
+        var skin = ModelSkinReader.Read(asset.Bytes, null, null)!;
+        var inner = new ModelParts
+        {
+            Positions = lava.Positions, Normals = lava.Normals, MeshSpans = lava.MeshSpans,
+            Parts = lava.Parts.Where(p => !Proteus.Services.Bulge.BulgeAsset.BulgeCopy.Contains(p.Label)).ToList(),
+            AttributeNames = lava.AttributeNames, Min = lava.Min, Max = lava.Max, ShatteredSubmeshes = lava.ShatteredSubmeshes,
+        };
+        var a = BodyRetarget.FindCrotch([(inner, skin)])!.Value;
+        output.WriteLine($"lava anchor y {a.Y:0.000} midX {a.MidX:0.000} z {a.At.Z:0.000} s {a.Scale:0.00}");
+        Vector3 Base(int v) => new(asset.Base[v * 3], asset.Base[v * 3 + 1], asset.Base[v * 3 + 2]);
+        var tris = asset.Copy.SelectMany(p => Enumerable.Range(0, p.Triangles.Length / 3)
+                                                         .Select(t => (p.Triangles[t * 3], p.Triangles[t * 3 + 1], p.Triangles[t * 3 + 2]))).ToList();
+        foreach (float threshold in new[] { 0.005f, 0.010f })
+        {
+            var core = asset.Copy.SelectMany(p => p.Triangles).Distinct()
+                            .Where(v => Vector3.Distance(At(lava, v), Base(v)) > threshold).ToHashSet();
+            // two rings, by triangle adjacency in the copy
+            for (int ring = 0; ring < 2; ring++)
+                core.UnionWith(tris.Where(t => core.Contains(t.Item1) || core.Contains(t.Item2) || core.Contains(t.Item3))
+                                   .SelectMany(t => new[] { t.Item1, t.Item2, t.Item3 }).ToList());
+            var coreTris = tris.Where(t => core.Contains(t.Item1) && core.Contains(t.Item2) && core.Contains(t.Item3)).ToList();
+            var ext = (new Vector3(core.Min(v => At(lava, v).X), core.Min(v => At(lava, v).Y), core.Min(v => At(lava, v).Z)),
+                       new Vector3(core.Max(v => At(lava, v).X), core.Max(v => At(lava, v).Y), core.Max(v => At(lava, v).Z)));
+            output.WriteLine($"threshold {threshold * 1000:0} mm: core {core.Count} vertices, {coreTris.Count} triangles, extent {ext.Item1} .. {ext.Item2}");
+            int bestFlips = int.MaxValue, bestBase = int.MaxValue;
+            string best = "", bestBaseAt = "";
+            foreach (float h in new[] { 0f, 0.03f, 0.06f, 0.12f, 0.18f, 0.24f, 0.32f })
+                foreach (float d in new[] { -0.15f, -0.10f, -0.06f, -0.03f, 0f })
+                    foreach (float pitch in new[] { -60f, -45f, -30f, -20f, -10f, 0f, 15f })
+                    {
+                        var o = new Vector3(a.MidX, a.Y + h * a.Scale, a.At.Z + d * a.Scale);
+                        float c = MathF.Cos(pitch * MathF.PI / 180), sn = MathF.Sin(pitch * MathF.PI / 180);
+                        (float U, float T) Chart(Vector3 p)
+                        {
+                            var q = p - o;
+                            float y = q.Y * c - q.Z * sn, z = q.Y * sn + q.Z * c;   // pitch about X
+                            return ((q.X) / a.Scale, MathF.Atan2(y, z));            // θ: 0 forward (+Z), −π/2 down
+                        }
+                        int Flips(Func<int, Vector3> pos)
+                        {
+                            var areas = coreTris.Select(t =>
+                            {
+                                var (u0, t0) = Chart(pos(t.Item1));
+                                var (u1, t1) = Chart(pos(t.Item2));
+                                var (u2, t2) = Chart(pos(t.Item3));
+                                return ((u1 - u0) * (t2 - t0) - (u2 - u0) * (t1 - t0)) * 0.5f;
+                            }).ToList();
+                            float sign = MathF.Sign(areas.Sum());
+                            float mean = areas.Average(MathF.Abs);
+                            return areas.Count(x => x * sign < -0.01f * mean);
+                        }
+                        int flips = Flips(v => At(lava, v));
+                        int baseFlips = Flips(Base);
+                        if (flips < bestFlips) { bestFlips = flips; best = $"h {h:0.00} d {d:0.00} pitch {pitch:0} (base there {baseFlips})"; }
+                        if (baseFlips < bestBase) { bestBase = baseFlips; bestBaseAt = $"h {h:0.00} d {d:0.00} pitch {pitch:0}"; }
+                    }
+            output.WriteLine($"  fewest flips {bestFlips} of {coreTris.Count} at {best}; the BASE's fewest {bestBase} at {bestBaseAt}");
+        }
+    }
 }
