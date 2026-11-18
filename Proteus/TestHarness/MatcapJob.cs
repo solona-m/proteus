@@ -196,7 +196,7 @@ internal static class MatcapJob
                 switch (MatcapPlan.KindOfApply(chosen))
                 {
                     case MatcapPlan.ApplyKind.Change:
-                        changeNames = MatcapPlan.ChangeNames(chosen);
+                        changeNames = MatcapPlan.ChangeNames(chosen, MatcapRecord.Read(args.ModRoot));
                         outcome = MatcapStudio.ChangeAll(args.ModRoot, changeNames, choice!, args.Port.Env);
                         break;
                     case MatcapPlan.ApplyKind.Mixed:

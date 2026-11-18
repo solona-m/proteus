@@ -17,15 +17,49 @@ internal static class MatcapPreview
 {
     /// <param name="DrawnAt">The game paths the open model is drawn at (where the brush preview redirects it).</param>
     /// <param name="ModsRoot">Penumbra's mod folder, where a library option's texture is read from.</param>
+    /// <param name="ResolvedMaterial">Row matcap: where Penumbra resolves the part's material for the player (a disk path,
+    /// resolved on the framework thread), so the preview shows the cut of the option actually worn. Null: unknown.</param>
     public sealed record Input(string ModRoot, string ModelRel, string ModelGamePath, IReadOnlyCollection<string> DrawnAt,
                                byte[] ModelBytes, IReadOnlyList<ModelPart> Ticked, MatcapChoice Choice,
-                               MatcapStudio.Environment Env, string ModsRoot);
+                               MatcapStudio.Environment Env, string ModsRoot, string? ResolvedMaterial = null);
 
     /// <summary>The files to push, or why not (<see cref="Code"/> empty when built).</summary>
     public sealed record Built(IReadOnlyList<LiveBrushPreview.PreviewFile> Files, string Code, string Message)
     {
         public bool Ok => Code.Length == 0;
         public static Built Refuse(string code, string message) => new([], code, message);
+
+        /// <summary>Row matcap: which cut copy the preview pushed — the one Penumbra resolves ("penumbra") or a guess ("heuristic").</summary>
+        public string? ResolvedFrom { get; init; }
+    }
+
+    /// <summary>
+    /// For each cut path, the cut copy to preview: the one cut from the file Penumbra resolves the material to (or the game
+    /// cut, when it resolves to the game); without a usable resolution, the default data's, else the first.
+    /// </summary>
+    internal static (List<LiveBrushPreview.PreviewFile> Files, bool Resolved) CutFiles(string modRoot, MatcapRowCut.Plan plan, string? resolved)
+    {
+        string? resolvedRel = null;
+        bool resolvedGame = false, usable = false;
+        if (resolved != null)
+        {
+            var full = Path.GetFullPath(resolved);
+            var rootFull = Path.GetFullPath(modRoot).TrimEnd('\\', '/') + Path.DirectorySeparatorChar;
+            if (full.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase)) { resolvedRel = full[rootFull.Length..]; usable = true; }
+            else if (!Path.IsPathRooted(resolved)) { resolvedGame = true; usable = true; }   // a game path: the game's own file
+        }
+        var files = new List<LiveBrushPreview.PreviewFile>();
+        foreach (var path in plan.Files.SelectMany(f => f.Redirects.Select(r => r.GamePath)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var holders = plan.Files.Where(f => f.Redirects.Any(r => PenumbraModMeta.SameFile(r.GamePath, path))).ToList();
+            MatcapRowCut.CutFile? pick = null;
+            if (resolvedRel != null) pick = holders.FirstOrDefault(f => f.Source.File != null && PenumbraModMeta.SameFile(f.Source.File, resolvedRel));
+            else if (resolvedGame) pick = holders.FirstOrDefault(f => f.Source.Game);
+            pick ??= holders.FirstOrDefault(f => f.Redirects.Any(r => r.Container.IsDefault && PenumbraModMeta.SameFile(r.GamePath, path)))
+                     ?? holders[0];
+            files.Add(new([path], ".mtrl", pick.Bytes));
+        }
+        return (files, usable);
     }
 
     public const string CodeNotGear = "not-gear", CodeLibraryMissing = "library-missing";
@@ -74,7 +108,8 @@ internal static class MatcapPreview
         var temps = new List<string> { req.MaskTemp };
         if (req.FlatNormalTemp != null) temps.Add(req.FlatNormalTemp);
         temps.AddRange(req.Materials.Select(m => m.ImageTexTemp).OfType<string>());
-        temps.AddRange(req.Materials.Select(m => m.RowNormalTemp).OfType<string>());
+        temps.AddRange(req.Materials.SelectMany(m => m.Row?.Cut.Bakes.Select(b => b.Temp) ?? []));
+        string? resolvedFrom = null;
         try
         {
             var files = new List<LiveBrushPreview.PreviewFile>
@@ -86,17 +121,21 @@ internal static class MatcapPreview
                 files.Add(new(m.GamePaths, ".mtrl", m.Bytes));
                 if (m.ImageTexTemp != null && m.Source.Tex is { } tex)
                     files.Add(new([tex.GamePath], ".tex", File.ReadAllBytes(m.ImageTexTemp)));
-                if (m.RowNormalTemp != null && m.RowNormalGamePath != null)
-                    files.Add(new([m.RowNormalGamePath], ".tex", File.ReadAllBytes(m.RowNormalTemp)));
-                if (m.CutMaterial != null && m.CutMaterialGamePaths.Count > 0)
-                    files.Add(new(m.CutMaterialGamePaths, ".mtrl", m.CutMaterial));
+                // A row matcap: the cut copies at the CUT paths only (never at the author's), and their cut normals.
+                if (m.Row is { } row)
+                {
+                    var (cuts, resolved) = CutFiles(input.ModRoot, row.Cut, input.ResolvedMaterial);
+                    files.AddRange(cuts);
+                    foreach (var b in row.Cut.Bakes) files.Add(new([b.GamePath], ".tex", File.ReadAllBytes(b.Temp)));
+                    resolvedFrom = resolved ? "penumbra" : "heuristic";
+                }
             }
             files.Add(new([MatcapWriter.MaskGamePath(req.Token)], ".tex", File.ReadAllBytes(req.MaskTemp)));
             if (req.FlatNormalTemp != null)
                 files.Add(new([MatcapWriter.FlatNormalGamePath(req.Token)], ".tex", File.ReadAllBytes(req.FlatNormalTemp)));
             if (input.Choice.Library is { } lib && optionBytes != null)
                 files.Add(new([lib.Texture], ".tex", optionBytes));
-            return new Built(files, "", "");
+            return new Built(files, "", "") { ResolvedFrom = resolvedFrom };
         }
         finally
         {
@@ -127,7 +166,7 @@ internal static class MatcapPreview
             // A copy of the model at a fresh path, so the gear reloads and asks for its materials again.
             var files = new List<LiveBrushPreview.PreviewFile> { new(input.DrawnAt, ".mdl", input.ModelBytes) };
             var texPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var name in MatcapPlan.ChangeNames(input.Ticked))
+            foreach (var name in MatcapPlan.ChangeNames(input.Ticked, record))
             {
                 var entry = record.Materials.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));
                 var (src, mtrl, _, code, msg) = MatcapStudio.PrepareChange(input.ModRoot, name, input.Choice, env, baked);

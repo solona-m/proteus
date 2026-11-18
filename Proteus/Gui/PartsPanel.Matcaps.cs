@@ -494,7 +494,7 @@ public sealed partial class PartsPanel
         if (kind == MatcapPlan.ApplyKind.Change)
         {
             if (ModRoot() is not { } changeRoot) return;
-            var names = MatcapPlan.ChangeNames(chosen);
+            var names = MatcapPlan.ChangeNames(chosen, MatcapRecord.Read(changeRoot));
             var changePath = models[modelIndex].GamePath;
             matcapJob = Task.Run(() =>
             {

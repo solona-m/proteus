@@ -64,16 +64,17 @@ internal static class MatcapWriter
                                       float? AlphaThreshold, MatcapRecord.SourceRef Source, string? ImageTexTemp,
                                       IReadOnlyList<(string Rel, int Source, int Drawn)> Meshes)
     {
-        /// <summary>PROTOTYPE (row matcap): the baked, row-cut normal the material reads, and where. Preview only.</summary>
-        public string? RowNormalTemp { get; init; }
-        public string? RowNormalGamePath { get; init; }
-        /// <summary>PROTOTYPE: the part's own material, repointed at the cut normal, and the paths it replaces.</summary>
-        public byte[]? CutMaterial { get; init; }
-        public IReadOnlyList<string> CutMaterialGamePaths { get; init; } = [];
+        /// <summary>A row matcap's cut, or null for a whole-part matcap.</summary>
+        public RowPlan? Row { get; init; }
     }
 
-    /// <summary>PROTOTYPE: a row matcap is shown by the click preview only; Apply refuses it.</summary>
-    public const string CodeRowPrototype = "row-prototype";
+    /// <summary>
+    /// A row matcap's cut, prepared: the row, the cut copy name the row triangles were moved onto, the planned cut files
+    /// and normals (<see cref="MatcapRowCut.Plan"/>), the meshes that now draw the cut, and whether their vertex alpha
+    /// was raised to 1.
+    /// </summary>
+    public sealed record RowPlan(int Row, SubRowPick Sub, string CutName, MatcapRowCut.Plan Cut,
+                                 IReadOnlyList<(string Rel, int Source, int Drawn)> CutMeshes, bool CutAlphaSet);
 
     /// <summary>
     /// Everything an apply needs, prepared on a worker (<see cref="MatcapStudio"/>): one material per source material
@@ -114,9 +115,6 @@ internal static class MatcapWriter
             if (PenumbraModMeta.IsLegacyFolder(modRoot))
                 return Outcome.Refuse(CodeLegacy, ProteusLoc.Localize("Matcap.Refused.Legacy",
                     "This mod is still in Penumbra's old folder layout. Open it in Penumbra once so it is updated, then try again."));
-            if (req.Materials.Any(p => p.RowNormalTemp != null))
-                return Outcome.Refuse(CodeRowPrototype, "Row matcaps are a prototype: click a matcap to preview one; Apply is not built yet. Set the row back to \"Whole part\" to apply.");
-
             var record = MatcapRecord.Read(modRoot);
             if (record.Unreadable)
                 return Outcome.Refuse(CodeUnreadable, ProteusLoc.Localize("Matcap.Refused.RecordUnreadable",
@@ -141,7 +139,16 @@ internal static class MatcapWriter
                 Name = p.Name, File = MaterialFile(p.Name), GamePaths = [.. p.GamePaths],
                 Normal = p.Normal, AlphaThreshold = p.AlphaThreshold, Pending = true, Source = p.Source,
                 Meshes = p.Meshes.Select(x => new MatcapRecord.MeshRef { Model = x.Rel, Mesh = x.Drawn, From = x.Source }).ToList(),
+                Row = p.Row is { } row ? RowEntry(row) : null,
             }).ToList();
+            // A row matcap's cut files and normals with their redirects, by container (default data's join addedKeys).
+            var rowEdits = new Dictionary<PenumbraModMeta.ContainerRef, Dictionary<string, string>>();
+            void RowAdd(PenumbraModMeta.ContainerRef c, string gamePath, string file)
+            {
+                if (c.IsDefault) { addedKeys[gamePath] = file; return; }
+                foreach (var (k, v) in rowEdits) if (k.SameAs(c)) { v[gamePath] = file; return; }
+                rowEdits[c] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [gamePath] = file };
+            }
             // A backup is the original only while the file still carries one of our matcaps (as written, or edited on
             // top by a later feature such as the brush, which keeps its own backup in the order). A backup over a file
             // that names none of them — left by a failed retire or a deleted record, the author's update since — is
@@ -220,6 +227,23 @@ internal static class MatcapWriter
                         Place(modRoot, tex.File, File.ReadAllBytes(plan.ImageTexTemp), created);
                         addedKeys[tex.GamePath] = tex.File;
                     }
+                    // A row matcap: each cut copy at every redirect it mirrors, and the cut normals in default data.
+                    if (plan.Row is { } row && entry.Row is { } rowEntry)
+                    {
+                        for (int k = 0; k < row.Cut.Files.Count; k++)
+                        {
+                            var cf = row.Cut.Files[k];
+                            var file = rowEntry.Files[k].File;
+                            Place(modRoot, file, cf.Bytes, created);
+                            foreach (var (c, gp) in cf.Redirects) RowAdd(c, gp, file);
+                        }
+                        for (int k = 0; k < row.Cut.Bakes.Count; k++)
+                        {
+                            var n = rowEntry.Normals[k];
+                            Place(modRoot, n.File, File.ReadAllBytes(row.Cut.Bakes[k].Temp), created);
+                            RowAdd(new PenumbraModMeta.ContainerRef(""), n.GamePath, n.File);
+                        }
+                    }
                 }
                 if (maskSet)
                 {
@@ -234,7 +258,8 @@ internal static class MatcapWriter
                 AfterStep?.Invoke("files");
 
                 PenumbraModMeta.EditContainers(modRoot, [new PenumbraModMeta.ContainerEdit(
-                    new PenumbraModMeta.ContainerRef(""), addedKeys, new Dictionary<string, string>())]);
+                    new PenumbraModMeta.ContainerRef(""), addedKeys, new Dictionary<string, string>()),
+                    .. rowEdits.Select(kv => new PenumbraModMeta.ContainerEdit(kv.Key, kv.Value, new Dictionary<string, string>()))]);
                 AfterStep?.Invoke("redirects");
 
                 foreach (var m in req.Models)
@@ -263,9 +288,10 @@ internal static class MatcapWriter
                     try { PenumbraModMeta.AtomicWrite(Full(modRoot, m.Rel), m.SourceBytes); } catch { }
                 try
                 {
-                    if (addedKeys.Count > 0)
+                    if (addedKeys.Count > 0 || rowEdits.Count > 0)
                         PenumbraModMeta.EditContainers(modRoot, [new PenumbraModMeta.ContainerEdit(
-                            new PenumbraModMeta.ContainerRef(""), new Dictionary<string, string>(), addedKeys)]);
+                            new PenumbraModMeta.ContainerRef(""), new Dictionary<string, string>(), addedKeys),
+                            .. rowEdits.Select(kv => new PenumbraModMeta.ContainerEdit(kv.Key, new Dictionary<string, string>(), kv.Value))]);
                 }
                 catch { }
                 foreach (var f in created) TryDelete(Full(modRoot, f));
@@ -288,6 +314,43 @@ internal static class MatcapWriter
                     "The matcap could not be written ({0}). Nothing was changed."), ex.Message));
             }
         }
+    }
+
+    /// <summary>
+    /// The record of a prepared row matcap: its cut files (<c>Proteus Matcaps/&lt;cut stem&gt;[_k].mtrl</c>) with every
+    /// redirect and source, its cut normals (named as their game paths, under our folder) and the per-folder fingerprint.
+    /// </summary>
+    private static MatcapRecord.RowRef RowEntry(RowPlan row)
+    {
+        var stem = StemOf(row.CutName);
+        var entry = new MatcapRecord.RowRef
+        {
+            Row = row.Row,
+            Sub = row.Sub switch { SubRowPick.A => MatcapRecord.RowRef.SubA, SubRowPick.B => MatcapRecord.RowRef.SubB, _ => MatcapRecord.RowRef.SubBoth },
+            Cut = row.CutName, CutAlphaSet = row.CutAlphaSet,
+            CutMeshes = row.CutMeshes.Select(x => new MatcapRecord.MeshRef { Model = x.Rel, Mesh = x.Drawn, From = x.Source }).ToList(),
+            Fingerprint = new MatcapRecord.RowFingerprint { Folders = [.. row.Cut.Folders], SwapsSha8 = row.Cut.SwapsSha8 },
+        };
+        for (int k = 0; k < row.Cut.Files.Count; k++)
+        {
+            var cf = row.Cut.Files[k];
+            entry.Files.Add(new MatcapRecord.RowFileRef
+            {
+                File = k == 0 ? $"{FilesFolder}/{stem}.mtrl" : $"{FilesFolder}/{stem}_{k + 1}.mtrl",
+                Sha8 = cf.Sha8, ThresholdZero = cf.ThresholdZero, Source = cf.Source, Normal = cf.Normal, Index = cf.Index,
+                Redirects = cf.Redirects.Select(r => new MatcapRecord.RowRedirect
+                {
+                    Group = r.Container.Group, Option = r.Container.Option, Index = r.Container.Index, GamePath = r.GamePath,
+                }).ToList(),
+            });
+        }
+        foreach (var b in row.Cut.Bakes)
+            entry.Normals.Add(new MatcapRecord.FileRef
+            {
+                File = $"{FilesFolder}/{Path.GetFileName(b.GamePath)}", GamePath = b.GamePath,
+                Sha8 = File.Exists(b.Temp) ? HairPortPlan.Sha8(File.ReadAllBytes(b.Temp)) : "",
+            });
+        return entry;
     }
 
     // ── change ──────────────────────────────────────────────────────────────
@@ -423,6 +486,7 @@ internal static class MatcapWriter
                 return Outcome.Refuse(CodeNothing, ProteusLoc.Localize("Parts.Matcap.NothingToUndo", "There is no matcap on this model to undo."));
 
             var removeKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var removeFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var kept = new List<string>();
             var touched = new List<string>();
             // Refits, hair ports and earless copies remade from a file carrying one of our matcaps draw it too: its files
@@ -436,9 +500,9 @@ internal static class MatcapWriter
             foreach (var mat in record.Materials.ToList())
             {
                 bool named = mat.Meshes.Select(x => x.Model).Distinct(StringComparer.OrdinalIgnoreCase)
-                                .Any(m => NamesIn(modRoot, m)?.Contains(mat.Name) == true);
+                                .Any(m => NamesIn(modRoot, m) is { } ns && (ns.Contains(mat.Name) || (mat.Row != null && ns.Contains(mat.Row.Cut))));
                 if (named) continue;
-                if (DropMaterial(modRoot, mat, removeKeys, kept, refitUsers, portUsers, refits.Value)) record.Materials.Remove(mat);
+                if (DropMaterial(modRoot, mat, removeKeys, kept, refitUsers, portUsers, refits.Value, removeFiles)) record.Materials.Remove(mat);
             }
 
             // ── the group: this model plus every model sharing a remaining material with it ──
@@ -481,7 +545,7 @@ internal static class MatcapWriter
 
             // Nothing to restore, forget or remove — the model was undone already and what is left is kept for refits or
             // ports (#96): said so, and nothing is written, reloaded or redrawn.
-            if (restore.Count == 0 && forget.Count == 0 && removeKeys.Count == 0)
+            if (restore.Count == 0 && forget.Count == 0 && removeKeys.Count == 0 && removeFiles.Count == 0)
                 return Outcome.Refuse(CodeNothing, (forgetOnly
                     ? ProteusLoc.Localize("Parts.Matcap.NothingToForget", "Every matcap on this model is still in use; there is nothing to forget.")
                     : ProteusLoc.Localize("Parts.Matcap.NothingToUndo", "There is no matcap on this model to undo."))
@@ -503,7 +567,7 @@ internal static class MatcapWriter
             {
                 // A material leaves with its models: every model it draws in was restored or forgotten.
                 if (!mat.Meshes.All(x => gone.Contains(x.Model))) continue;
-                if (DropMaterial(modRoot, mat, removeKeys, kept, refitUsers, portUsers, refitsNow.Value)) record.Materials.Remove(mat);
+                if (DropMaterial(modRoot, mat, removeKeys, kept, refitUsers, portUsers, refitsNow.Value, removeFiles)) record.Materials.Remove(mat);
             }
             record.Models.RemoveAll(m => gone.Contains(m.File));
 
@@ -533,9 +597,9 @@ internal static class MatcapWriter
                 record.Shared = new MatcapRecord.SharedFiles();
             }
 
-            if (removeKeys.Count > 0)
-                PenumbraModMeta.EditContainers(modRoot, [new PenumbraModMeta.ContainerEdit(
-                    new PenumbraModMeta.ContainerRef(""), new Dictionary<string, string>(), removeKeys)]);
+            // One manifest write: default-data keys, every redirect to a dropped row's files wherever it sits, and unclaimed cut redirects.
+            var removals = RemovalEdits(modRoot, record, removeKeys, removeFiles);
+            if (removals.Count > 0) PenumbraModMeta.EditContainers(modRoot, removals);
             foreach (var g in dropped) TryDelete(Full(modRoot, g));
             MatcapRecord.Write(modRoot, record);
 
@@ -575,8 +639,11 @@ internal static class MatcapWriter
     /// <paramref name="refitUsers"/> or <paramref name="portUsers"/>, and false returned so the record keeps it until
     /// nothing names it (a later Undo or Forget checks again).
     /// </summary>
+    /// <param name="removeFiles">A row matcap's cut files and normals: every redirect to one of them, in any container,
+    /// is taken out (by file, so a renamed option or Gear variants' copies are found too).</param>
     private static bool DropMaterial(string modRoot, MatcapRecord.MaterialEntry mat, Dictionary<string, string> removeKeys,
-                                     List<string> kept, List<string> refitUsers, List<string> portUsers, List<Regenerated> regenerated)
+                                     List<string> kept, List<string> refitUsers, List<string> portUsers, List<Regenerated> regenerated,
+                                     HashSet<string> removeFiles)
     {
         var users = regenerated.Where(r => Draws(r, mat)).ToList();
         if (users.Count > 0)
@@ -595,7 +662,84 @@ internal static class MatcapWriter
             removeKeys[tex.GamePath] = tex.File;
             if (Edited(modRoot, tex.File, tex.Sha8) && tex.Sha8.Length > 0) kept.Add(tex.File); else TryDelete(Full(modRoot, tex.File));
         }
+        if (mat.Row is { } row)
+        {
+            foreach (var f in row.Files)
+            {
+                removeFiles.Add(f.File);
+                if (Edited(modRoot, f.File, f.Sha8) && f.Sha8.Length > 0) kept.Add(f.File); else TryDelete(Full(modRoot, f.File));
+            }
+            foreach (var n in row.Normals)
+            {
+                removeFiles.Add(n.File);
+                if (Edited(modRoot, n.File, n.Sha8) && n.Sha8.Length > 0) kept.Add(n.File); else TryDelete(Full(modRoot, n.File));
+            }
+        }
         return true;
+    }
+
+    /// <summary>
+    /// The container edits that take out every redirect to <paramref name="removeFiles"/> (by file, wherever it is), plus
+    /// <paramref name="removeKeys"/> from default data, and — unless the record is unreadable — the orphan sweep: redirects
+    /// to a <c>Proteus Matcaps/*_mcut*</c> file no record entry claims and no model the mod draws or Proteus regenerated
+    /// names (a record an older Proteus rewrote without its rows). The sweep removes redirects only, never files.
+    /// </summary>
+    private static List<PenumbraModMeta.ContainerEdit> RemovalEdits(string modRoot, MatcapRecord record,
+                                                                      Dictionary<string, string> removeKeys, HashSet<string> removeFiles)
+    {
+        var removals = new Dictionary<PenumbraModMeta.ContainerRef, Dictionary<string, string>>();
+        Dictionary<string, string> Of(PenumbraModMeta.ContainerRef c)
+        {
+            foreach (var (k, v) in removals) if (k.SameAs(c)) return v;
+            var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            removals[c] = d;
+            return d;
+        }
+        foreach (var (k, v) in removeKeys) Of(new PenumbraModMeta.ContainerRef(""))[k] = v;
+
+        var all = PenumbraModMeta.ReadContainerRedirects(modRoot);
+        var claimed = new HashSet<string>(record.Materials.Where(m => m.Row != null)
+            .SelectMany(m => m.Row!.Files.Select(f => f.File).Concat(m.Row.Normals.Select(n => n.File)))
+            .Select(f => f.Replace('\\', '/')), StringComparer.OrdinalIgnoreCase);
+        HashSet<string>? drawn = null;
+        foreach (var r in all)
+        {
+            var file = r.File.Replace('\\', '/');
+            bool ours = removeFiles.Any(f => PenumbraModMeta.SameFile(f, file));
+            if (!ours && !record.Unreadable && IsCutFile(file) && !claimed.Contains(file))
+            {
+                drawn ??= DrawnNames(modRoot, record);
+                ours = !drawn.Contains(CutNameOf(file));
+            }
+            if (ours) Of(r.Container)[r.GamePath] = r.File;
+        }
+        return removals.Select(kv => new PenumbraModMeta.ContainerEdit(kv.Key, new Dictionary<string, string>(), kv.Value)).ToList();
+    }
+
+    /// <summary>A file in our folder that is a row matcap's cut copy or cut normal.</summary>
+    private static bool IsCutFile(string rel)
+    {
+        var f = rel.Replace('\\', '/');
+        return f.StartsWith(FilesFolder + "/", StringComparison.OrdinalIgnoreCase)
+               && f.Contains(MatcapPlan.CutMarker, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The cut name a cut file stands for: <c>Proteus Matcaps/mt_x_mcutabc1_2.mtrl</c> → <c>mt_x_mcutabc1.mtrl</c>.</summary>
+    private static string CutNameOf(string rel)
+    {
+        var stem = Path.GetFileNameWithoutExtension(rel.Replace('\\', '/'));
+        var m = System.Text.RegularExpressions.Regex.Match(stem, @"^(.*_mcut[0-9a-f]{6}\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return (m.Success ? m.Groups[1].Value : stem) + ".mtrl";
+    }
+
+    /// <summary>The material file names the mod's recorded models and Proteus's remade files draw.</summary>
+    private static HashSet<string> DrawnNames(string modRoot, MatcapRecord record)
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void AddAll(IEnumerable<string> ns) { foreach (var n in ns) names.Add(n.Replace('\\', '/')[(n.Replace('\\', '/').LastIndexOf('/') + 1)..]); }
+        foreach (var m in record.Models) if (NamesIn(modRoot, m.File) is { } n) AddAll(n);
+        foreach (var r in RegeneratedNames(modRoot)) AddAll(r.Names);
+        return names;
     }
 
     /// <summary>
@@ -634,6 +778,8 @@ internal static class MatcapWriter
     /// </summary>
     private static bool Draws(Regenerated r, MatcapRecord.MaterialEntry mat)
         => r.Names.Contains(mat.Name)
+           // A row matcap's cut copy: a refit remade from the model draws the cut too.
+           || mat.Row is { } row && r.Names.Contains(row.Cut)
            || r.Race > 0 && r.Names.Any(n => HairMaterialPath.GamePath(r.Race, r.Id, n) is { } gp
                                              && mat.GamePaths.Contains(gp, StringComparer.OrdinalIgnoreCase))
            // A port into a race with its own material folder redirects its own path to the source's file: the matcap's.

@@ -65,7 +65,7 @@ internal static class MatcapPanelModel
             case MatcapPlan.ApplyKind.Mixed:
                 return s.AlreadyMatcap;
             case MatcapPlan.ApplyKind.Change:
-                foreach (var name in MatcapPlan.ChangeNames(ticked))
+                foreach (var name in MatcapPlan.ChangeNames(ticked, record))
                 {
                     var entry = record.Materials.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));
                     if (entry == null) return s.NoEntry;
@@ -105,7 +105,7 @@ internal static class MatcapPanelModel
                                             string modelFile)
     {
         var s = Strings.Matcap;
-        var names = MatcapPlan.ChangeNames(ticked);
+        var names = MatcapPlan.ChangeNames(ticked, record);
         if (names.Count == 0) return [];
         var lines = new List<string> { string.Format(s.ChangesFmt, string.Join(", ", names.Select(MatcapWriter.StemOf))) };
         var tickedLabels = ticked.Select(p => p.Label).ToHashSet(StringComparer.Ordinal);
