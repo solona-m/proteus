@@ -48,7 +48,8 @@ public sealed class ReadmeTermsTests
     [Fact]
     [Trait("Plan", "AC-readme-tos-5")]
     [Trait("Plan", "EDGE-readme-tos-7")]
-    public void Terms_file_is_the_owners_text()
+    [Trait("Plan", "EDGE-proteus-licence-2-17")]
+    public void Terms_file_is_the_owners_text()   // [EDGE-proteus-licence-2-17]
     {
         var text = Read("TERMS.md");
         Assert.Equal("# Terms of Service — Solona's mods and plugins", text.Split('\n')[0].TrimEnd());
@@ -125,20 +126,22 @@ public sealed class ReadmeTermsTests
     [Trait("Plan", "AC-contrib-clean-room-11")]
     [Trait("Plan", "EDGE-contrib-clean-room-21")]
     [Trait("Plan", "EDGE-contrib-clean-room-22")]
-    public void Licence_is_the_Proteus_Licence_in_force()   // [AC-contrib-clean-room-11] [EDGE-contrib-clean-room-21] [EDGE-contrib-clean-room-22]
+    [Trait("Plan", "AC-proteus-licence-2-1")]
+    [Trait("Plan", "EDGE-proteus-licence-2-1")]
+    public void Licence_is_the_Proteus_Licence_2_0()   // [AC-proteus-licence-2-1] [EDGE-proteus-licence-2-1]
     {
+        // AC-contrib-clean-room-11 was the 1.0 criterion ("Version 1.0 — in force"); AC-proteus-licence-2-1 supersedes
+        // it. 1.0 itself stays in git history only (61c8c7b6:LICENSE).
         var licence = Read("LICENSE").Replace("\r\n", "\n");
         var lines = licence.Split('\n');
-        Assert.Equal("# Proteus Licence", lines[0]);
-        Assert.Matches(@"^\*Version 1\.0 — in force from \d{4}-\d{2}-\d{2}\*$", lines[2]);
+        Assert.Equal("PROTEUS LICENCE", lines[0].Trim());
+        Assert.Equal("Version 2.0, 18 November 2026", lines[1].Trim());
         Assert.DoesNotContain("DRAFT", licence);
         Assert.DoesNotContain("GNU AFFERO GENERAL PUBLIC LICENSE", licence);
         Assert.False(File.Exists(Repo(Path.Combine("docs", "LICENSE-DRAFT.md"))), "docs/LICENSE-DRAFT.md is still there.");
-        // The published text is the reviewed draft (docs/LICENSE-DRAFT.md at 4f535282^), word for word, apart from the
-        // status line: the SHA-256 of every other line, LF-joined, is the draft's.
-        var body = string.Join("\n", lines.Where((_, i) => i != 2));
-        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(body)));
-        Assert.Equal("397567B1D707395A3778024F6FF23B367C4478BDCD2E0A2CB86D47BFD1CAFA0B", hash);
+        // The whole text, pinned: any change to the licence has to be deliberate (update this hash with it).
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(licence)));
+        Assert.Equal("B9A1CE90DB32E7DAB1BFA3F79C19203C02A21727B03EB2B0882530C266E57570", hash);
         // GitHub reads any root LICENSE-* file as a second licence.
         Assert.False(Directory.GetFiles(Root.Value!, "LICENSE*")
                          .Any(f => Path.GetFileName(f).StartsWith("LICENSE-", StringComparison.OrdinalIgnoreCase)),

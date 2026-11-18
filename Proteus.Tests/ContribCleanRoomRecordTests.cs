@@ -69,7 +69,8 @@ public sealed class ContribCleanRoomRecordTests
 
     [Fact]
     [Trait("Plan", "AC-contrib-clean-room-5")]
-    public void IpcProvider_header_is_pinned()   // [AC-contrib-clean-room-5]
+    [Trait("Plan", "AC-proteus-licence-2-8")]
+    public void IpcProvider_header_is_pinned()   // [AC-contrib-clean-room-5] [AC-proteus-licence-2-8]
     {
         var lines = Read("Proteus/Interop/IpcProvider.cs").Split('\n');
         Assert.Equal("// SPDX-License-Identifier: LicenseRef-Proteus", lines[0].TrimEnd());

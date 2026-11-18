@@ -90,7 +90,7 @@
 <Content Include="..\THIRD_PARTY_NOTICES.txt" Link="THIRD_PARTY_NOTICES.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <!-- The Proteus Licence travels with every copy of the plugin (licence §2.5: mirrors keep it intact). -->
+    <!-- The Proteus Licence travels with every copy of the plugin (licence Part 1, section C). -->
     <Content Include="..\LICENSE" Link="LICENSE.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

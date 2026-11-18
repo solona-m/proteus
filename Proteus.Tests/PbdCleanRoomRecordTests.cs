@@ -232,7 +232,8 @@ public sealed class PbdCleanRoomRecordTests
 
     [Fact]
     [Trait("Plan", "AC-pbd-clean-room-4")]
-    public void Header_names_the_spec_not_a_port()
+    [Trait("Plan", "AC-proteus-licence-2-8")]
+    public void Header_names_the_spec_not_a_port()   // [AC-proteus-licence-2-8]
     {
         var source = Read("XivLiveMesh/PbdFile.cs");
         var lines = source.Split('\n');
