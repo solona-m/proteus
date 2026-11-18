@@ -553,3 +553,67 @@ Sub-agents: none
 Identifier-grep hits: 0
 Luna files read (facts only): Luna/Luna/Ipc/FuncSubscriber.cs, Luna/Luna/Ipc/EventSubscriber.cs, Luna/Luna/Ipc/ActionSubscriber.cs, Glamourer/Luna/Luna/Ipc/FuncSubscriber.cs, Glamourer/Luna/Luna/Ipc/EventSubscriber.cs (lines 110-167)
 Glamourer NOTICE file: none
+
+## Agent B2
+
+Start commit: `22502d52`. Extracted from its transcript by agent ID (extract_contrib.py, role b).
+
+Phase B implementer (clean; never read the API or Luna sources). New: Proteus/Interop/Ipc/{IpcContract,IpcGates,PenumbraGates,GlamourerGates,PenumbraApiTypes,GlamourerApiTypes}.cs, Proteus/TestHarness/{GlamourerApplyDesign,GlamourerApplyState}.cs. B2 edits of existing files (named): Proteus/Interop/PenumbraBridge.cs, Proteus/Interop/GlamourerBridge.cs, Proteus/TestHarness/GameHarnessAdapter.cs, Proteus/Plugin.cs (wiring: IpcLog.Attach/Detach), Proteus/Proteus.csproj (three ProjectReferences and the Luna comment removed), Proteus/packages.lock.json (hand-edited because restore kept stale entries; confirmed by the orchestrator's dotnet restore --force-evaluate, which changed nothing further). Proteus/Interop/LunaLog.cs was emptied by B2 and removed by the orchestrator (git rm) together with its test Proteus.Tests/LunaLogTests.cs: it only routed Luna's log, which no longer exists, and its role moved into IpcLog. IpcContract.Entries: 43 (P1-P35, G1-G8). The 7 listing hits first reported were lines of one ripgrep regex-parse error message (no result paths); the extraction now skips such errors and the recount is 0.
+
+Opened:
+- Read docs/ipc-contract.md
+- Grep docs/contrib-clean-room-plan.md
+- Glob E:/orca/workspaces/Proteus/licence-clean-room
+- Read docs/contrib-clean-room-plan.md
+- Read Proteus.Tests/IpcContractTests.cs
+- Read Proteus.Tests/BridgeAvailabilityTests.cs
+- Read Proteus.Tests/ShippedAssembliesTests.cs
+- Read Proteus.Tests/HarnessBindingsWiringTests.cs
+- Grep Proteus.Tests/ContribSpecTests.cs
+- Read Proteus.Tests/ContribSpecTests.cs
+- Read Proteus/Interop/PenumbraBridge.cs
+- Read Proteus/Interop/GlamourerBridge.cs
+- Grep Proteus
+- Read Proteus/Proteus.csproj
+- Read Proteus/Interop/LunaLog.cs
+- Grep E:/orca/workspaces/Proteus/licence-clean-room
+- Read Proteus.Tests/LunaLogTests.cs
+- Grep Proteus.Tests/Proteus.Tests.csproj
+- Read Proteus.Tests/Proteus.Tests.csproj
+- Glob C:/Users/solon/AppData/Roaming/XIVLauncher/addon/Hooks/dev
+- Grep Proteus/packages.lock.json
+- Grep Proteus.Tests
+- Grep docs
+- Read Proteus/Plugin.cs
+- Grep Proteus/TestHarness/GameHarnessAdapter.cs
+- Read Proteus/TestHarness/GameHarnessAdapter.cs
+- Write Proteus/Interop/Ipc/PenumbraApiTypes.cs
+- Write Proteus/Interop/Ipc/GlamourerApiTypes.cs
+- Write Proteus/Interop/Ipc/IpcGates.cs
+- Write Proteus/Interop/Ipc/PenumbraGates.cs
+- Write Proteus/Interop/Ipc/GlamourerGates.cs
+- Write Proteus/Interop/Ipc/IpcContract.cs
+- Edit Proteus/Interop/PenumbraBridge.cs
+- Edit Proteus/Interop/GlamourerBridge.cs
+- Write Proteus/TestHarness/GlamourerApplyDesign.cs
+- Write Proteus/TestHarness/GlamourerApplyState.cs
+- Edit Proteus/TestHarness/GameHarnessAdapter.cs
+- Grep Proteus.Tests/HarnessReleaseGuardTests.cs
+- Grep Proteus.Tests/HarnessBuildFlagTests.cs
+- Read Proteus.Tests/HarnessReleaseGuardTests.cs
+- Write Proteus/Interop/LunaLog.cs
+- Edit Proteus/Plugin.cs
+- Edit Proteus/Proteus.csproj
+- Read Proteus/packages.lock.json
+- Write Proteus/packages.lock.json
+- Read Proteus.Tests/IdleDiskIoWiringTests.cs
+- Grep Proteus.Tests/SupplyChainTests.cs
+- Read Proteus.Tests/SupplyChainTests.cs
+Shell commands:
+- dotnet build E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Proteus.csproj -c Release
+- dotnet build E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Proteus.csproj -c Release
+- dotnet test E:/orca/workspaces/Proteus/licence-clean-room/Proteus.Tests/Proteus.Tests.csproj -c Release --filter "FullyQualifiedName~IpcContractTests|FullyQualifiedName~ShippedAssembliesTests|FullyQualifiedName~BridgeAvailabilityTests|FullyQualifiedName~HarnessBindingsWiringTests|FullyQualifiedName~HarnessBuildFlagTests|FullyQualifiedName~HarnessReleaseGuardTests&Speed!=Slow"
+Sub-agents: none
+Grep without line numbers: 0
+Shell commands outside the allowlist: 0
+forbidden locations in listing/search results: 0

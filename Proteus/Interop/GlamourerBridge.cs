@@ -5,9 +5,8 @@ using System.Threading;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Glamourer.Api.Enums;
-using Glamourer.Api.IpcSubscribers;
-using Luna;
 using Newtonsoft.Json.Linq;
+using Proteus.Interop.Ipc;
 
 namespace Proteus.Interop;
 
@@ -17,8 +16,8 @@ public class GlamourerBridge : IDisposable
     private readonly IObjectTable objectTable;
     private readonly IDalamudPluginInterface pluginInterface;
 
-    private readonly EventSubscriber<nint, StateChangeType>? stateChangedSub;
-    private readonly EventSubscriber<nint, StateFinalizationType>? stateFinalizedSub;
+    private readonly GlamourerStateChangedWithType? stateChangedSub;
+    private readonly GlamourerStateFinalized? stateFinalizedSub;
 
     // When we last called ReapplyPlayerState, so its own finalization echo can be filtered out. The window
     // only has to cover Glamourer raising the event for a call we just made, not any real user action.
@@ -28,12 +27,12 @@ public class GlamourerBridge : IDisposable
     // When someone OTHER than us last had Glamourer reapply the local player: with the Gearset finalization
     // after it, the only evidence of an automation design apply (DesignBindingService.IsInferredAutomationApply).
     private long lastForeignReapplyTick;
-    private readonly GetDesignList getDesignList;
-    private readonly GetDesignJObject getDesignJObject;
-    private readonly GetState getState;
-    private readonly ReapplyState reapplyState;
-    private readonly SetBonusItem setBonusItem;
-    private readonly SetItem setItem;
+    private readonly GlamourerGetDesignList getDesignList;
+    private readonly GlamourerGetDesignJObject getDesignJObject;
+    private readonly GlamourerGetState getState;
+    private readonly GlamourerReapplyState reapplyState;
+    private readonly GlamourerSetBonusItem setBonusItem;
+    private readonly GlamourerSetItem setItem;
 
     public bool IsAvailable { get; private set; }
 
@@ -76,19 +75,19 @@ public class GlamourerBridge : IDisposable
         this.objectTable     = objectTable;
         this.pluginInterface = pluginInterface;
 
-        // FuncSubscriber construction only creates the call gate (safe even if Glamourer is absent);
+        // Creating a gate only asks Dalamud for it (safe even if Glamourer is absent);
         // the Invoke() calls below are individually guarded.
-        getDesignList    = new GetDesignList(pluginInterface);
-        getDesignJObject = new GetDesignJObject(pluginInterface);
-        getState         = new GetState(pluginInterface);
-        reapplyState     = new ReapplyState(pluginInterface);
-        setBonusItem     = new SetBonusItem(pluginInterface);
-        setItem          = new SetItem(pluginInterface);
+        getDesignList    = new GlamourerGetDesignList(pluginInterface);
+        getDesignJObject = new GlamourerGetDesignJObject(pluginInterface);
+        getState         = new GlamourerGetState(pluginInterface);
+        reapplyState     = new GlamourerReapplyState(pluginInterface);
+        setBonusItem     = new GlamourerSetBonusItem(pluginInterface);
+        setItem          = new GlamourerSetItem(pluginInterface);
 
         try
         {
-            stateChangedSub   = StateChangedWithType.Subscriber(pluginInterface, OnStateChanged);
-            stateFinalizedSub = StateFinalized.Subscriber(pluginInterface, OnStateFinalized);
+            stateChangedSub   = new GlamourerStateChangedWithType(pluginInterface, OnStateChanged);
+            stateFinalizedSub = new GlamourerStateFinalized(pluginInterface, OnStateFinalized);
             IsAvailable = true;
             log.Information("[Proteus] Glamourer IPC subscribed.");
         }

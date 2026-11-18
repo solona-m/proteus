@@ -128,7 +128,7 @@ public sealed class Plugin : IDalamudPlugin
                                                    a => _ = framework.RunOnTick(a, TimeSpan.FromMilliseconds(250)),
                                                    log));
 
-        Interop.LunaLog.Attach(log);
+        Interop.Ipc.IpcLog.Attach(log);
         penumbra = new PenumbraBridge(pluginInterface, log);
         glamourer = new GlamourerBridge(pluginInterface, ObjectTable, log);
         textureLoader = new TextureLoader(DataManager, log)
@@ -680,7 +680,7 @@ public sealed class Plugin : IDalamudPlugin
         discovery.Detach();    // its cache's subscriptions, before the bridge goes
         glamourer.Dispose();
         penumbra.Dispose();
-        Interop.LunaLog.Detach();
+        Interop.Ipc.IpcLog.Detach();
         loc.Dispose();   // last: unhooks LanguageChanged, which anything above could still be drawing under
     }
 }
