@@ -194,12 +194,16 @@ public class SharedSeamTests
     [Fact]
     [Trait("Plan", "AC-split-waist-seam-2")]
     [Trait("Plan", "EDGE-split-waist-seam-1")]
-    public void LegsBytes_IndependentOfTop_AndOrder()
+    public void LegsRefit_TakesNothingFromTheTop_ClosesAgainstAnyTop()
     {
+        // The legs refit is handed no part of the top's refit (no outfit, no top model): its bytes are the same made alone,
+        // before the top's refit or after it. What matters is that it closes against whatever top is worn.
         byte[] top = TopBytes(), legs = LegsBytes();
+        var (_, legsSeamAlone) = Seams(top, legs);
+        var legsAlone = BodyRetarget.Plan(ModelPartReader.Read(legs)!, legs, [Pair("_dwn", 0.12f, 0.126f)], "_dwn",
+                                          sharedSeam: legsSeamAlone);
         var (_, legsFirst) = Refit(top, legs, seam: true);
-        var (_, legsAgain) = Refit(top, legs, seam: true);
-        Assert.Equal(legsFirst.Model, legsAgain.Model);
+        Assert.Equal(legsAlone.Model, legsFirst.Model);
 
         // Against the author's own top (not refitted): its ring is where the author put it, and so is the legs'.
         var l = ModelPartReader.Read(legs)!;
@@ -430,9 +434,8 @@ public class SharedSeamTests
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-split-waist-seam-21")]
     [Trait("Plan", "EDGE-split-waist-seam-29")]
-    public void HipLevelSplit_AndBodyCopiedSuit_NoNewFoldsOrDropped()
+    public void BodyCopiedSuit_NoWorse()
     {
         // Both pieces made on the same body and refitted alike (a suit copied off one body): the hold changes nothing it
         // does not have to, adds no fold and is not dropped.
@@ -447,5 +450,109 @@ public class SharedSeamTests
         Assert.True(heldTop.Report.Folded <= bareTop.Report.Folded);
         Assert.True(heldLegs.Report.Folded <= bareLegs.Report.Folded);
         Assert.True(RingGap(top, heldTop, legs, heldLegs) <= 5e-5f);
+        Assert.True(Inside(legs, heldLegs) <= Inside(legs, bareLegs));
+        Assert.True(Inside(top, heldTop) <= Inside(top, bareTop));
+    }
+
+    /// <summary>Cloth vertices inside the 0.126 m body after a refit.</summary>
+    private static int Inside(byte[] model, BodyRetarget.Planned plan)
+    {
+        var m = ModelPartReader.Read(model)!;
+        return Enumerable.Range(0, m.Positions.Length / 3).Count(v =>
+        {
+            var p = Moved(m, plan, v);
+            return new Vector2(p.X, p.Z).Length() < 0.126f - BodyRetarget.UnfoldBuryTolerance;
+        });
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-split-waist-seam-21")]
+    public void HipLevelSplit_NoNewFoldsOrDropped()
+    {
+        // The split at the hips (0.92 m) rather than the waist, the legs piece short: a steeper band, still no new fold,
+        // not dropped, closed.
+        const float hip = 0.92f;
+        Func<int, float, (string, float)[]> W(string own) => (_, y) => MathF.Abs(y - hip) < 1e-6f ? [("j_kosi", 1f)] : [(own, 1f)];
+        byte[] top = SyntheticModel.BuildSurface([], Tube(Cloth, ClothRadius, hip, 1.2f, 7, W("j_sebo_a"), doubleSided: true));
+        byte[] legs = SyntheticModel.BuildSurface([], Tube(Cloth, ClothRadius, 0.86f, hip, 3, W("j_asi_a_l"), doubleSided: true));
+        var (topSeam, legsSeam) = Seams(top, legs);
+        var bare = BodyRetarget.Plan(ModelPartReader.Read(legs)!, legs, [Pair("_dwn", 0.12f, 0.126f)], "_dwn");
+        var held = BodyRetarget.Plan(ModelPartReader.Read(legs)!, legs, [Pair("_dwn", 0.12f, 0.126f)], "_dwn", sharedSeam: legsSeam);
+        var heldTop = BodyRetarget.Plan(ModelPartReader.Read(top)!, top, [Pair("_top", 0.126f, 0.126f)], "_top", sharedSeam: topSeam);
+        Assert.True(held.Report.SeamKept);
+        Assert.True(held.Report.Folded <= bare.Report.Folded);
+        var t = ModelPartReader.Read(top)!;
+        var l = ModelPartReader.Read(legs)!;
+        for (int i = 0; i < t.Positions.Length / 3; i++)
+        {
+            if (MathF.Abs(At(t, i).Y - hip) > 1e-6f) continue;
+            for (int j = 0; j < l.Positions.Length / 3; j++)
+                if (Vector3.Distance(At(t, i), At(l, j)) < 1e-6f)
+                    Assert.True(Vector3.Distance(Moved(t, heldTop, i), Moved(l, held, j)) <= 5e-5f);
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-split-waist-seam-3")]
+    public void BandWeights_FadeSmoothly_ThroughThePlan()
+    {
+        // Legs rigged to the body bone j_kosi, refitted across bodies onto one rigged to j_kosi_b: without the hold every
+        // cloth vertex takes j_kosi_b and the waist parts from the top's j_kosi when posed. With it the ring keeps the
+        // author's j_kosi and the band fades to j_kosi_b along the cloth, no edge jumping more than the fade's own slope.
+        static byte[] RiggedBody(float r, string bone) => SyntheticModel.BuildSurface([], Tube(Skin, r, 0.7f, 1.4f, 14, (_, _) => [(bone, 1f)], cap: true));
+        byte[] src = RiggedBody(0.12f, "j_kosi"), dst = RiggedBody(0.126f, "j_kosi_b");
+        var source = ModelPartReader.Read(src)!;
+        var target = ModelPartReader.Read(dst)!;
+        Assert.True(IdentityCorrespondence.TryBuild(source, target, "_dwn", out var built, out string refusal), refusal);
+        var pair = new BodyRetarget.SlotPair("_dwn", built!, target, dst, src);
+        byte[] legs = SyntheticModel.BuildSurface([], Tube(Cloth, ClothRadius, 0.9f, Split, 10, (_, _) => [("j_kosi", 1f)]));
+        byte[] top = SyntheticModel.BuildSurface([], Tube(Cloth, ClothRadius, Split, 1.2f, 4, (_, _) => [("j_kosi", 1f)]));
+        var (_, legsSeam) = Seams(top, legs);
+        var held = BodyRetarget.Plan(ModelPartReader.Read(legs)!, legs, [pair], "_dwn", acrossBodies: true, sharedSeam: legsSeam);
+        Assert.True(held.Report.SeamKept);
+
+        var parts = ModelPartReader.Read(held.Model)!;
+        var skin = ModelSkinReader.Read(held.Model, null, null)!;
+        float Share(int v) => BodyRetarget.Influences(skin, v).Where(i => i.Bone == "j_kosi").Sum(i => i.W);
+        float worst = 0f, longest = 0f;
+        var tris = parts.Parts.Where(p => p.Island < 0).SelectMany(p => p.Triangles).ToArray();
+        for (int k = 0; k + 2 < tris.Length; k += 3)
+            foreach (var (a, b) in new[] { (tris[k], tris[k + 1]), (tris[k + 1], tris[k + 2]), (tris[k + 2], tris[k]) })
+            {
+                worst = MathF.Max(worst, MathF.Abs(Share(a) - Share(b)));
+                longest = MathF.Max(longest, MathF.Abs(At(parts, a).Y - At(parts, b).Y));
+            }
+        // Smoothstep's steepest slope is 1.5 over the reach; neighbour averaging only flattens it.
+        Assert.True(worst <= 1.5f * longest / BodyRetarget.SeamBlendReach + 0.02f, $"a band edge jumps {worst:0.000}");
+        for (int v = 0; v < parts.Positions.Length / 3; v++)
+            if (MathF.Abs(At(parts, v).Y - Split) < 1e-6f) Assert.Equal(1f, Share(v), 3);
+            else if (Split - At(parts, v).Y > BodyRetarget.SeamBlendReach + 0.011f) Assert.Equal(0f, Share(v), 3);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-split-waist-seam-24")]
+    public void HalfPositions_SeamBytesEqualAuthored()
+    {
+        // Positions stored as Half4: the written seam positions are the authored half values exactly, in both pieces.
+        byte[] top = SyntheticModel.BuildSurface([], halfPositions: true, Tube(Cloth, ClothRadius, Split, 1.2f, 4, Weights("j_sebo_a"), true));
+        byte[] legs = SyntheticModel.BuildSurface([], halfPositions: true, Tube(Cloth, ClothRadius, 0.85f, Split, 3, Weights("j_asi_a_l"), true));
+        Assert.Equal(14, SecondSkinWriter.Parse(legs).Decls[0].First(e => e.Usage == SecondSkinWriter.UsePosition).Type);
+        var (topPlan, legsPlan) = Refit(top, legs, seam: true);
+        Assert.True(legsPlan.Report.SeamKept);
+        var authored = ModelPartReader.Read(legs)!;
+        var writtenTop = ModelPartReader.Read(topPlan.Model)!;
+        var writtenLegs = ModelPartReader.Read(legsPlan.Model)!;
+        var topAt = Enumerable.Range(0, writtenTop.Positions.Length / 3).Select(v => At(writtenTop, v)).ToHashSet();
+        var legsAt = Enumerable.Range(0, writtenLegs.Positions.Length / 3).Select(v => At(writtenLegs, v)).ToHashSet();
+        int ring = 0;
+        for (int v = 0; v < authored.Positions.Length / 3; v++)
+        {
+            var p = At(authored, v);
+            if (MathF.Abs(p.Y - Split) > 1e-3f) continue;
+            ring++;
+            Assert.Contains(p, legsAt);         // the same half value, to the bit
+            Assert.Contains(p, topAt);
+        }
+        Assert.Equal(2 * Segments, ring);
     }
 }

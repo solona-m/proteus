@@ -218,13 +218,23 @@ public sealed class SharedSeamResolverTests : IDisposable
         File.SetLastWriteTimeUtc(Path.Combine(root, "top/a.mdl"), DateTime.UtcNow.AddMinutes(1));
         Assert.NotEqual(key, RefitCore.SeamCacheKey(root, files, "Body", "Body", Race, "bodies v1"));
 
+        // A second resolve under the same key reads nothing: the gate is not asked again.
         var cache = new RefitCore.SeamCache();
-        int made = 0;
-        RefitCore.SeamGate Make() { made++; return new RefitCore.SeamGate(null, "none"); }
-        System.Threading.Tasks.Parallel.For(0, 8, _ => cache.GetOrAdd("k", Make));
-        Assert.Equal(1, cache.Count);
-        var first = cache.GetOrAdd("k", Make);
-        Assert.Same(first, cache.GetOrAdd("k", Make));
+        int reads = 0;
+        RefitCore.SeamGate Resolve() => Gate(_ => { reads++; return Pick("Body"); });
+        var first = cache.GetOrAdd(key, Resolve);
+        int afterFirst = reads;
+        Assert.True(afterFirst > 0);
+        Assert.Same(first, cache.GetOrAdd(key, Resolve));
+        Assert.Equal(afterFirst, reads);
+        // Concurrent resolves give one stored answer.
+        var shared = new RefitCore.SeamCache();
+        System.Threading.Tasks.Parallel.For(0, 8, _ => shared.GetOrAdd("k", () => new RefitCore.SeamGate(null, "none")));
+        Assert.Equal(1, shared.Count);
+        // A transient answer (a file could not be read) is never kept.
+        var transient = new RefitCore.SeamCache();
+        transient.GetOrAdd("t", () => new RefitCore.SeamGate(null, "no legs file could be read", Transient: true));
+        Assert.Equal(0, transient.Count);
     }
 
     [Fact]
@@ -308,4 +318,32 @@ public sealed class SharedSeamResolverTests : IDisposable
                                                Catalog(("body/legs.mdl", "_dwn")), Race, Mod(), [], new(), null, notes.Add));
         Assert.Contains(notes, n => n.Contains("Made on", StringComparison.Ordinal));
     }
+
+    [Fact]
+    [Trait("Plan", "EDGE-split-waist-seam-28")]
+    public void SizeSetCache_PerRunOnly()
+    {
+        // The size set's gate answers live in one run's cache: made in Run, handed to each piece, never static.
+        string src = File.ReadAllText(Path.Combine(SourceRoot(), "Proteus", "Services", "SizeSet", "SizeSetRefit.cs"));
+        Assert.Contains("var seamGates = new RefitCore.SeamCache();", src);
+        Assert.DoesNotContain("static RefitCore.SeamCache", src);
+        Assert.DoesNotContain("static readonly RefitCore.SeamCache", src);
+        // Within the run, a second piece asking the same gate reads nothing again.
+        byte[] legs = File.ReadAllBytes(Path.Combine(root, "legs/a.mdl"));
+        var request = new SizeSetRefit.Request(root, ["rue"], false, false, []);
+        var piece = new SizeSetRefit.Piece(LegsPath, "_dwn", null, [], "Legs", "Leg Size", Race);
+        var run = new RefitCore.SeamCache();
+        var readings = new Dictionary<string, AutoRefitDecisions.Pick?>(StringComparer.Ordinal);
+        SizeSetRefit.SharedSeamFor(request, piece, ModelPartReader.Read(legs)!, legs, "Body", Catalog(("body/legs.mdl", "_dwn")),
+                                   Race, Mod(), [], readings, run, _ => { });
+        int stored = run.Count, read = readings.Count;
+        SizeSetRefit.SharedSeamFor(request, piece, ModelPartReader.Read(legs)!, legs, "Body", Catalog(("body/legs.mdl", "_dwn")),
+                                   Race, Mod(), [], readings, run, _ => { });
+        Assert.Equal(1, stored);
+        Assert.Equal(stored, run.Count);
+        Assert.Equal(read, readings.Count);
+    }
+
+    private static string SourceRoot([System.Runtime.CompilerServices.CallerFilePath] string here = "")
+        => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, ".."));
 }

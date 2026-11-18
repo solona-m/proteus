@@ -211,7 +211,7 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
         NotePermanent(modDir, before, now);
         collection ??= coll;
         since ??= DateTime.UtcNow;
-        log?.Information("[Proteus] test harness: {0}'s setting changed by a matcap job; recorded for put-back", modDir);
+        log?.Information("[Proteus] test harness: {0}'s setting changed by a harness job; recorded for put-back", modDir);
     }
 
     private void NotePermanent(string mod, PermanentSetting was, PermanentSetting now)

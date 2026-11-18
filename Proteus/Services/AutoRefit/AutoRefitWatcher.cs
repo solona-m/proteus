@@ -1672,10 +1672,10 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                        carryPiercings: piercings, carryPubes: pubes, sharedSeam: sharedSeam);
         if (sharedSeam != null)
             log.Information("[Proteus] auto refit: {0}: shared seam {1}", item,
-                            plan.Report.SeamDropped is { } droppedSeam
-                                ? $"not held — {droppedSeam}"
-                                : $"held: {plan.Report.SeamPinnedNodes} positions ({plan.Report.SeamPinnedVertices} vertices) "
-                                  + $"where the author put them ({sharedSeam.Label})");
+                            plan.Report.SeamKept
+                                ? $"held: {plan.Report.SeamPinnedNodes} positions ({plan.Report.SeamPinnedVertices} vertices) "
+                                  + $"where the author put them ({sharedSeam.Label})"
+                                : $"not held — {plan.Report.SeamDropped ?? "every seam place is kept whole, held or skin"}");
         plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPaths, uvRemap, male, log);
         // Up, the kept skin named like the body's; down, bent back into the drawn race — or not saved at all.
         var (finished, _, bentBack) = RefitCore.Finish(plan, route, g.Wearer, targetPaths, log);
@@ -1699,8 +1699,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         if (await SaveAndWear(r, g, root, group, savePath, lead, labelFrom, refit, cutFrom, route, item, gameGear,
                               new BodyRetargetWriter.Provenance(pick.Dir, pick.Option.Rel, recorded,
                                                                 AutoRefitTargets.BodiesOf(recordedOn, lead.Dir),
-                                                                RefitCore.RecordedSeam(seamKey,
-                                                                                       plan.Report.SeamDropped == null)))
+                                                                RefitCore.RecordedSeam(seamKey, plan.Report.SeamKept)))
             is not { } savedRoot)
             return;
         Outcome(r, onTarget: true, pick, RecordedFile(savedRoot, group, option, savePath));
@@ -2420,6 +2419,12 @@ public sealed partial class AutoRefitWatcher : IDisposable
     {
         void Note(string note) => log.Information("[Proteus] auto refit: {0}: {1}", item, note);
         if (RefitCore.SeamFilesOf(redirects, ownRecord, race, Note) is not { } files) return (null, null);
+        // A mod with no split at all says so only at Debug: that is most outfit mods.
+        void Said(RefitCore.SeamGate gate, string why)
+        {
+            if (gate.NoSplit) log.Debug("[Proteus] auto refit: {0}: shared seam: not held — {1}", item, why);
+            else Note($"shared seam: not held — {why}");
+        }
         string chestDir = targets.DirOf("_top"), legsDir = targets.DirOf("_dwn");
         if (state.Find(chestDir) is not { } chestEntry)
         {
@@ -2436,7 +2441,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                                        race, false, f.File).Source,
             Note, chestName: chestEntry.Name));
         var (seam, seamKey, why) = RefitCore.SeamForGarment(gate, garment, bytes, chestDir, legsDir);
-        if (seam == null) Note($"shared seam: not held — {why}");
+        if (seam == null) Said(gate, why);
         return (seam, seamKey);
     }
 

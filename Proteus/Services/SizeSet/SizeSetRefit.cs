@@ -997,10 +997,10 @@ internal static partial class SizeSetRefit
                                              carryPiercings: request.Piercings, carryPubes: request.Pubes, sharedSeam: sharedSeam);
                 if (sharedSeam != null)
                     log.Information("[Proteus] size set: {0} {1}: shared seam {2}", piece.Label, option,
-                                    plan.Report.SeamDropped is { } droppedSeam
-                                        ? $"not held — {droppedSeam}"
-                                        : $"held: {plan.Report.SeamPinnedNodes} positions ({plan.Report.SeamPinnedVertices} "
-                                          + $"vertices) where the author put them ({sharedSeam.Label})");
+                                    plan.Report.SeamKept
+                                        ? $"held: {plan.Report.SeamPinnedNodes} positions ({plan.Report.SeamPinnedVertices} "
+                                          + $"vertices) where the author put them ({sharedSeam.Label})"
+                                        : $"not held — {plan.Report.SeamDropped ?? "every seam place is kept whole, held or skin"}");
                 plan = RefitCore.MatchSkinToBody(plan, chosen.SourcePath, targetPath, uvRemap, male, log);
                 // Folds are said, never refused (cross-sex-tops-yas).
                 // The body's skin triangles put in and left out where the author cut theirs (Keep hidden skin).
@@ -1077,7 +1077,8 @@ internal static partial class SizeSetRefit
             note,
             chestName: request.Bodies.FirstOrDefault(b => string.Equals(b.Dir, targetDir, StringComparison.OrdinalIgnoreCase))?.Name));
         var (seam, _, why) = RefitCore.SeamForGarment(gate, garment, bytes, targetDir, targetDir);
-        if (seam == null) note($"shared seam: not held — {why}");
+        // A mod with no split at all is most outfit mods: not worth a line per size.
+        if (seam == null && !gate.NoSplit) note($"shared seam: not held — {why}");
         return seam;
     }
 

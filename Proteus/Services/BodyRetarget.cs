@@ -307,6 +307,7 @@ internal static partial class BodyRetarget
     /// body.</param>
     /// <param name="SeamBandNear">Points of that band ending within <see cref="Clearance"/> of the body.</param>
     /// <param name="SeamDropped">Why the hold was let go (it folded triangles or buried cloth); null when it was not.</param>
+    /// <param name="SeamKept">The hold stands: at least one seam place held and not let go. What a refit's record keeps.</param>
     internal sealed record Report(
         int Nodes, int Snapped, int Transferred, int Missed, int Pushed,
         float WorstMove, float WorstPush, int UnmappedSpares, bool HasOtherLods, int Held = 0, int Laid = 0,
@@ -315,7 +316,7 @@ internal static partial class BodyRetarget
         IReadOnlyList<int>? DeepAt = null, int StandoffPulled = 0, float StandoffWorst = 0f, int StandoffHeld = 0,
         int OpenEdgeFitted = 0, int SmallclothesFallback = 0, int SourceSmallclothes = 0, int ShapeFallbacks = 0,
         int SeamPinnedNodes = 0, int SeamPinnedVertices = 0, int SeamSkipped = 0, int SeamBandHeld = 0,
-        int SeamBandNear = 0, string? SeamDropped = null)
+        int SeamBandNear = 0, string? SeamDropped = null, bool SeamKept = false)
     {
         /// <summary>Share of moved nodes that landed on a body vertex exactly. Low means the author sculpted the
         /// garment's body mesh rather than copying it, and the seam may not come out perfect.</summary>
@@ -931,7 +932,7 @@ internal static partial class BodyRetarget
                                 solved.SourceSmallclothes, solved.ShapeFallbacks,
                                 seamPin is { Kept: true } ? seamPin.PinnedNodes : 0,
                                 seamPin is { Kept: true } ? seamPin.PinnedVertices : 0, seamPin?.Skipped ?? 0,
-                                seamPin?.BandHeld ?? 0, seamPin?.BandNear ?? 0, seamPin?.Dropped);
+                                seamPin?.BandHeld ?? 0, seamPin?.BandNear ?? 0, seamPin?.Dropped, seamPin?.Kept == true);
 
         // Only the copies the written model draws: a slot whose skin no mesh of the garment reached adds none.
         var drawnMaterials = new HashSet<string>(SecondSkinWriter.Parse(model).MatNames.Select(m => m.TrimStart('/')),

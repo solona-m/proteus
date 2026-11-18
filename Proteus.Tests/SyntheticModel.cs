@@ -27,7 +27,7 @@ namespace Proteus.Tests;
 internal static class SyntheticModel
 {
     // Vertex element types and usages, as the model format numbers them (see SecondSkinWriter.ReadTyped).
-    private const byte Float2 = 1, Float3 = 2, UByte4 = 5;
+    private const byte Float2 = 1, Float3 = 2, UByte4 = 5, Half4 = 14;
     private const byte UsePosition = 0, UseBlendWeight = 1, UseBlendIndices = 2, UseNormal = 3, UseUV = 4;
 
     /// <summary>A skinned model's stream 0: position, four blend weights, four blend indices — the game's own layout.</summary>
@@ -529,6 +529,11 @@ internal static class SyntheticModel
     /// skinned and always carries a normal, which the body smoothing will not run without.
     /// </summary>
     internal static byte[] BuildSurface(IReadOnlyList<string> attrNames, params SurfaceMesh[] meshes)
+        => BuildSurface(attrNames, halfPositions: false, meshes);
+
+    /// <inheritdoc cref="BuildSurface(IReadOnlyList{string}, SurfaceMesh[])"/>
+    /// <param name="halfPositions">Store positions as Half4, as many game models do, rather than Float3.</param>
+    internal static byte[] BuildSurface(IReadOnlyList<string> attrNames, bool halfPositions, params SurfaceMesh[] meshes)
     {
         var materials = meshes.Select(m => m.Material).Distinct(StringComparer.Ordinal).ToList();
         var bones = new[] { "n_root" }
@@ -568,9 +573,19 @@ internal static class SyntheticModel
                 var vtx = new byte[SurfaceStride];
                 var p = mesh.Positions[i];
                 var n = mesh.Normals[i];
-                BitConverter.GetBytes(p.X).CopyTo(vtx, 0);
-                BitConverter.GetBytes(p.Y).CopyTo(vtx, 4);
-                BitConverter.GetBytes(p.Z).CopyTo(vtx, 8);
+                if (halfPositions)
+                {
+                    BitConverter.GetBytes((Half)p.X).CopyTo(vtx, 0);
+                    BitConverter.GetBytes((Half)p.Y).CopyTo(vtx, 2);
+                    BitConverter.GetBytes((Half)p.Z).CopyTo(vtx, 4);
+                    BitConverter.GetBytes((Half)1f).CopyTo(vtx, 6);
+                }
+                else
+                {
+                    BitConverter.GetBytes(p.X).CopyTo(vtx, 0);
+                    BitConverter.GetBytes(p.Y).CopyTo(vtx, 4);
+                    BitConverter.GetBytes(p.Z).CopyTo(vtx, 8);
+                }
                 BitConverter.GetBytes(n.X).CopyTo(vtx, 12);
                 BitConverter.GetBytes(n.Y).CopyTo(vtx, 16);
                 BitConverter.GetBytes(n.Z).CopyTo(vtx, 20);
@@ -620,7 +635,7 @@ internal static class SyntheticModel
         ms.Write(new byte[0x44]);
         var decl = new byte[DeclSize];
         for (int i = 0; i < DeclSize; i++) decl[i] = 0xFF;
-        WriteElem(decl, 0, 0, 0, Float3, UsePosition, 0);
+        WriteElem(decl, 0, 0, 0, halfPositions ? Half4 : Float3, UsePosition, 0);
         WriteElem(decl, 1, 0, 12, Float3, UseNormal, 0);
         WriteElem(decl, 2, 0, 24, UByte4, UseBlendWeight, 0);
         WriteElem(decl, 3, 0, 28, UByte4, UseBlendIndices, 0);

@@ -128,7 +128,8 @@ public class SarelleSplitSeamLocalTests(ITestOutputHelper output)
 
     /// <summary>The user's pairs, as the sidecar recorded them, with or without the shared seam.</summary>
     internal static (BodyRetarget.Planned Top, BodyRetarget.Planned Legs) RefitUserCombination(
-        BodyRetarget.SharedSeam? topSeam, BodyRetarget.SharedSeam? legsSeam, Action<string>? log = null)
+        BodyRetarget.SharedSeam? topSeam, BodyRetarget.SharedSeam? legsSeam, Action<string>? log = null,
+        bool throughAutoRefit = false)
     {
         var tre = Body(LocalData.TreMod);
         var bibo = Body(LocalData.BiboPlusMod);
@@ -138,7 +139,10 @@ public class SarelleSplitSeamLocalTests(ITestOutputHelper output)
         Assert.Null(BodyRetarget.BuildPair("_top", Path.Combine(LocalData.Path(LocalData.TreMod), "files/common/4/c0201e0000_top.mdl"),
                                            Path.Combine(LocalData.Path(LocalData.TreMod), "files/common/3/c0201e0000_top.mdl"),
                                            "_top", false, null, null, null, out var topPair));
-        var topPlan = BodyRetarget.Plan(top.Parts, top.Bytes, [topPair], "_top", log: log, sharedSeam: topSeam);
+        var topPlan = throughAutoRefit
+            ? RefitCore.PlanRefit(top.Parts, top.Bytes, [topPair], "_top", across: false, gameGear: false, out _, log,
+                                  sharedSeam: topSeam)
+            : BodyRetarget.Plan(top.Parts, top.Bytes, [topPair], "_top", log: log, sharedSeam: topSeam);
 
         var legs = Load(BiboLLegs);
         var pick = RefitCore.DetectSource(legs.Parts, legs.Bones, "_dwn", Race, bodies, tre.Dir, _ => true)!;
@@ -156,8 +160,11 @@ public class SarelleSplitSeamLocalTests(ITestOutputHelper output)
                                                "_top", false, null, null, null, out var chestPair));
             pairs.Add(chestPair with { ShapeOnly = true });
         }
-        var legsPlan = BodyRetarget.Plan(legs.Parts, legs.Bytes, pairs, "_dwn", replaceSkin: true, acrossBodies: true,
-                                         log: log, sharedSeam: legsSeam);
+        var legsPlan = throughAutoRefit
+            ? RefitCore.PlanRefit(legs.Parts, legs.Bytes, pairs, "_dwn", across: true, gameGear: false, out _, log,
+                                  sharedSeam: legsSeam)
+            : BodyRetarget.Plan(legs.Parts, legs.Bytes, pairs, "_dwn", replaceSkin: true, acrossBodies: true,
+                                log: log, sharedSeam: legsSeam);
         return (topPlan, legsPlan);
     }
 
@@ -386,6 +393,13 @@ public class SarelleSplitSeamLocalTests(ITestOutputHelper output)
         var top = Load(TreMTop);
         var legs = Load(BiboLLegs);
         var pairs = AuthoredPairs(top.Parts, legs.Parts);
+        // Step 0(d): the position format of the author's files and of the written ones (2 = Float3, 14 = Half4).
+        foreach (var (name, bytes) in new[] { ("top", top.Bytes), ("legs", legs.Bytes), ("written top", topHeld.Model), ("written legs", legsHeld.Model) })
+        {
+            var types = SecondSkinWriter.Parse(bytes).Decls
+                                        .Select(d => d.FirstOrDefault(e => e.Usage == SecondSkinWriter.UsePosition).Type).Distinct();
+            output.WriteLine($"{name} positions: type {string.Join(", ", types)}");
+        }
         foreach (var (written, authored) in new[] { (topHeld.Model, top), (legsHeld.Model, legs) })
         {
             var parts = ModelPartReader.Read(written)!;
@@ -444,5 +458,28 @@ public class SarelleSplitSeamLocalTests(ITestOutputHelper output)
         Assert.Null(main.Seam);
         var rueLegs = Load("leg size/yiggle rue wc/chara/equipment/e0628/model/c0201e0628_dwn.mdl");
         Assert.NotNull(RefitCore.SeamForGarment(gate, rueLegs.Parts, rueLegs.Bytes, "Rue", "Rue").Seam);
+    }
+
+    [LocalDataFact(LocalData.SarelleMod, LocalData.TreMod, LocalData.BiboPlusMod, LocalData.RueMod, LocalData.YabMod)]
+    [Trait("Plan", "AC-split-waist-seam-1")]
+    public void UserCombination_ThroughTheAutoRefitsPlan_WaistHeld()
+    {
+        // The automatic refit's own entry (RefitCore.PlanRefit: its keep-shape pieces, standoff, open skin and tuck rules)
+        // rather than BodyRetarget.Plan alone: the hold stands and the waist closes.
+        var (topSeam, legsSeam) = UserSeams();
+        var (topHeld, legsHeld) = RefitUserCombination(topSeam, legsSeam, throughAutoRefit: true);
+        var (topBare, legsBare) = RefitUserCombination(null, null, throughAutoRefit: true);
+        var top = Load(TreMTop);
+        var legs = Load(BiboLLegs);
+        var pairs = AuthoredPairs(top.Parts, legs.Parts);
+        float held = Gap(top.Parts, topHeld, legs.Parts, legsHeld, pairs, out int within);
+        output.WriteLine($"through PlanRefit: worst {held * 1000f:0.000} mm, {within} of {pairs.Count}; folds "
+                         + $"{topBare.Report.Folded}/{legsBare.Report.Folded} -> {topHeld.Report.Folded}/{legsHeld.Report.Folded}");
+        Assert.True(topHeld.Report.SeamKept);
+        Assert.True(legsHeld.Report.SeamKept);
+        Assert.Equal(pairs.Count, within);
+        Assert.Equal(pairs.Count, HeldOnWritten(top.Parts, topHeld.Model, legsHeld.Model, pairs));
+        Assert.True(topHeld.Report.Folded <= topBare.Report.Folded);
+        Assert.True(legsHeld.Report.Folded <= legsBare.Report.Folded);
     }
 }

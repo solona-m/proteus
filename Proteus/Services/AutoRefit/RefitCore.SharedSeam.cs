@@ -44,14 +44,22 @@ internal static partial class RefitCore
     internal sealed record SeamTop(string File, string BodyDir, BodyRetarget.SeamPoints Points);
 
     /// <summary>The gate's answer for a mod and the bodies refitted onto: a seam top, or why there is none.</summary>
-    internal sealed record SeamGate(SeamTop? Top, string? Refusal);
+    /// <param name="NoSplit">The mod's chest and legs files share no split at all — most outfit mods.</param>
+    /// <param name="Transient">The answer rests on a file that could not be read now (locked, say): not kept, so the next
+    /// refit asks again.</param>
+    internal sealed record SeamGate(SeamTop? Top, string? Refusal, bool NoSplit = false, bool Transient = false);
 
     /// <summary>Where gate answers are kept: across runs for the automatic refit, for one run in the size set.</summary>
     internal sealed class SeamCache
     {
         private readonly ConcurrentDictionary<string, SeamGate> gates = new(StringComparer.Ordinal);
         public int Count => gates.Count;
-        public SeamGate GetOrAdd(string key, Func<SeamGate> make) => gates.GetOrAdd(key, _ => make());
+        public SeamGate GetOrAdd(string key, Func<SeamGate> make)
+        {
+            if (gates.TryGetValue(key, out var known)) return known;
+            var made = make();
+            return made.Transient ? made : gates.GetOrAdd(key, made);
+        }
         public bool TryGet(string key, out SeamGate gate) => gates.TryGetValue(key, out gate!);
     }
 
@@ -154,16 +162,22 @@ internal static partial class RefitCore
         if (chestCat == null || legsCat == null)
             return new SeamGate(null, "the target body's chest or legs sizes could not be read");
 
+        bool unread = false;
         var legs = new List<(ModelParts, XivLiveMesh.SkinnedMesh)>();
         foreach (var f in files.Legs)
             if (OpenSeamFile(modRoot, f.File, note) is { } opened) legs.Add((opened.Model, opened.Skin));
-        if (legs.Count == 0) return new SeamGate(null, "no legs file could be read");
+            else unread = true;
+        if (legs.Count == 0) return new SeamGate(null, "no legs file could be read", Transient: true);
 
         bool anySplit = false;
         int readings = 0;
         foreach (var f in SeamCandidateOrder(files.Tops, chestName ?? chestDir))
         {
-            if (OpenSeamFile(modRoot, f.File, note) is not { } top) continue;
+            if (OpenSeamFile(modRoot, f.File, note) is not { } top)
+            {
+                unread = true;
+                continue;
+            }
             if (BodyRetarget.SplitPoints(top.Model, top.Skin, legs) is not { } points) continue;
             anySplit = true;
             if (readings++ >= SeamReadingCap)
@@ -181,7 +195,8 @@ internal static partial class RefitCore
             return new SeamGate(new SeamTop(f.File, pick.Dir, points), null);
         }
         return new SeamGate(null, anySplit ? $"no chest piece sharing the seam is made on {chestDir}"
-                                           : "its chest and legs files share no split");
+                                           : "its chest and legs files share no split",
+                            NoSplit: !anySplit && !unread, Transient: unread);
     }
 
     /// <summary>

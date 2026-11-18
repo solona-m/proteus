@@ -95,15 +95,26 @@ internal static class AutoRefitNowJob
         var clock = Stopwatch.StartNew();
         int quiet = 0;
         bool finished = false;
-        while (clock.Elapsed < jobs.Timings.AutoRefitNowWait)
+        try
         {
-            await Task.Delay(Sample, ct).ConfigureAwait(false);
-            if (game.AutoRefit().Busy) quiet = 0;
-            else if (++quiet >= QuietLooks)
+            while (clock.Elapsed < jobs.Timings.AutoRefitNowWait)
             {
-                finished = true;
-                break;
+                await Task.Delay(Sample, ct).ConfigureAwait(false);
+                if (game.AutoRefit().Busy) quiet = 0;
+                else if (++quiet >= QuietLooks)
+                {
+                    finished = true;
+                    break;
+                }
             }
+        }
+        catch (OperationCanceledException)
+        {
+            // Off or unload mid-wait: what the refits leave is not known. The preference's Before stays recorded (on disk
+            // and in put-back's notes); the mod's files are restored by job.
+            args.Changes.AutoRefitPreference.End(finished: false);
+            job.Fail(new JobError("cancelled", "the harness stopped while the refits were running; restore by job, and check the auto refit preference"));
+            return;
         }
 
         try

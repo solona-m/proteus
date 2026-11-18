@@ -20,9 +20,6 @@ public class SharedSeamCorpusLocalTests(ITestOutputHelper output)
     private const string Race = "0201";
 
     [LocalDataFact(LocalData.Mods, LocalData.SarelleMod)]
-    [Trait("Plan", "EDGE-split-waist-seam-29")]
-    [Trait("Plan", "EDGE-split-waist-seam-31")]
-    [Trait("Plan", "EDGE-split-waist-seam-32")]
     public void Corpus_SplitsFound_Reported()
     {
         var clock = Stopwatch.StartNew();

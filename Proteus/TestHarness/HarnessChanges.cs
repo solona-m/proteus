@@ -108,6 +108,14 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
     /// <summary>A mod the worn-refit trigger refitted under a job's backup: put-back's notes name the job to restore by.</summary>
     public void NoteJobBackedMod(string modDir, string jobId) => jobBackedMods[modDir] = jobId;
 
+    /// <summary>The job-backed mods for put-back's report, said once: the next put-back no longer lists them.</summary>
+    private List<UndoEntry> TakeJobBackedMods()
+    {
+        var taken = jobBackedMods.Select(kv => new UndoEntry(kv.Key, "restore-by-job", kv.Value)).ToList();
+        jobBackedMods.Clear();
+        return taken;
+    }
+
     /// <summary>Record a test image the seed route wrote, to delete at put-back.</summary>
     public void NoteSeededImage(string path, byte[] bytes) => seededImages[path] = HairPortPlan.Sha8(bytes);
 
@@ -508,7 +516,7 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         return new PutBackReport(gearResults, holdResults, sweep, redraw || binding?.Restored == true, binding)
                { Studio = studioResults, MatcapImages = images, MatcapMods = mods, Sidecar = sidecars, AutoRefit = autoRefit,
                  Output = output, AutoRefitPreference = preference,
-                 JobBackedMods = jobBackedMods.Select(kv => new UndoEntry(kv.Key, "restore-by-job", kv.Value)).ToList() };
+                 JobBackedMods = TakeJobBackedMods() };
     }
 
     // ── the Studio ──────────────────────────────────────────────────────────
@@ -690,9 +698,12 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
                                  .Concat(autoRefitPubesOverride != null ? ["the auto-refit pubes override"] : [])
                                  .Concat(OutputLocks.Active ? ["output locks"] : [])
                                  .Concat(shellFaultArmed ? ["the shell fault"] : [])
-                                 .Concat(autoRedrawOverride != null ? ["the auto-redraw override"] : []));
+                                 .Concat(autoRedrawOverride != null ? ["the auto-redraw override"] : [])
+                                 .Concat(autoRefitPreference?.Recorded == true ? ["the auto refit preference (the worn-refit trigger's)"] : [])
+                                 .Concat(jobBackedMods.Select(kv => $"{kv.Key}: restore by job {kv.Value}")));
 
     internal bool Empty => gear.Count == 0 && holds.Count == 0 && bindings?.HasSession != true && studio == null
                         && sidecar.Empty && autoRefitOverride == null && autoRefitPubesOverride == null
-                        && !OutputLocks.Active && !shellFaultArmed && autoRedrawOverride == null;
+                        && !OutputLocks.Active && !shellFaultArmed && autoRedrawOverride == null
+                        && autoRefitPreference?.Recorded != true && jobBackedMods.Count == 0;
 }

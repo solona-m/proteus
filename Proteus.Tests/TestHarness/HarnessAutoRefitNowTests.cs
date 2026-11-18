@@ -174,10 +174,142 @@ public sealed class HarnessAutoRefitNowTests : IDisposable
         var (_, body) = await Trigger();
         string id = body.GetProperty("job").GetString()!;
         var job = await fx.WaitJob(id);
-        Assert.True(job.GetProperty("result").GetProperty("pieces")[0].TryGetProperty("targets", out _));
+        // [EDGE-split-waist-seam-40] The piece's targets and seam come from its record entry.
+        var piece = job.GetProperty("result").GetProperty("pieces")[0];
+        Assert.Equal("Tre S", piece.GetProperty("option").GetString());
+        Assert.Equal("Tre|Tre|top size/tre s.mdl", piece.GetProperty("seam").GetString());
+        var top = piece.GetProperty("targets").GetProperty("_top");
+        Assert.Equal("Tre", top.GetProperty("dir").GetString());
+        Assert.Equal("files/common/3/c0201e0000_top.mdl", top.GetProperty("rel").GetString());
         var (status, restore) = await fx.Post("/actions/restore", $"{{\"job\":\"{id}\"}}");
         Assert.Equal(202, status);
         await fx.WaitJob(restore.GetProperty("job").GetString()!);
         Assert.Equal("original", File.ReadAllText(Path.Combine(root, "chara", "model", "top.mdl")));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-split-waist-seam-36")]
+    public async Task PutBack_CollectionSetting_RestoredOrLeftWhenChanged()
+    {
+        Worn();
+        var (_, body) = await Trigger();
+        await fx.WaitJob(body.GetProperty("job").GetString()!);
+        Assert.Equal(7, fx.Game.Permanent["Sarelle"].Priority);        // the refit switched the setting
+        var (_, putBack) = await fx.Post("/actions/put-back", "{}");
+        Assert.Equal(0, fx.Game.Permanent["Sarelle"].Priority);
+        Assert.Contains(putBack.GetProperty("binding").GetProperty("permanent").EnumerateArray(),
+                        e => e.GetProperty("mod").GetString() == "Sarelle" && e.GetProperty("result").GetString() == "restored");
+
+        // Again, and the player changes the setting after the job: left as they set it.
+        (_, body) = await Trigger();
+        await fx.WaitJob(body.GetProperty("job").GetString()!);
+        fx.Game.Permanent["Sarelle"] = new PermanentSetting(false, 9);
+        await fx.Post("/actions/put-back", "{}");
+        Assert.Equal(new PermanentSetting(false, 9).Priority, fx.Game.Permanent["Sarelle"].Priority);
+        Assert.False(fx.Game.Permanent["Sarelle"].Enabled);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-split-waist-seam-36")]
+    public async Task BusyAtTheJobsRecheck_FailsNoBackup()
+    {
+        string root = Worn();
+        fx.Game.BusyAfterRequest = true;
+        var (status, body) = await Trigger();
+        Assert.Equal(202, status);
+        var job = await fx.WaitJob(body.GetProperty("job").GetString()!);
+        Assert.Equal("auto-refit-busy", Code(job));
+        Assert.Null(fx.Jobs.BackupOfJob(job.GetProperty("id").GetString()!));
+        Assert.Empty(fx.Game.RunNowAsked);
+        Assert.Equal("original", File.ReadAllText(Path.Combine(root, "chara", "model", "top.mdl")));
+        Assert.False(fx.Changes.AutoRefitPreference.Recorded);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-split-waist-seam-36")]
+    public async Task BackupFails_RecordDropped()
+    {
+        using var small = new HarnessFixture(HarnessFixture.FastTimings, refitCap: 1);
+        small.AddMod("Sarelle");
+        small.Game.WornFrom.Add("Sarelle");
+        small.Game.Permanent["Sarelle"] = new PermanentSetting(true, 0);
+        var (_, body) = await small.Post("/actions/auto-refit", "{\"refitWornNow\":true,\"mod\":\"Sarelle\"}");
+        var job = await small.WaitJob(body.GetProperty("job").GetString()!);
+        Assert.NotEqual(JsonValueKind.Null, job.GetProperty("error").ValueKind);
+        Assert.Empty(small.Game.RunNowAsked);
+        Assert.False(small.Changes.AutoRefitPreference.Recorded);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-split-waist-seam-36")]
+    public async Task SecondJobFailing_LeavesTheFirstJobsRecord()
+    {
+        // The review's F1: a second job of the session that fails before writing must not wipe the first job's record.
+        Worn();
+        string before = fx.Game.PreferenceJson!;
+        var (_, body) = await Trigger();
+        await fx.WaitJob(body.GetProperty("job").GetString()!);
+        fx.Game.RunNowBody = _ => [("_top", FakeGame.RefitTopPath, "not-enqueued:just-refitted")];
+        (_, body) = await Trigger();
+        var second = await fx.WaitJob(body.GetProperty("job").GetString()!);
+        Assert.Equal("nothing-enqueued", Code(second));
+        Assert.True(fx.Changes.AutoRefitPreference.Recorded);
+        var (_, putBack) = await fx.Post("/actions/put-back", "{}");
+        Assert.Equal("restored", putBack.GetProperty("autoRefit").GetProperty("preference").GetString());
+        Assert.Equal(before, fx.Game.PreferenceJson);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-split-waist-seam-36")]
+    [Trait("Plan", "EDGE-split-waist-seam-38")]
+    public async Task PutBack_WhileTheJobRuns_SkippedThenRestored()
+    {
+        Worn();
+        string before = fx.Game.PreferenceJson!;
+        var busy = new Proteus.Services.AutoRefitWatcher.ActivitySnapshot(true, 1, false, false);
+        fx.Game.RunNowBody = root =>
+        {
+            File.WriteAllText(Path.Combine(root, "chara", "model", "top.mdl"), "refitted");
+            fx.Game.PreferenceJson = "{\"BodyDir\":\"Rue\",\"Before\":1}";
+            fx.Game.Activity = busy;
+            return [("_top", FakeGame.RefitTopPath, "enqueued")];
+        };
+        var (_, body) = await Trigger();
+        string id = body.GetProperty("job").GetString()!;
+        while (fx.Game.RunNowAsked.Count == 0) await Task.Delay(10);
+        var (_, putBack) = await fx.Post("/actions/put-back", "{}");
+        Assert.Equal("skipped-running", putBack.GetProperty("autoRefit").GetProperty("preference").GetString());
+        fx.Game.Activity = default;
+        await fx.WaitJob(id);
+        (_, putBack) = await fx.Post("/actions/put-back", "{}");
+        Assert.Equal("restored", putBack.GetProperty("autoRefit").GetProperty("preference").GetString());
+        Assert.Equal(before, fx.Game.PreferenceJson);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-split-waist-seam-36")]
+    public async Task PutBack_OffOrUnload_LeavesRecordLogged()
+    {
+        // Off or unload mid-job cancels it: what the refits leave is not known, so the Before is kept on disk and put-back
+        // says so rather than deleting it.
+        Worn();
+        fx.Game.RunNowBody = root =>
+        {
+            fx.Game.Activity = new Proteus.Services.AutoRefitWatcher.ActivitySnapshot(true, 1, false, false);
+            return [("_top", FakeGame.RefitTopPath, "enqueued")];
+        };
+        var (_, body) = await Trigger();
+        string id = body.GetProperty("job").GetString()!;
+        while (fx.Game.RunNowAsked.Count == 0) await Task.Delay(10);
+        fx.Jobs.CancelRunning();
+        var job = await fx.WaitJob(id);
+        Assert.Equal("cancelled", Code(job));
+        fx.Game.Activity = default;
+        var record = Directory.GetFiles(Path.Combine(fx.Temp.Path, "config"), "autorefit-preference.json", SearchOption.AllDirectories);
+        Assert.Single(record);
+        var (_, putBack) = await fx.Post("/actions/put-back", "{}");
+        Assert.Equal("recorded-before-finish", putBack.GetProperty("autoRefit").GetProperty("preference").GetString());
+        Assert.True(File.Exists(record[0]), "the Before is kept on disk");
+        Assert.Equal(0, fx.Game.PreferenceRestores);
     }
 }
