@@ -221,6 +221,42 @@ public partial class BodyRetargetTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-refit-keep-pubes-6")]
+    [Trait("Plan", "EDGE-refit-keep-pubes-20")]
+    public void The_author_s_nails_under_cloth_never_let_pubes_through()
+    {
+        // [AC-refit-keep-pubes-6] [EDGE-refit-keep-pubes-20] The author drew nails at the very spot, under opaque cloth: a
+        // nail there would come in by the author's say-so, but a pube is judged on the cloth alone and stays out.
+        var garment = OpaqueOver(new SyntheticModel.Mesh(TreNails, new SyntheticModel.Sub(0, OffsetZ: 0.001f)));
+        var got = BodyRetarget.SwapSkin(garment, [Resized("_dwn", BareSkin(PubesOn()))], out _, carryPubes: true);
+        Assert.Equal(0, DrawnOf(got, BiboPube));
+
+        // The same spot with the body's nail instead: in, by the author's nail — the bypass this test proves pubes skip.
+        var nailed = BodyRetarget.SwapSkin(garment, [Resized("_dwn", BareSkin(new SyntheticModel.Mesh(
+            TreNails, new SyntheticModel.Sub(0, OffsetZ: 0.001f))))], out var nailReport, carryPubes: true);
+        Assert.Equal(1, nailReport.Adorned);
+        Assert.Equal(1, DrawnOf(nailed, TreNails));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-keep-pubes-23")]
+    [Trait("Plan", "EDGE-refit-keep-pubes-5")]
+    public void Another_race_s_copy_of_the_same_pubes_gives_way()
+    {
+        // [EDGE-refit-keep-pubes-23] [EDGE-refit-keep-pubes-5] Within one body mod: the garment's Xaela-named, odd-cased
+        // copy of the body's pubes is the same pubes, so it gives way and its name goes; its crotch mesh of a material the
+        // body does not bring stays.
+        const string XaelaPube = "/mt_c1401b0101_BiboPube.mtrl";
+        var garment = BareSkin(PubesOn(XaelaPube, tris: 2), PubesOn(BetterPube, tris: 2, x: 0.4f));
+        var got = BodyRetarget.SwapSkin(garment, [Resized("_dwn", BareSkin(PubesOn()))], out var report, carryPubes: true);
+        Assert.Equal(1, report.Adorned);
+        Assert.Equal(1, DrawnOf(got, BiboPube));
+        Assert.Equal(0, DrawnOf(got, XaelaPube));
+        Assert.DoesNotContain(XaelaPube, SecondSkinWriter.MaterialNames(got!));
+        Assert.Equal(2, DrawnOf(got, BetterPube));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-refit-keep-pubes-1")]
     public void A_body_without_pubes_is_unchanged_by_the_box()
     {

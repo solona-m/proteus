@@ -69,6 +69,7 @@ public class KeepPubesLocalTests(ITestOutputHelper output)
         // _bibopube; onto Bibo+, Bibo's come in only when asked, and Rue's crotch mesh leaves by name either way.
         string rue = PathOf(Rue, RueLegs), bibo = PathOf(Bibo, BiboLegs);
         Assert.True(Drawn(File.ReadAllBytes(rue), BetterPube) > 0, "the case is not reached: Rue's legs carry no _betterpube");
+        Assert.True(Drawn(File.ReadAllBytes(rue), BiboPube) > 0, "the case is not reached: Rue's legs carry no _bibopube");
 
         var on = Refit(rue, bibo, pubes: true);
         var off = Refit(rue, bibo, pubes: false);
