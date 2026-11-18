@@ -170,14 +170,23 @@ internal static class BodyRetargetWriter
         /// none, and for every entry written before it was kept.
         /// </summary>
         public Dictionary<string, string>? Layers { get; set; }
+
+        /// <summary>
+        /// The seam the refit held where the author put it, shared with the other piece of a mod split at the waist (see
+        /// <see cref="RefitCore.SeamKey"/>): "chest body|legs body|seam top", with "|dropped" when the hold was let go.
+        /// Null when none applied, and for every entry written before; left out of the file then.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Seam { get; set; }
     }
 
     /// <summary>Where a refit came from and went, as an entry records it (see <see cref="Entry.SourceDir"/>).</summary>
     /// <param name="Targets">The target body's file per slot refitted.</param>
     /// <param name="TargetBodies">The body each of those went onto, when not all one (see
     /// <see cref="Entry.TargetBodies"/>); null for one.</param>
+    /// <param name="Seam">The seam held (see <see cref="Entry.Seam"/>); null for none.</param>
     internal sealed record Provenance(string SourceDir, string SourceRel, IReadOnlyDictionary<string, string> Targets,
-                                      IReadOnlyDictionary<string, string>? TargetBodies = null);
+                                      IReadOnlyDictionary<string, string>? TargetBodies = null, string? Seam = null);
 
     /// <param name="Group">The group written.</param>
     /// <param name="Option">The option added.</param>
@@ -990,6 +999,7 @@ internal static class BodyRetargetWriter
                 ? null
                 : new Dictionary<string, string>(provenance.TargetBodies, StringComparer.Ordinal),
             Layers = layers == null ? null : new Dictionary<string, string>(layers, StringComparer.Ordinal),
+            Seam = provenance?.Seam,
         });
         SaveRecord(modRoot, record);
     }
@@ -1033,6 +1043,7 @@ internal static class BodyRetargetWriter
                     ? null
                     : new Dictionary<string, string>(e.TargetBodies, StringComparer.Ordinal),
                 Layers = e.Layers == null ? null : new Dictionary<string, string>(e.Layers, StringComparer.Ordinal),
+                Seam = e.Seam,
             });
         }
         SaveRecord(modRoot, record);

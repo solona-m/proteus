@@ -137,7 +137,12 @@ internal sealed partial class HarnessRouter
                 images = report.MatcapImages.Select(e => new { name = e.Name, result = e.Result, code = e.Code }),
             },
             sidecar = report.Sidecar.Select(e => new { mod = e.Mod, result = e.Result, code = e.Code, defaults = e.Defaults }),
-            autoRefit = new { result = report.AutoRefit.Result, refitsWhileOverridden = report.AutoRefit.RefitsWhileOverridden },
+            autoRefit = new
+            {
+                result = report.AutoRefit.Result, refitsWhileOverridden = report.AutoRefit.RefitsWhileOverridden,
+                preference = report.AutoRefitPreference,
+                jobBackedMods = report.JobBackedMods.Select(e => new { mod = e.Name, job = e.Code }),
+            },
             output = report.Output is { } o
                 ? new
                 {

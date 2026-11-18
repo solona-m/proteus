@@ -82,6 +82,8 @@ internal static partial class BodyRetarget
     /// faces another way (see <see cref="CutOpenSkinFacing"/>).</param>
     /// <param name="NoReshapeEnds">Make a women's glove a men's with its bare hand held as the women's and its skin kept, as
     /// builds before 1413 did, never swapped for the men's arm and hand (tests only; see <c>CrossSexRefitJob</c>).</param>
+    /// <param name="NoSharedSeam">Refit a garment split at the waist as if the other piece shared no seam with it, as
+    /// builds before the shared seam did (see <see cref="PinSharedSeam"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -98,7 +100,7 @@ internal static partial class BodyRetarget
                                   bool NoRelaxSinkGuard = false, bool NoSeamWeights = false,
                                   bool NoCutOpenSkin = false, bool CutOpenSkinUnderCloth = false,
                                   bool CutOpenSkinAnyFacing = false, bool NoCutInside = false,
-                                  bool NoReshapeEnds = false);
+                                  bool NoReshapeEnds = false, bool NoSharedSeam = false);
 
     private static readonly Tuning DefaultTuning = new();
 
