@@ -153,7 +153,6 @@ public class BulgeTransplantTests
         var flipped = (Vector3[])positions.Clone();
         // Push one corner through the face's plane, past the opposite edge: the face now points the other way.
         var a = flipped[t[0]]; var b = flipped[t[1]]; var c = flipped[t[2]];
-        var n = Vector3.Normalize(Vector3.Cross(b - a, c - a));
         flipped[t[0]] = (b + c) - a;
         Assert.Contains("turned over", BulgeSwap.SelfCheck(model, before, piece, TbseBulge.Shared, flipped, slotOf, bodyAt) ?? "");
     }

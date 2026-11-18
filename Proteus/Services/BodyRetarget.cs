@@ -799,11 +799,14 @@ internal static partial class BodyRetarget
         // than its residual; today's is then kept if it folds less, and the log says the penis was kept.
         if (!Tuned.NoBulge && swapSlot == null && pairs.Any(p => p.Featureless != null))
         {
-            Planned Again(ModelParts g, byte[] b, IReadOnlyList<SlotPair> p, bool quiet = false)
+            // A run planned in the background writes its lines into a buffer, replayed only if its result is the one used.
+            Planned Again(ModelParts g, byte[] b, IReadOnlyList<SlotPair> p, List<(bool Warn, string Line)>? buffer = null)
                 => WithTuning(Tuned with { NoBulge = true }, () => Plan(g, b, p, garmentSlot: garmentSlot, pushOut: pushOut,
                     held: held, replaceSkin: replaceSkin, acrossBodies: acrossBodies, clearBody: clearBody, cutHidden: cutHidden,
-                    keepShape: keepShape, swapSlot: swapSlot, log: quiet ? null : log, warn: quiet ? null : warn,
-                    chestSlot: chestSlot, trace: quiet ? null : trace,
+                    keepShape: keepShape, swapSlot: swapSlot,
+                    log: buffer != null ? l => { lock (buffer) buffer.Add((false, l)); } : log,
+                    warn: buffer != null ? l => { lock (buffer) buffer.Add((true, l)); } : warn,
+                    chestSlot: chestSlot, trace: buffer != null ? null : trace,
                     outfit: outfit, tuckSlot: tuckSlot, deepClear: deepClear, keepStandoff: keepStandoff,
                     carryPiercings: carryPiercings, liftUnderbust: liftUnderbust, seeInside: seeInside,
                     relaxSinkGuard: relaxSinkGuard, openSkin: openSkin, rebuildSwapsShapeOnly: rebuildSwapsShapeOnly,
@@ -811,6 +814,7 @@ internal static partial class BodyRetarget
             // Never fails a refit: anything thrown on the way to the featureless refit leaves today's.
             Planned? featureless = null;
             System.Threading.Tasks.Task<Planned>? today = null;
+            var todayLines = new List<(bool Warn, string Line)>();
             try
             {
                 var fitted = FitBulges(garment, garmentBytes, pairs, replaceSkin, log, out var fitGarment, out var fitBytes,
@@ -818,10 +822,10 @@ internal static partial class BodyRetarget
                 if (bulged)
                 {
                     if (Tuned.BulgeFault) throw new InvalidOperationException("bulge fault (test)");
-                    // Today's refit, planned beside the featureless one for the guard below (quietly: its log is not the
-                    // refit's), so the guard costs no wall time.
+                    // Today's refit, planned beside the featureless one for the guard below (its lines held back until it
+                    // is the refit used), so the guard costs no wall time.
                     var tuned = Tuned;
-                    today = System.Threading.Tasks.Task.Run(() => WithTuning(tuned, () => Again(garment, garmentBytes, pairs, quiet: true)));
+                    today = System.Threading.Tasks.Task.Run(() => WithTuning(tuned, () => Again(garment, garmentBytes, pairs, todayLines)));
                     // Observed, so a fault in a plan nobody waits for is not left unobserved.
                     today.ContinueWith(t => _ = t.Exception, System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted);
                     featureless = Again(fitGarment, fitBytes, fitted);
@@ -860,7 +864,11 @@ internal static partial class BodyRetarget
                 Planned? planned = null;
                 try { planned = today?.GetAwaiter().GetResult(); }
                 catch (Exception) { planned = null; }
-                return planned ?? Again(garment, garmentBytes, pairs);
+                if (planned == null) return Again(garment, garmentBytes, pairs);
+                lock (todayLines)
+                    foreach (var (isWarn, line) in todayLines)
+                        (isWarn ? warn ?? log : log)?.Invoke(line);
+                return planned;
             }
         }
 
