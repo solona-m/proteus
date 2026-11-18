@@ -172,6 +172,7 @@ public class KeepShapeReleaseLocalTests
     [Trait("Plan", "AC-keep-shape-release-3")]
     [Trait("Plan", "AC-keep-shape-release-9")]
     [Trait("Plan", "EDGE-seam-weights-15")]
+    [Trait("Suite", "Diagnostic")]
     public void Ash_cover_bends_with_Uranus()
     {
         var bytes = Ash("Rue L");
@@ -216,6 +217,7 @@ public class KeepShapeReleaseLocalTests
     [LocalDataFact(AshPack, Rue, Uranus)]
     [Trait("Plan", "AC-refit-piercings-option-1")]
     [Trait("Plan", "AC-refit-piercings-option-2")]
+    [Trait("Suite", "Diagnostic")]
     public void Ash_cover_carries_no_piercing_with_the_option_off()
     {
         // [AC-refit-piercings-option-1] [AC-refit-piercings-option-2] First that the case is reached: asked for, the ring
@@ -236,6 +238,7 @@ public class KeepShapeReleaseLocalTests
     [LocalDataFact(AshPack, Yab, Uranus)]
     [Trait("Plan", "AC-keep-shape-release-2")]
     [Trait("Plan", "AC-keep-shape-release-9")]
+    [Trait("Suite", "Diagnostic")]
     public void Ash_other_source_keeps_its_choker()
     {
         var bytes = Ash("Yab L");
@@ -255,6 +258,7 @@ public class KeepShapeReleaseLocalTests
 
     [LocalDataFact(LaVieEnRose, Bibo, Rue)]
     [Trait("Plan", "AC-keep-shape-release-4")]
+    [Trait("Suite", "Diagnostic")]
     public void Small_ornaments_stay_whole_however_deep_they_sink()
     {
         // La Vie en Rose's little roses and beads, onto Rue+ Yiggle Large: moved whole some sink far past ReleaseSink —
@@ -286,6 +290,7 @@ public class KeepShapeReleaseLocalTests
     [Trait("Plan", "AC-open-patch-authored-9")]
     [Trait("Plan", "AC-keep-shape-flat-card-3")]
     [Trait("Plan", "EDGE-seam-weights-15")]
+    [Trait("Suite", "Diagnostic")]
     public void Pop_hard_pieces_stay_kept(string which)
     {
         var (toNeed, toRel) = which switch

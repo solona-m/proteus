@@ -26,6 +26,7 @@ public class PioneerBottomsRefitTests(ITestOutputHelper output)
     [InlineData("hs-Rue+-2.2.7-y0f")]
     [InlineData("Neolithe [ALL IN ONE]")]
     [InlineData("Bibo+")]
+    [Trait("Suite", "Diagnostic")]
     public void The_vanilla_waist_skin_is_swapped_for_the_body_s(string bodyMod)
     {
         var game = new Lumina.GameData(LocalData.Path(LocalData.GameData));

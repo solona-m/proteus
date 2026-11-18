@@ -79,6 +79,7 @@ public class SnapPushTests(ITestOutputHelper output)
     [Trait("Plan", "AC-snap-push-2")]
     [Trait("Plan", "EDGE-snap-push-1")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Between_sizes_of_one_body_the_model_is_byte_identical()
     {
         // Prouder nipples on the target: the nipple smoothing runs and wraps the identity correspondence, which the gate

@@ -134,6 +134,7 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
     }
 
     [LocalDataFact(LocalData.GameData, MuseBare)]
+    [Trait("Suite", "Diagnostic")]
     public void The_Type_B_dress_on_Muse_bare_follows_the_flat_chest()
     {
         // [AC-bra-hole-transfer-1][EDGE-bra-hole-transfer-15] With nipple smoothing on, as it ships.
@@ -211,6 +212,7 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
 
     [LocalDataTheory(LocalData.GameData, Rue, LavaBod, Bibo)]
     [MemberData(nameof(FullerBusts))]
+    [Trait("Suite", "Diagnostic")]
     public void The_Type_B_dress_on_fuller_busts_follows_them_out(string modNeed, string? rel)
     {
         // [AC-bra-hole-transfer-2] Other chests: the bra only ever brings the cloth in, so over a fuller chest it stays
@@ -262,6 +264,7 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
     }
 
     [LocalDataFact(LocalData.GameData, Neolithe, Bibo, MuseRoot)]
+    [Trait("Suite", "Diagnostic")]
     public void Which_bodies_have_no_skin_under_their_underwear()
     {
         // [EDGE-bra-hole-transfer-4] Every race's own game body, and every chest and legs option of Neolithe, Bibo+ and
@@ -304,6 +307,7 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
     }
 
     [LocalDataFact(LocalData.GameData, Bibo, MuseBare)]
+    [Trait("Suite", "Diagnostic")]
     public void A_body_mods_chest_is_read_as_before_whatever_its_underwear()
     {
         // [AC-bra-hole-transfer-3][EDGE-bra-hole-transfer-1] Bibo+'s first chest, its SFW bra over a hole of its own (see the
@@ -357,6 +361,7 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
 
     [LocalDataTheory(LocalData.GameData, Neolithe, Bibo, Rue, LavaBod)]
     [MemberData(nameof(GameTops))]
+    [Trait("Suite", "Diagnostic")]
     public void A_game_top_auto_refit_with_the_bra_followed_is_no_worse(string garmentName, string modNeed, string? rel)
     {
         // [AC-bra-hole-transfer-4] The automatic refit of game tops: no more skin through or under the cloth, no more

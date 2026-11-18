@@ -61,6 +61,7 @@ public sealed class HairPortScanLocalTests(ITestOutputHelper o)
 
     [LocalDataFact(LocalData.Mods, LocalData.GameData)]
     [Trait("Plan", "AC-hair-port-scan-1")]
+    [Trait("Suite", "Diagnostic")]
     public void Installed_mods_check_for_midlander_female()
     {
         var game = HairPortLocalTests.Load();

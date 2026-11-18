@@ -34,6 +34,7 @@ public class KeepEndsSiblingLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-jacket-refit-1")]
     [Trait("Plan", "EDGE-jacket-refit-4")]
     [Trait("Plan", "EDGE-jacket-refit-7")]
+    [Trait("Suite", "Diagnostic")]
     public void Geometrics_jacket_is_sized_by_its_medium_top_and_clears_the_new_bust_better()
     {
         string root = LocalData.Path(Geometric);

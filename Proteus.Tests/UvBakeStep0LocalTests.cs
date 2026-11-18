@@ -122,6 +122,7 @@ public class UvBakeStep0LocalTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, Bibo, Tbse)]
     [Trait("Plan", "AC-tbse-uvmap-2")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Measure_bodies() // [AC-tbse-uvmap-2]
     {
         var (pbd, parentOf, bones) = Game();

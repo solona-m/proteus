@@ -160,6 +160,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [LocalDataFact(LocalData.GameData, Sheer, CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse,
                    CrossSexRefitLocalTests.TbseX, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-sizeset-cross-sex-3")]
+    [Trait("Suite", "Diagnostic")]
     public void Sources_for_men_are_measured_sheer() // [AC-sizeset-cross-sex-3]
     {
         var women = Installed(CrossSexRefitLocalTests.Bibo);
@@ -172,6 +173,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [LocalDataFact(LocalData.GameData, RueTop, Yab, CrossSexRefitLocalTests.Rue, CrossSexRefitLocalTests.Bibo,
                    CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-sizeset-cross-sex-3")]
+    [Trait("Suite", "Diagnostic")]
     public void Sources_for_men_are_measured_rue_top() // [AC-sizeset-cross-sex-3]
     {
         var women = Installed(Yab, CrossSexRefitLocalTests.Rue, CrossSexRefitLocalTests.Bibo);
@@ -189,6 +191,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [LocalDataFact(LocalData.GameData, Starlit, Yab, CrossSexRefitLocalTests.Rue, CrossSexRefitLocalTests.Bibo,
                    CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-sizeset-cross-sex-3")]
+    [Trait("Suite", "Diagnostic")]
     public void Sources_for_men_are_measured_starlit_legs() // [AC-sizeset-cross-sex-3]
     {
         var women = Installed(Yab, CrossSexRefitLocalTests.Rue, CrossSexRefitLocalTests.Bibo);
@@ -293,6 +296,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [Trait("Plan", "EDGE-tbsex-nude-legs-11")]
     [Trait("Plan", "EDGE-tbsex-nude-legs-12")]
     [Trait("Plan", "AC-equinox-legs-slits-7")]
+    [Trait("Suite", "Diagnostic")]
     public void Sheer_elegance_gains_mens_versions() // [AC-sizeset-cross-sex-2] [AC-sizeset-cross-sex-4] [EDGE-sizeset-cross-sex-19] [EDGE-sizeset-cross-sex-24] [EDGE-sizeset-cross-sex-3] [AC-cross-sex-area-coverage-3] [AC-cross-sex-area-coverage-7] [EDGE-cross-sex-area-coverage-6] [AC-tbsex-nude-legs-1] [AC-tbsex-nude-legs-4] [AC-tbsex-nude-legs-7] [EDGE-tbsex-nude-legs-11] [EDGE-tbsex-nude-legs-12]
     {
         string root = Copy(Sheer);
@@ -363,6 +367,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
 
     [LocalDataFact(LocalData.GameData, Sheer, CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-sizeset-cross-sex-4")]
+    [Trait("Suite", "Diagnostic")]
     public void The_size_sets_mens_model_is_the_jobs() // [AC-sizeset-cross-sex-4]
     {
         string root = Copy(Sheer);
@@ -381,6 +386,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [Trait("Plan", "AC-sizeset-cross-sex-7")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-12")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-13")]
+    [Trait("Suite", "Diagnostic")]
     public void Mens_versions_rerun_remake_cancel_and_undo() // [AC-sizeset-cross-sex-7] [EDGE-sizeset-cross-sex-12] [EDGE-sizeset-cross-sex-13]
     {
         string root = Copy(Sheer);
@@ -422,6 +428,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [Trait("Plan", "AC-cross-sex-area-coverage-7")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-16")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-14")]
+    [Trait("Suite", "Diagnostic")]
     public void Starlit_gains_mens_versions_with_its_bones_moved(string skeleton) // [AC-sizeset-cross-sex-8] [EDGE-sizeset-cross-sex-8] [EDGE-sizeset-cross-sex-9] [AC-cross-sex-area-coverage-4] [AC-cross-sex-area-coverage-7] [EDGE-cross-sex-area-coverage-16] [EDGE-cross-sex-area-coverage-14]
     {
         string root = Copy(Starlit);
@@ -466,6 +473,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [LocalDataFact(LocalData.GameData, Sheer, CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "EDGE-sizeset-cross-sex-22")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-23")]
+    [Trait("Suite", "Diagnostic")]
     public void Unreadable_and_missing_bodies_are_said_once() // [EDGE-sizeset-cross-sex-22] [EDGE-sizeset-cross-sex-23]
     {
         // TBSE-X not installed: said once per piece, and TBSE still made.
@@ -514,6 +522,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [Trait("Plan", "EDGE-cross-sex-area-coverage-8")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-14")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-17")]
+    [Trait("Suite", "Diagnostic")]
     public void Stormblessed_gains_mens_legs() // [AC-cross-sex-area-coverage-1] [AC-cross-sex-area-coverage-8] [EDGE-cross-sex-area-coverage-8] [EDGE-cross-sex-area-coverage-14] [EDGE-cross-sex-area-coverage-17]
     {
         string root = Copy(Stormblessed);
@@ -585,6 +594,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [Trait("Plan", "AC-mens-ends-crotch-4")]
     [Trait("Plan", "EDGE-mens-ends-crotch-1")]
     [Trait("Plan", "EDGE-mens-ends-crotch-23")]
+    [Trait("Suite", "Diagnostic")]
     public void Stormblessed_gains_mens_boots_and_gloves() // [AC-mens-ends-crotch-1] [AC-mens-ends-crotch-2] [AC-mens-ends-crotch-3] [AC-mens-ends-crotch-4] [EDGE-mens-ends-crotch-1] [EDGE-mens-ends-crotch-23]
     {
         string root = Copy(Stormblessed);

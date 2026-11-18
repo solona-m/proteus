@@ -301,6 +301,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-keep-hand-foot-skin-6")]
     [Trait("Plan", "EDGE-keep-hand-foot-skin-4")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Holding_the_foot_adds_no_folds_and_the_ankle_seam_holds()
     {
         foreach (var (name, done) in new[] { ("Neolithe SFW M", NeolitheMedium.Value), ("Bibo+ Large", BiboLarge.Value) })
@@ -326,6 +327,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [LocalDataFact(Heartthrob, Bibo, Neolithe, Rue, Yab)]
     [Trait("Plan", "AC-keep-hand-foot-skin-6")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void KeepEnds_e2e_Heartthrob_detect_plan_save()
     {
         var bodies = Bodies(Bibo, Neolithe, Rue, Yab);
@@ -455,6 +457,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-keep-hand-foot-skin-13")]
     [Trait("Plan", "EDGE-keep-hand-foot-skin-14")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Game_boots_baked_for_a_woman_keep_their_feet_and_read_on_the_game_legs()
     {
         // A man's boots from the game, baked onto a woman as the watcher bakes male-only gear: the ends are found on the
@@ -503,6 +506,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [LocalDataFact(Bibo, Neolithe, Rue, Yab)]
     [Trait("Plan", "AC-keep-hand-foot-skin-3")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Installed_long_gloves_are_read_on_their_arms()
     {
         // Every chest size of a body has the same arms, so a glove's forearm might tie between them and read as unsure.
@@ -647,6 +651,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-keep-ends-studio-1")]
     [Trait("Plan", "EDGE-keep-ends-studio-20")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Studio_Shift_YAB_WC_onto_LavaBod_keeps_the_heeled_foot_and_refits_the_stocking()   // [AC-keep-ends-studio-1] [EDGE-keep-ends-studio-20]
     {
         var bytes = LocalData.PackEntryEndingWith(LocalData.ShiftPack, ShiftShoe);
@@ -719,6 +724,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.ShiftPack, Yab, LavaBod)]
     [Trait("Plan", "EDGE-keep-ends-studio-7")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Studio_unticked_foot_skin_keeps_the_stocking_beside_it_unfolded()   // [EDGE-keep-ends-studio-7]
     {
         // ND-7 (a): the parts unticked join the hold. Beside held skin there is no gap correction, so the stocking there
@@ -774,6 +780,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [LocalDataFact(SeenGloves, Rue, Yab)]
     [Trait("Plan", "AC-keep-ends-studio-2")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Studio_gloves_keep_their_hands_onto_another_body()   // [AC-keep-ends-studio-2]
     {
         // Rue+ to YAB+: one family's two bodies, whose arms correspond. (Neolithe to Bibo+ arms are refused outright.)
@@ -820,6 +827,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [LocalDataFact(HellForLeather, Bibo, Neolithe)]
     [Trait("Plan", "EDGE-keep-ends-studio-27")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Studio_skinless_boot_with_legs_picked_by_hand_keeps_its_foot()   // [EDGE-keep-ends-studio-27]
     {
         // Leather from toe to thigh: nothing to read a body off (NoSkin), so the user picks the legs by hand. The refit

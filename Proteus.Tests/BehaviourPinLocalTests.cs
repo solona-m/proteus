@@ -80,6 +80,7 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
                    CrossSexRefitLocalTests.Bibo, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-mens-ends-crotch-9")]
     [Trait("Plan", "EDGE-mens-ends-crotch-26")]
+    [Trait("Suite", "Diagnostic")]
     public void Lumberjack_made_womens_is_unchanged() // [AC-mens-ends-crotch-9] [EDGE-mens-ends-crotch-26]
         => Check("lumberjack", LumberjackPin,
                  Hash(CrossSexRefitJob.Run(Inputs(CrossSexRefitLocalTests.LumberjackShirt, 201, CrossSexRefitLocalTests.Tbse,
@@ -97,6 +98,7 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, CrossSexNudeLegsLocalTests.StormblessedLegs, CrossSexNudeLegsLocalTests.LavaBod,
                    CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-mens-ends-crotch-9")]
+    [Trait("Suite", "Diagnostic")]
     public void Stormblessed_legs_made_mens_are_unchanged() // [AC-mens-ends-crotch-9]
     {
         var log = Substitute.For<IPluginLog>();
@@ -110,6 +112,7 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.ImcToggleMod, SizeSetBatchData.Bibo, SizeSetBatchData.Rue, LocalData.GameData, LocalData.UvMaps)]
     [Trait("Plan", "AC-mens-ends-crotch-9")]
     [Trait("Plan", "EDGE-mens-ends-crotch-26")]
+    [Trait("Suite", "Diagnostic")]
     public void A_same_sex_size_set_with_shoes_is_unchanged() // [AC-mens-ends-crotch-9] [EDGE-mens-ends-crotch-26]
     {
         string copy = SizeSetBatchData.CopyOf(LocalData.ImcToggleMod);

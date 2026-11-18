@@ -24,6 +24,7 @@ public sealed class HairPortModsLocalTests(ITestOutputHelper o)
 
     [LocalDataFact(LocalData.Mods, LocalData.GameData)]
     [Trait("Plan", "AC-hair-race-port-2")]
+    [Trait("Suite", "Diagnostic")]
     public void Ports_of_installed_mods_land_near_the_authors_own_ports()
     {
         var game = HairPortLocalTests.Load();
@@ -87,6 +88,7 @@ public sealed class HairPortModsLocalTests(ITestOutputHelper o)
     /// </summary>
     [LocalDataFact(LocalData.Mods, LocalData.GameData)]
     [Trait("Plan", "EDGE-hair-race-port-6")]
+    [Trait("Suite", "Diagnostic")]
     public void A_skeleton_entry_in_another_group_ports_installed_mods()
     {
         var game = HairPortLocalTests.Load();
@@ -126,6 +128,7 @@ public sealed class HairPortModsLocalTests(ITestOutputHelper o)
     /// </summary>
     [LocalDataFact(LocalData.Mods, LocalData.GameData)]
     [Trait("Plan", "AC-cross-sex-hair-port-4")]
+    [Trait("Suite", "Diagnostic")]
     public void Cross_sex_ports_of_installed_mods_land_near_the_authors_own_other_sex_model()
     {
         var game = HairPortLocalTests.Load();

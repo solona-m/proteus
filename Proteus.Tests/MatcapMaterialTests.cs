@@ -96,6 +96,8 @@ public class MatcapMaterialLocalTests(ITestOutputHelper output)
 
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-matcaps-4")]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void Template_texture_paths_distinct_or_index_retarget()
     {
         var h = MatcapMaterial.ReadHeader(Template())!;
@@ -119,6 +121,8 @@ public class MatcapMaterialLocalTests(ITestOutputHelper output)
 
     [LocalDataFact(LocalData.GameData, LocalData.MatcapLibraryPack)]
     [Trait("Plan", "AC-matcaps-4")]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void Template_compared_with_the_library_material()
     {
         var lib = MatcapMaterial.ReadHeader(LocalData.PackEntryEndingWith(LocalData.MatcapLibraryPack,

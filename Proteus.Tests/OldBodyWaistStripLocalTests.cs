@@ -21,6 +21,7 @@ public class OldBodyWaistStripLocalTests(ITestOutputHelper output)
     private const string NeolitheLegs = LocalData.Mods + ":Neolithe [ALL IN ONE]/default legs - smallclothes/gen a large.mdl";
 
     [LocalDataFact(Pants, LitheLegs, NeolitheLegs)]
+    [Trait("Suite", "Diagnostic")]
     public void Old_body_skin_reaching_past_the_new_legs_is_swapped()
     {
         var bytes = File.ReadAllBytes(LocalData.Path(Pants));

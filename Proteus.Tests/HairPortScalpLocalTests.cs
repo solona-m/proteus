@@ -59,6 +59,7 @@ public sealed class HairPortScalpLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-hair-material-scalp-fit-15")]
     [Trait("Plan", "EDGE-hair-material-scalp-fit-20")]
     [Trait("Plan", "EDGE-hair-material-scalp-fit-22")]
+    [Trait("Suite", "Diagnostic")]
     public void Created_clips_on_game_hairstyles_before_and_after_the_push()
     {
         var game = HairPortLocalTests.Load();
@@ -99,6 +100,7 @@ public sealed class HairPortScalpLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-hair-material-scalp-fit-7")]
     [Trait("Plan", "EDGE-hair-material-scalp-fit-15")]
+    [Trait("Suite", "Diagnostic")]
     public void Push_never_moves_a_port_away_from_the_games_own_copy()
     {
         var game = HairPortLocalTests.Load();
@@ -165,6 +167,7 @@ public sealed class HairPortScalpLocalTests(ITestOutputHelper o)
     /// </summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-hair-material-scalp-fit-7")]
+    [Trait("Suite", "Diagnostic")]
     public void Push_adds_no_folds_or_excess_strain_on_game_hairstyles()
     {
         var game = HairPortLocalTests.Load();
@@ -271,6 +274,7 @@ public sealed class HairPortScalpLocalTests(ITestOutputHelper o)
     /// </summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-hair-material-scalp-fit-6")]
+    [Trait("Suite", "Diagnostic")]
     public void Pushed_hair_is_outside_the_skin_by_an_independent_test()
     {
         var game = HairPortLocalTests.Load();
@@ -491,6 +495,7 @@ public sealed class HairPortScalpLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-hair-material-scalp-fit-6")]
     [Trait("Plan", "EDGE-hair-material-scalp-fit-14")]
+    [Trait("Suite", "Diagnostic")]
     public void No_pushed_vertex_ends_further_from_the_scalp_than_on_the_source()
     {
         var game = HairPortLocalTests.Load();
@@ -539,6 +544,7 @@ public sealed class HairPortScalpLocalTests(ITestOutputHelper o)
     /// </summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-hair-material-scalp-fit-6")]
+    [Trait("Suite", "Diagnostic")]
     public void Skull_surface_reads_the_skin_not_the_horns()
     {
         var game = HairPortLocalTests.Load();
@@ -573,6 +579,7 @@ public sealed class HairPortScalpLocalTests(ITestOutputHelper o)
     /// <summary>[EDGE-hair-material-scalp-fit-17] A game hairstyle with shape keys keeps each spare's offset from its base.</summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "EDGE-hair-material-scalp-fit-17")]
+    [Trait("Suite", "Diagnostic")]
     public void Push_keeps_game_hair_shapes()
     {
         var game = HairPortLocalTests.Load();

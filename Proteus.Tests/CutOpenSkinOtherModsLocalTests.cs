@@ -49,6 +49,7 @@ public class CutOpenSkinOtherModsLocalTests(ITestOutputHelper output)
     [MemberData(nameof(Garments))]
     [Trait("Plan", "AC-cut-open-skin-2")]
     [Trait("Plan", "AC-cut-open-skin-3")]
+    [Trait("Suite", "Diagnostic")]
     public void Other_garments_are_no_worse(string mod, string model, string slot, string ownBody)
     {
         byte[] bytes = Read(mod, model);

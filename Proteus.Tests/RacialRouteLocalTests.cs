@@ -134,6 +134,7 @@ public class RacialRouteLocalTests(ITestOutputHelper o)
     [InlineData("e0257", 1301, 101)]   // and the men's
     [Trait("Plan", "AC-racial-gear-upscale-1")]
     [Trait("Plan", "EDGE-racial-gear-upscale-1")]
+    [Trait("Suite", "Diagnostic")]
     public void Racial_skin_bent_down_lies_on_the_game_s_shared_body(string set, int drawn, int shared)
     {
         var data = Data();

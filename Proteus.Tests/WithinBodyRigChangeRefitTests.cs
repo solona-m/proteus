@@ -75,6 +75,7 @@ public class WithinBodyRigChangeRefitTests(ITestOutputHelper output)
     /// hair at the crotch — and onto no skirt vertex.
     /// </summary>
     [LocalDataFact(Rue, Starlit)]
+    [Trait("Suite", "Diagnostic")]
     public void Starlit_skirt_Gen_A_to_B_keeps_its_thigh_weights_and_puts_the_new_bones_only_on_the_crotch()
     {
         var r = StarlitGenAToB();
@@ -130,6 +131,7 @@ public class WithinBodyRigChangeRefitTests(ITestOutputHelper output)
     /// the chest.
     /// </summary>
     [LocalDataFact(Rue, Starlit)]
+    [Trait("Suite", "Diagnostic")]
     public void Rue_Yiggle_to_plain_legs_on_the_Starlit_skirt()
     {
         string rue = LocalData.Path(Rue);

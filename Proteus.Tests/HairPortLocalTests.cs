@@ -62,6 +62,7 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     /// </summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-hair-race-port-2")]
+    [Trait("Suite", "Diagnostic")]
     public void Ported_hair_sits_on_the_target_head()
     {
         var game = Load();
@@ -167,6 +168,7 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     /// </summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-hair-race-port-2")]
+    [Trait("Suite", "Diagnostic")]
     public void Port_lands_near_the_game_s_own_model()
     {
         var game = Load();
@@ -219,6 +221,7 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     /// <summary>A port folds no triangle over and collapses none, for every shared hairstyle of every pair.</summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-hair-race-port-2")]
+    [Trait("Suite", "Diagnostic")]
     public void Ported_hair_has_no_folded_or_degenerate_triangles()
     {
         // The bend itself, before any check: what it does to every shared hairstyle of every pair, Miqo'te included.
@@ -260,6 +263,7 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-cross-sex-tops-yas-8")]
     [Trait("Plan", "EDGE-cross-sex-tops-yas-22")]
+    [Trait("Suite", "Diagnostic")]
     public void Over_the_fold_limit_a_port_is_saved_with_a_warning() // [AC-cross-sex-tops-yas-8] [EDGE-cross-sex-tops-yas-22]
     {
         var game = Load();
@@ -377,6 +381,7 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-hair-skeleton-infer-2")]
     [Trait("Plan", "EDGE-hair-skeleton-infer-21")]
+    [Trait("Suite", "Diagnostic")]
     public void The_games_hair_skeleton_table_is_what_its_own_models_move_with()
     {
         var game = Load();
@@ -506,6 +511,7 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-cross-sex-hair-port-4")]
     [Trait("Plan", "EDGE-cross-sex-hair-port-3")]
+    [Trait("Suite", "Diagnostic")]
     public void Cross_sex_ports_sit_on_the_target_head()
     {
         var game = Load();
@@ -552,6 +558,7 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     /// </summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-cross-sex-hair-port-9")]
+    [Trait("Suite", "Diagnostic")]
     public void Cross_sex_physics_skeleton_measurement()
     {
         var game = Load();
@@ -587,6 +594,7 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     /// no entry to it, and no bones of it handed to the bend — the source's is carried, or nothing.</summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-cross-sex-hair-port-9")]
+    [Trait("Suite", "Diagnostic")]
     public void Cross_sex_choose_never_trusts_the_target_skeleton()
     {
         var game = Load();

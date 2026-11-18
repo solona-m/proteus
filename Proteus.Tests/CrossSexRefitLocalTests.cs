@@ -139,6 +139,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Speed", "Slow")]
     [Trait("Plan", "EDGE-uvmap-nipples-48")]
     [Trait("Plan", "AC-uvmap-nipples-8")]
+    [Trait("Suite", "Diagnostic")]
     public void Lumberjack_refits_onto_bibo_for_midlander_women() // [AC-cross-sex-refit-2] [AC-cross-sex-refit-3] [AC-cross-sex-refit-5] [EDGE-cross-sex-refit-13] [EDGE-cross-sex-refit-14] [EDGE-uvmap-nipples-48] [AC-uvmap-nipples-8]
     {
         var inputs = Inputs(LumberjackShirt, 201, Tbse, UvBakeInputs.TbseChest, Bibo, UvBakeInputs.BiboChest);
@@ -196,6 +197,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-cross-sex-tops-yas-2")]
     [Trait("Plan", "AC-cross-sex-tops-yas-3")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Sheer_elegance_top_refits_onto_tbse_for_midlander_men() // [AC-cross-sex-tops-yas-1] [AC-cross-sex-tops-yas-2] [AC-cross-sex-tops-yas-3]
     {
         var offered = OtherRaceRefit.Offered("chara/equipment/e6010/model/c0201e6010_top.mdl",
@@ -274,6 +276,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, SheerTop, Bibo, Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-cross-sex-tops-yas-3")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Underbust_lift_for_a_womans_top_is_measured() // [AC-cross-sex-tops-yas-3]
     {
         var results = new Dictionary<bool, (int Folds, float Inside)>();
@@ -308,6 +311,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-cross-sex-tops-yas-13")]
     [Trait("Plan", "EDGE-cross-sex-tops-yas-19")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Starlit_rigged_to_yas_bones_refits_onto_tbse_legs(bool ivcs) // [AC-cross-sex-tops-yas-4] [AC-cross-sex-tops-yas-5] [AC-cross-sex-tops-yas-6] [EDGE-cross-sex-tops-yas-3] [EDGE-cross-sex-tops-yas-4] [EDGE-cross-sex-tops-yas-13] [EDGE-cross-sex-tops-yas-19]
     {
         var inputs = Inputs(Starlit, 101, Rue, RueRel(RueYiggleWc), Tbse, UvBakeInputs.TbseLegs[0].Rel,
@@ -357,6 +361,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-cross-sex-tops-yas-5")]
     [Trait("Plan", "EDGE-cross-sex-tops-yas-6")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Starlit_drawn_with_the_game_s_women_skeleton_still_refits() // [EDGE-cross-sex-tops-yas-5] [EDGE-cross-sex-tops-yas-6]
     {
         var inputs = Inputs(Starlit, 101, Rue, RueRel(RueYiggleWc), Tbse, UvBakeInputs.TbseLegs[0].Rel);

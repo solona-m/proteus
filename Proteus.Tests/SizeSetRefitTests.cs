@@ -411,6 +411,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [LocalDataFact(Rue, Yab)]
     [Trait("Plan", "AC-refit-piercings-option-5")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Size_set_carries_piercings_only_when_asked()
     {
         // [AC-refit-piercings-option-5] Rue's bare chest sized onto YAB. First that the case is reached: asked for, the
@@ -498,6 +499,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-keep-ends-studio-14")]
     [Trait("Plan", "AC-sizeset-game-body-source-3")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Shift_shoe_gains_legs_sizes_with_its_foot_kept()   // [AC-keep-ends-studio-6] [EDGE-keep-ends-studio-13] [EDGE-keep-ends-studio-14] [AC-sizeset-game-body-source-3]
     {
         var shoe = LocalData.PackEntryEndingWith(LocalData.ShiftPack, "e6219_sho.mdl");
@@ -594,6 +596,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.ShiftPack, Yab, Rue, Bibo)]
     [Trait("Plan", "EDGE-keep-ends-studio-15")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void A_shoe_in_no_group_gets_a_group_of_ours_whose_default_is_put_back()   // [EDGE-keep-ends-studio-15]
     {
         // Given outside any group, its sizes go into a group of Proteus's own, appended after the author's, whose default
@@ -647,6 +650,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-keep-ends-studio-15")]
     [Trait("Plan", "EDGE-keep-ends-studio-24")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Cancelling_still_puts_a_group_of_ours_default_back()   // [EDGE-keep-ends-studio-15] [EDGE-keep-ends-studio-24]
     {
         // Sizes saved into a group of Proteus's own, then the run cancelled: the group still defaults to "Original", not
@@ -740,6 +744,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.ShiftPack, Yab, Rue, Bibo)]
     [Trait("Plan", "EDGE-keep-ends-studio-24")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Cancelling_keeps_saved_end_sizes()   // [EDGE-keep-ends-studio-24]
     {
         // Cancelled while the third body is being made: what the first two saved stays, and nothing is half-written.
@@ -822,6 +827,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [LocalDataFact(Heartthrob, Bibo, Rue, Yab)]
     [Trait("Plan", "EDGE-keep-ends-studio-17")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Authors_own_shoe_size_is_found_by_its_legs()   // [EDGE-keep-ends-studio-17]
     {
         // Heartthrob's legs are Bibo+ Small, Medium and Large. Asked for Bibo, "Bottom Size" gains nothing: the legs find
@@ -883,6 +889,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [LocalDataFact(HellForLeather, Bibo, Rue)]
     [Trait("Plan", "AC-keep-ends-studio-9")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void HFL_boots_and_gloves_are_noted_not_sized()   // [AC-keep-ends-studio-9]
     {
         // Leather from toe to thigh and fingertip to shoulder: nothing to read a body off. Each gets a note, no sizes.
@@ -1034,6 +1041,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [LocalDataFact(Heartthrob, SeenGloves, LocalData.ShiftPack, Bibo, Rue, Yab)]
     [Trait("Plan", "AC-keep-ends-studio-8")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Gloves_and_a_shoe_beside_a_chest_join_its_sizes()   // [AC-keep-ends-studio-8]
     {
         // Heartthrob's Small top, Seen's gloves and Shift's shoe, all sized in one "Top Size": each size the top makes
@@ -1088,6 +1096,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [Trait("Plan", "AC-keep-ends-studio-8")]
     [Trait("Plan", "EDGE-bulk-nearest-source-7")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void A_shoe_beside_a_chest_keeps_the_authors_where_the_size_has_no_legs()   // [AC-keep-ends-studio-8]
     {
         // Neolithe XS is worn with the Small hips: no legs of its own. The shoe in that size stays the author's, quietly,
@@ -1204,6 +1213,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-sizeset-game-body-source-7")]
     [Trait("Plan", "EDGE-sizeset-game-body-source-8")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Game_boots_get_legs_sizes_read_off_the_game_body()   // [AC-sizeset-game-body-source-1] [EDGE-sizeset-game-body-source-6] [EDGE-sizeset-game-body-source-7] [EDGE-sizeset-game-body-source-8]
     {
         // The plan named Lace's boots; read over the game's body too, they still match nothing (5%), so they stay a
@@ -1300,6 +1310,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [Trait("Plan", "AC-sizeset-game-body-source-3")]
     [Trait("Plan", "EDGE-sizeset-game-body-source-3")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Body_mod_shoes_and_gloves_read_the_same_with_the_game_body_offered()   // [AC-sizeset-game-body-source-3] [EDGE-sizeset-game-body-source-3]
     {
         var game = GameBodies();
@@ -1362,6 +1373,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, Heartthrob, CasualFitShirt, TheBodySe, TheBodySeX, Bibo, Rue)]
     [Trait("Plan", "AC-sizeset-game-body-source-4")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Chest_and_legs_never_read_the_game_body()   // [AC-sizeset-game-body-source-4]
     {
         var game = GameBodies();
@@ -1583,6 +1595,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [Trait("Plan", "AC-keep-ends-studio-8")]
     [Trait("Plan", "EDGE-keep-ends-studio-16")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Ends_off_is_todays_size_set_and_on_the_shoe_joins_its_legs_sizes()   // [AC-keep-ends-studio-10] [EDGE-keep-ends-studio-26] [AC-keep-ends-studio-8] [EDGE-keep-ends-studio-16]
     {
         string off = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
@@ -1734,6 +1747,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [LocalDataFact(ThisOldThing, Neolithe, Rosaline)]
     [Trait("Plan", "AC-headless-size-set-7")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void A_Neolithe_top_gains_Rosaline_M_L_and_Coconut() // [AC-headless-size-set-7]
     {
         string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
@@ -1763,6 +1777,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     /// </summary>
     [LocalDataFact(ThisOldThing, Neolithe, Bibo, Rue, Yab)]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void A_whole_mod_gains_the_sizes_it_lacks()
     {
         string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
@@ -1838,6 +1853,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [Trait("Plan", "AC-outfit-fit-1")]
     [Trait("Plan", "AC-outfit-fit-9")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Geometrics_jacket_is_sized_by_the_top_in_its_option_and_kept_outside_its_refit()
     {
         string copy = GeometricAsShipped();

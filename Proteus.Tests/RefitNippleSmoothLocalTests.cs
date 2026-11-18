@@ -192,6 +192,7 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-refit-nipple-smooth-2")]
     [Trait("Plan", "EDGE-refit-nipple-smooth-24")]
     [Trait("Plan", "AC-refit-nipple-smooth-5")]
+    [Trait("Suite", "Diagnostic")]
     public void Zayne_smoothing_inside_the_pass()
     {
         // [AC-refit-nipple-smooth-5] The body mods' files on disk are the same after the refit.
@@ -234,6 +235,7 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-refit-nipple-smooth-1")]
     [Trait("Plan", "AC-refit-nipple-smooth-2")]
     [Trait("Plan", "AC-refit-nipple-smooth-6")]
+    [Trait("Suite", "Diagnostic")]
     public void Zayne_bralet_Rue_M_to_Lava_Teardrop_hides_the_nipples(bool cutHidden)
     {
         var on = ZayneOntoLava(cutHidden);
@@ -376,6 +378,7 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
     /// </summary>
     [LocalDataFact(OldThing, Rue, Lava)]
     [Trait("Plan", "AC-refit-nipple-smooth-7")]
+    [Trait("Suite", "Diagnostic")]
     public void This_Old_Thing_matches_the_author_as_well_as_before()
     {
         string garment = Path.Combine(LocalData.Path(OldThing), OldThingSize("rue m"));
@@ -430,6 +433,7 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
     [InlineData("neolithe xs", "neolithe")]
     [InlineData("rue m", "finish")]
     [Trait("Plan", "AC-refit-nipple-smooth-3")]
+    [Trait("Suite", "Diagnostic")]
     public void Same_body_resizes_and_finish_are_untouched(string size, string to)
     {
         var garment = File.ReadAllBytes(Path.Combine(LocalData.Path(OldThing), OldThingSize(size)));
@@ -485,6 +489,7 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
     [InlineData("lava")]
     [Trait("Plan", "AC-refit-nipple-smooth-8")]
     [Trait("Plan", "EDGE-refit-nipple-smooth-24")]
+    [Trait("Suite", "Diagnostic")]
     public void Nipples_under_cloth_are_smoothed_on_every_body(string body)
     {
         var garment = File.ReadAllBytes(Path.Combine(LocalData.Path(OldThing), OldThingSize("rue m")));

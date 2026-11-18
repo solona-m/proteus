@@ -74,6 +74,7 @@ public sealed class HairPortStryxLocalTests(ITestOutputHelper o) : IDisposable
     /// </summary>
     [LocalDataFact(LocalData.StryxMod, LocalData.GameData)]
     [Trait("Plan", "AC-hair-material-scalp-fit-6")]
+    [Trait("Suite", "Diagnostic")]
     public void Stryx_ports_lose_their_created_clips()
     {
         var game = HairPortLocalTests.Load();
@@ -123,6 +124,7 @@ public sealed class HairPortStryxLocalTests(ITestOutputHelper o) : IDisposable
     [LocalDataFact(LocalData.StryxMod, LocalData.GameData)]
     [Trait("Plan", "AC-hair-material-scalp-fit-8")]
     [Trait("Plan", "EDGE-hair-material-scalp-fit-17")]
+    [Trait("Suite", "Diagnostic")]
     public void Stryx_hat_fitted_source_gets_no_clip_warning_from_spares()
     {
         var game = HairPortLocalTests.Load();
@@ -147,6 +149,7 @@ public sealed class HairPortStryxLocalTests(ITestOutputHelper o) : IDisposable
     [Trait("Plan", "AC-hair-material-scalp-fit-1")]
     [Trait("Plan", "AC-hair-material-scalp-fit-2")]
     [Trait("Plan", "AC-hair-material-scalp-fit-10")]
+    [Trait("Suite", "Diagnostic")]
     public void Stryx_ports_to_midlander_man_alone()
     {
         var game = HairPortLocalTests.Load();
@@ -178,6 +181,7 @@ public sealed class HairPortStryxLocalTests(ITestOutputHelper o) : IDisposable
     /// the bend's did.</summary>
     [LocalDataFact(LocalData.StryxMod, LocalData.GameData)]
     [Trait("Plan", "AC-hair-material-scalp-fit-7")]
+    [Trait("Suite", "Diagnostic")]
     public void Stryx_push_keeps_strands_and_physics()
     {
         var game = HairPortLocalTests.Load();
@@ -226,6 +230,7 @@ public sealed class HairPortStryxLocalTests(ITestOutputHelper o) : IDisposable
     [LocalDataFact(LocalData.StryxMod, LocalData.GameData)]
     [Trait("Plan", "AC-hair-material-scalp-fit-6")]
     [Trait("Plan", "EDGE-hair-material-scalp-fit-14")]
+    [Trait("Suite", "Diagnostic")]
     public void Stryx_pushed_hair_leaves_the_skin_without_overshooting()
     {
         var game = HairPortLocalTests.Load();

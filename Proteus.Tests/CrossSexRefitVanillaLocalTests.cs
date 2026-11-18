@@ -104,6 +104,7 @@ public class CrossSexRefitVanillaLocalTests(ITestOutputHelper o)
     [InlineData(TbseX, "erect l cut", true)]
     [Trait("Plan", "AC-vanilla-cross-sex-legs-3")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Fuath_pantaloons_refit_from_the_vanilla_body_onto_tbse_for_men(string onto, string folder, bool pushOut) // [AC-vanilla-cross-sex-legs-3]
     {
         var inputs = Inputs(onto, folder, pushOut);
