@@ -56,6 +56,15 @@ public class EnaretosRealModTests : IDisposable
         foreach (var (k, v) in original) Assert.True(v == now[k], $"the original mod's {k} changed");
     }
 
+    /// <summary>The copy without the owner's own matcaps (the real mod may carry some): every test starts from none.</summary>
+    private static void NoMatcaps(string mod)
+    {
+        if (!MatcapRecord.Exists(mod)) return;
+        foreach (var m in MatcapRecord.Read(mod).Models.Select(x => x.File).ToList())
+            if (MatcapRecord.Exists(mod)) MatcapWriter.Undo(mod, m);
+        Assert.False(MatcapRecord.Exists(mod), "the copy's matcaps could not be undone");
+    }
+
     private MatcapStudio.Environment Env(Func<string, byte[]?> game) =>
         new(p => p == MatcapMaterial.VanillaTemplatePath ? SyntheticMatcapMod.Reflection() : game(p),
             loader, false, Path.Combine(temp, "work"), WornFolder: 1, Affordable: () => false, GearShadersOn: true);
@@ -81,11 +90,58 @@ public class EnaretosRealModTests : IDisposable
         return new MatcapImage("gem.tex", path, false);
     }
 
+    [LocalDataFact(LocalData.EnaretosMod, LocalData.GameData)]
+    [Trait("Plan", "AC-row-matcap-glass-1")]
+    [Trait("Plan", "AC-row-matcap-glass-2")]
+    [Trait("Plan", "AC-row-matcap-glass-4")]
+    [Trait("Plan", "EDGE-row-matcap-glass-13")]
+    public void Real_bracelet_glass_row_round_trip()
+    {
+        const string glassMat = "/mt_c0201a0153_wrs_b.mtrl";
+        const string glassRel = "enaretos bracelet/chara/accessory/a0153/material/v0001/mt_c0201a0153_wrs_b.mtrl";
+        var (original, mod) = CopyMod();
+        NoMatcaps(mod);
+        var game = new Lumina.GameData(LocalData.Path(LocalData.GameData));
+        byte[]? Read(string p) { try { return game.GetFile(p)?.Data; } catch { return null; } }
+        var baseline = Hashes(mod);
+        var glassBefore = File.ReadAllBytes(MatcapWriter.Full(mod, glassRel));
+
+        var env = Env(Read) with { RowOnly = 8, RowSub = SubRowPick.B };
+        var model = File.ReadAllBytes(MatcapWriter.Full(mod, ModelRel));
+        var pool = MatcapPlan.RowPool(ModelPartReader.Read(model)!.Parts, MatcapPlan.Kind.Gear, [], glassMat);
+        var p = MatcapStudio.Prepare(mod, ModelRel, ModelPath, model, pool, MatcapChoice.OfImage(Image(Path.Combine(temp, "img"), loader)), env);
+        Assert.True(p.Ok, p.Code + ": " + p.Message);
+        Assert.True(p.RowGlass);
+        Assert.True(p.RowGlassTriangles > 0);
+
+        var applied = MatcapWriter.Apply(mod, p.Request!);
+        Assert.True(applied.Ok, applied.Message);
+        var row = MatcapRecord.Read(mod).Materials.Single().Row!;
+        var cut = row.Files.Single();
+        // The count shown is the triangles the open model now draws from the converted copy.
+        var drawn = File.ReadAllBytes(MatcapWriter.Full(mod, ModelRel));
+        Assert.Equal(p.RowGlassTriangles, ModelPartReader.Read(drawn)!.Parts.Where(x => x.Island < 0 && x.Material == row.Cut)
+                                                  .Sum(x => ModelMaterialWriter.TriangleUvs(drawn, [x]).Count));
+        var cutBytes = File.ReadAllBytes(MatcapWriter.Full(mod, cut.File));
+        Assert.Equal(CharacterShaderUpgrade.Character, CharacterShaderUpgrade.ShaderOf(cutBytes));
+        Assert.True(MatcapGlassCut.IsSound(glassBefore, cutBytes, Read(MatcapGlassCut.TemplatePath)!,
+                                           MatcapMaterial.ReadHeader(cutBytes)!.TextureOf(MatcapMaterial.SamplerNormal)));
+        Assert.Equal(glassBefore, File.ReadAllBytes(MatcapWriter.Full(mod, glassRel)));   // the author's glass untouched
+        Assert.Equal(MatcapGlassCut.GlassShader, CharacterShaderUpgrade.ShaderOf(glassBefore));
+
+        Assert.True(MatcapWriter.Undo(mod, ModelRel).Ok);
+        var after = Hashes(mod);
+        Assert.Equal(baseline.Keys.Order(), after.Keys.Where(k => !k.Contains("-superseded")).Order());
+        foreach (var (k, v) in baseline) Assert.True(v == after[k], $"{k} differs after Undo");
+        Untouched(original);
+    }
+
     [LocalDataFact(LocalData.EnaretosMod)]
     [Trait("Plan", "AC-upgrade-vs-matcap-1")]
     public void Make_cuts_the_real_upgraded_bracelet()
     {
         var (original, mod) = CopyMod();
+        NoMatcaps(mod);
         var env = Env(_ => null);
         var row = UsedRow(mod, env);
         var target = MatcapPlan.TargetOf(ModelPath, out _)!;
@@ -104,6 +160,7 @@ public class EnaretosRealModTests : IDisposable
     public void Prepare_follows_a0153s_real_imc()
     {
         var (original, mod) = CopyMod();
+        NoMatcaps(mod);
         var game = new Lumina.GameData(LocalData.Path(LocalData.GameData));
         byte[]? Read(string p) { try { return game.GetFile(p)?.Data; } catch { return null; } }
         var env = Env(Read);
@@ -146,6 +203,7 @@ public class EnaretosRealModTests : IDisposable
     public void Real_bracelet_copy_round_trip()
     {
         var (original, mod) = CopyMod();
+        NoMatcaps(mod);
         var env = Env(_ => null);
         var row = UsedRow(mod, env);
         var model = File.ReadAllBytes(MatcapWriter.Full(mod, ModelRel));

@@ -6727,6 +6727,14 @@
     "message": "单行 matcap 需要部件使用 character.shpk，而 {0} 使用的是 {1}。",
     "description": ""
   },
+  "Matcap.Refused.RowGlassLayout.Fmt": {
+    "message": "{0} 以 Proteus 无法为行材质捕获转换到 character.shpk 的结构使用 {1}（需要恰好一张法线贴图、遮罩贴图和索引贴图，以及金曦之遗辉的颜色表）。",
+    "description": ""
+  },
+  "Matcap.Refused.RowGlassTemplate": {
+    "message": "无法读取用于制作玻璃部件切割副本的游戏自带材质，因此没有做任何更改。",
+    "description": ""
+  },
   "Matcap.Refused.RowLegacyWear.Fmt": {
     "message": "{0} 仍在使用旧着色器（characterlegacy.shpk），而行材质捕获需要 character.shpk。请穿戴一次，让装备着色器将其改为 character.shpk，然后再添加行材质捕获。如果仍停留在旧着色器，请将鼠标悬停在 {1} 下的计数上查看原因。",
     "description": ""
@@ -6847,6 +6855,10 @@
     "message": "此部件的部分镂空孔位于该行的三角形内，因此会露出 matcap。",
     "description": ""
   },
+  "Parts.Matcap.RowGlassWarn.Fmt": {
+    "message": "此部件是玻璃，无法切割：Proteus 会改用自己的不透明（character.shpk）材质副本绘制该行周围的 {1} 个三角形。你的玻璃材质不会被更改，“{0}”可以全部还原。",
+    "description": ""
+  },
   "Parts.Matcap.Chat.Applied.Fmt": {
     "message": "已将 matcap 应用于 {0} 个模型文件。",
     "description": ""
@@ -6857,6 +6869,10 @@
   },
   "Parts.Matcap.Chat.Edges": {
     "message": "请在游戏中检查透明边缘。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Glass.Fmt": {
+    "message": "此部件是玻璃：该行周围的 {0} 个三角形现在以不透明方式绘制，而不是玻璃。",
     "description": ""
   },
   "Parts.Matcap.Chat.Skipped.Fmt": {

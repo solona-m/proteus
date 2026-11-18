@@ -6727,6 +6727,14 @@
     "message": "행 매트캡은 부위가 character.shpk여야 하는데 {0}은(는) {1}을(를) 씁니다.",
     "description": ""
   },
+  "Matcap.Refused.RowGlassLayout.Fmt": {
+    "message": "{0}은(는) {1}을(를) Proteus가 행 매트캡을 위해 character.shpk로 옮길 수 없는 구성으로 사용합니다(노멀, 마스크, 인덱스 맵이 정확히 하나씩과 황금의 유산 색상 테이블이 필요합니다).",
+    "description": ""
+  },
+  "Matcap.Refused.RowGlassTemplate": {
+    "message": "유리 부위의 잘라낸 사본을 만드는 데 쓰는 게임 자체 재질을 읽을 수 없어 아무것도 변경하지 않았습니다.",
+    "description": ""
+  },
   "Matcap.Refused.RowLegacyWear.Fmt": {
     "message": "{0}은(는) 아직 이전 셰이더(characterlegacy.shpk)를 사용하며, 행 매트캡에는 character.shpk가 필요합니다. 한 번 착용해 장비 셰이더가 character.shpk로 옮기게 한 다음 행 매트캡을 추가하세요. 이전 셰이더에 그대로 있으면 {1}의 개수 위에 마우스를 올려 이유를 확인하세요.",
     "description": ""
@@ -6847,6 +6855,10 @@
     "message": "이 부위의 잘라낸 구멍 일부가 행의 삼각형 안에 있어 매트캡이 보입니다.",
     "description": ""
   },
+  "Parts.Matcap.RowGlassWarn.Fmt": {
+    "message": "이 부위는 유리라서 잘라낼 수 없습니다. 대신 Proteus가 행 주변의 삼각형 {1}개를 불투명한(character.shpk) 자체 재질 사본으로 그립니다. 원래 유리 재질은 바뀌지 않으며, \"{0}\"(으)로 모두 되돌릴 수 있습니다.",
+    "description": ""
+  },
   "Parts.Matcap.Chat.Applied.Fmt": {
     "message": "모델 파일 {0}개에 매트캡을 적용했습니다.",
     "description": ""
@@ -6857,6 +6869,10 @@
   },
   "Parts.Matcap.Chat.Edges": {
     "message": "비치는 가장자리를 게임에서 확인하세요.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Glass.Fmt": {
+    "message": "이 부위는 유리입니다. 행 주변의 삼각형 {0}개가 이제 유리가 아니라 불투명하게 그려집니다.",
     "description": ""
   },
   "Parts.Matcap.Chat.Skipped.Fmt": {

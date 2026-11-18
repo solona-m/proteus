@@ -21,7 +21,9 @@ internal static class SyntheticMatcapMod
     /// float constants, and an optional legacy (512 B) or Dawntrail (2048 B) colour table whose row k is filled with k.
     /// </summary>
     internal static byte[] Material(string shader, string[] textures, (uint Id, int Tex)[] samplers,
-                                    (uint Id, float[] Values)[]? constants = null, int colorTableBytes = 512)
+                                    (uint Id, float[] Values)[]? constants = null, int colorTableBytes = 512,
+                                    uint? additional = null, uint shaderFlags = 0xD, (uint Key, uint Value)[]? keys = null,
+                                    uint[]? samplerFlags = null, int dyeBytes = 0, int additionalSize = 4)
     {
         var strings = new MemoryStream();
         var texOffsets = new List<ushort>();
@@ -59,29 +61,34 @@ internal static class SyntheticMatcapMod
         var ms = new MemoryStream();
         ms.Write(BitConverter.GetBytes(0x01030000u));
         ms.Write(new byte[2]);                                                     // file size, patched
-        ms.Write(BitConverter.GetBytes((ushort)colorTableBytes));
+        ms.Write(BitConverter.GetBytes((ushort)(colorTableBytes + dyeBytes)));
         ms.Write(BitConverter.GetBytes((ushort)str.Length));
         ms.Write(BitConverter.GetBytes(shpkOff));
         ms.WriteByte((byte)textures.Length);
         ms.WriteByte(1);
         ms.WriteByte((byte)(colorTableBytes > 0 ? 1 : 0));
-        ms.WriteByte(4);                                                           // additional data size
+        ms.WriteByte((byte)additionalSize);                                        // additional data size
         foreach (var off in texOffsets) { ms.Write(BitConverter.GetBytes(off)); ms.Write(new byte[2]); }
         ms.Write(BitConverter.GetBytes(uvOff)); ms.Write(new byte[2]);
         if (colorTableBytes > 0) { ms.Write(BitConverter.GetBytes(csOff)); ms.Write(new byte[2]); }
         ms.Write(str);
-        ms.Write(colorTableBytes > 0 ? new byte[] { 4, 0, 0, 0 } : new byte[4]);
+        var add = new byte[additionalSize];
+        BitConverter.GetBytes(additional ?? (colorTableBytes > 0 ? 4u : 0u)).AsSpan(0, Math.Min(4, additionalSize)).CopyTo(add);
+        ms.Write(add);
         ms.Write(table);
+        for (int i = 0; i < dyeBytes; i++) ms.WriteByte((byte)(i * 7));
         ms.Write(BitConverter.GetBytes((ushort)values.Length));
-        ms.Write(BitConverter.GetBytes((ushort)0));                                // shader keys
+        ms.Write(BitConverter.GetBytes((ushort)(keys?.Length ?? 0)));              // shader keys
         ms.Write(BitConverter.GetBytes((ushort)consts.Length));
         ms.Write(BitConverter.GetBytes((ushort)samplers.Length));
-        ms.Write(BitConverter.GetBytes(0xDu));                                    // flags
+        ms.Write(BitConverter.GetBytes(shaderFlags));                             // flags
+        foreach (var (k, v) in keys ?? []) { ms.Write(BitConverter.GetBytes(k)); ms.Write(BitConverter.GetBytes(v)); }
         ms.Write(constRecs.ToArray());
-        foreach (var (id, tex) in samplers)
+        for (int si = 0; si < samplers.Length; si++)
         {
+            var (id, tex) = samplers[si];
             ms.Write(BitConverter.GetBytes(id));
-            ms.Write(BitConverter.GetBytes(0x000F8340u));
+            ms.Write(BitConverter.GetBytes(samplerFlags is { } sf && si < sf.Length ? sf[si] : 0x000F8340u));
             ms.WriteByte((byte)tex); ms.Write(new byte[3]);
         }
         ms.Write(values.ToArray());

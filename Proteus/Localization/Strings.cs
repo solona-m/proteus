@@ -254,11 +254,19 @@ public sealed class MatcapStrings
         "This material has colours set in Proteus. The matcapped row's pixels draw from a copy of the material and won't follow them.");
     public readonly string RowHolesWarn = ProteusLoc.Localize("Parts.Matcap.RowHolesWarn",
         "Some cut-out holes in this part sit inside the row's triangles, so they will show the matcap.");
+    /// <summary>{0} the Undo button's label; {1} how many triangles draw from the converted copy.</summary>
+    public readonly string RowGlassWarnFmt = ProteusLoc.Localize("Parts.Matcap.RowGlassWarn.Fmt",
+        "This part is glass, which can't be cut: Proteus draws {1} triangle(s) around the row from its own solid (character.shpk) copy of the material instead. Your glass material isn't changed, and \"{0}\" puts it all back.");
+    /// <summary>The Undo button's label without its ImGui id, for sentences.</summary>
+    public readonly string UndoLabel = ProteusLoc.Localize("Parts.Matcap.Undo", "Undo matcaps on this model");
     // ── a finished job, said in chat ──
     /// <summary>{0} the number of model files written.</summary>
     public readonly string ChatAppliedFmt = ProteusLoc.Localize("Parts.Matcap.Chat.Applied.Fmt", "Matcap applied to {0} model file(s).");
     public readonly string ChatHoles = ProteusLoc.Localize("Parts.Matcap.Chat.Holes", "Some see-through holes on this row will show the matcap.");
     public readonly string ChatEdges = ProteusLoc.Localize("Parts.Matcap.Chat.Edges", "Check see-through edges in game.");
+    /// <summary>{0} the number of triangles a glass part's converted cut copy draws.</summary>
+    public readonly string ChatGlassFmt = ProteusLoc.Localize("Parts.Matcap.Chat.Glass.Fmt",
+        "This part is glass: {0} triangle(s) around the row now draw solid, not glass.");
     /// <summary>{0} the options left out.</summary>
     public readonly string ChatSkippedFmt = ProteusLoc.Localize("Parts.Matcap.Chat.Skipped.Fmt", "Not applied to {0}: their parts differ.");
     /// <summary>{0} how many more options were left out.</summary>
