@@ -297,3 +297,29 @@ Identifier-grep hits: 0
   - Run 1: 1008 passed, 1 failed (`Glamourer_lock_warnings_name_the_item_and_slot`, `Assert.Contains()`, hash `e39328fca658ac0c`). It went to A, who answered "spec error" (1d), and the test now uses the game slot code.
   - Run 2: **1009 passed, 0 failed, 0 skipped.** There are no baselines and no skips to carry forward. That TRX is kept as `step2-gate.trx` in the session scratchpad.
 - **`norm` (D5):** CRLF becomes LF, then trim; paths become `<path>`; GUIDs become `<guid>`; digit runs become `<n>`. The hash is the first 16 hex digits of SHA-256.
+
+### Step 3: removal checks (orchestrator, count-only)
+
+- **The removal commit:** `<R0>` = `<R>` = `7ce8851b`. It was committed with `git add -u` without viewing it. `git status --short` listed only the mixed-set files, the deleted `IpcProvider.cs` and `proteus.slnx`, and the six deleted sample files.
+- **`restored-check.ps1 -From 7ce8851b -To 7ce8851b`:** `added: 39, markers: 27, restored verified: 12 (manifest rows verified: 13), unmatched: 0, blank: 0, bump: 0, other: 0`. The 13th restored line is identical to the line it replaces, so it is not an added line; Agent A reported this.
+  - **Two void runs came before it,** because of bugs in my script. A variable name clashed with the manifest parameter, since PowerShell names are case-insensitive. Separately, the section sign in the marker regex was decoded as ANSI. Both void runs printed counts only.
+  - **A count-only marker-probe script** (`marker-probe.ps1`) located the encoding bug.
+- **Blame at `<R>` (`blame-authors.ps1`, 1114 text files):**
+  - In `-w -M -C`: contributor non-trivial 0. Caraxi has `using` 3, all in the `ColorTableEditor*.cs` files. AzureRavie has 0. dependabot[bot] has non-trivial 1 (the bot commit, which is recorded and not replaced).
+  - In `-w -M -C -C`: contributor non-trivial 0. Caraxi has blank 6, `using` 202, namespace 3, brace 0 and game fact 3.
+  - **Baseline against §1:** compared per file, the only differences are two new files with one `using` line each, `Proteus.Tests/ContribSpecTests.cs` and `Proteus.Tests/IpcProviderSpecTests.cs`. These are new test files by the orchestrator at step 2; copy detection matched their import header. Every other file is identical to §1's class table.
+- **The guard against `test`:** 2. `106c450b` is bump-only and `dd53194b` is "other". This is logged only, and is handled at the step-8 merge through A3.
+  - The first `guard-classify.ps1` run printed "guard: 0", because of a parameter-passing bug (`-File` passes a comma list as one string). A direct `git rev-list --count` gave 2, and the fixed script gives the same.
+- **The 1b failure path added no file** (A confirmed this at 1b), so D8's exclusion list stays as written.
+- **Two deletions were refused by the session's permission system, and neither was worked around:**
+  - Agent A's `rm -rf` of `scratchpad-agentA\`;
+  - the orchestrator's `Remove-Item` of `scratchpad-handover\contrib-restored-manifest.tsv`.
+
+  Both stay on disk, unread by the clean side. Both are forbidden locations for every clean agent, so the owner should delete them.
+
+### Step 4: slnx and "not passing"
+
+- **`proteus.slnx`** was regenerated with `dotnet new sln --name proteus --format slnx`, then one `dotnet sln add --include-references false` call with the four projects from §1: Glamourer.Api, Penumbra.Api, Proteus and XivLiveMesh. It was committed alone, as `0dfaa9f8`.
+  - A first attempt without `--include-references false` also pulled in the Luna projects. It was discarded and regenerated with `--force` before the commit.
+- **Deleting `bin/` and `obj/` in the four projects was refused** by the session's permission system, and was not worked around. Agent B's allowlist forbids those folders, the transcript extraction checks for them, and B's own build overwrites the outputs.
+- **The "not passing" run** (the spec tests on the removed code) fails to compile, with 74 `error CS` lines. This is the expected state: the spec tests don't pass.
