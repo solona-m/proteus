@@ -430,3 +430,72 @@ Sub-agents: none
 Grep without line numbers: 0
 Shell commands outside the allowlist: 0
 forbidden locations in listing/search results: 0
+
+## Agent D (self-report)
+
+Folder: C:\Users\solon\AppData\Local\Temp\claude\861b008b34a06d0d\5936bcc1-21b0-4a70-8eb3-e82d4006af47\scratchpad-agentD\
+Opened:
+- docs/contrib-clean-room-plan.md (Read, lines 171-370; also Grep for headings)
+- docs/contrib-clean-room-spec.md (Read, lines 349-573; also Grep for headings)
+- scratchpad-agentD/measure.py, idgrep.py, section.md (written by D)
+Shell commands:
+- mkdir -p "C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentD"
+- git -C E:/orca/workspaces/Proteus/licence-clean-room diff --stat 9ae845ea^ 9ae845ea
+- python -I "C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentD/measure.py" "C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentD"   (runs, inside the script: git -C W diff -U0 7ce8851b^ 7ce8851b; git -C W diff -U0 9ae845ea^ 9ae845ea -- Proteus)
+- python -I -c "import json;d=json.load(open(r'C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentD/result.json',encoding='utf-8'));[print(m['file'].split('/')[-1],m['line'],'|',m['norm'],'|',m['removed_at'][:3]) for m in d['matches']]"
+- git -C E:/orca/workspaces/Proteus/licence-clean-room show 9ae845ea:Proteus/Gui/StatusWindow.cs | sed -n '1355,1420p'
+- git -C E:/orca/workspaces/Proteus/licence-clean-room show 9ae845ea:Proteus/Gui/ModsTab.cs | grep -n "pri_\|_priorityEdits\|var pri\|bool active"
+- git -C E:/orca/workspaces/Proteus/licence-clean-room show 9ae845ea:Proteus/Services/SidecarDiscoveryService.cs | sed -n '470,545p'
+- git -C E:/orca/workspaces/Proteus/licence-clean-room show 9ae845ea:Proteus/Interop/PenumbraBridge.cs | grep -n "private readonly [A-Z][A-Za-z]* [a-z][A-Za-z]*;\|try { .*} *$"
+- git -C E:/orca/workspaces/Proteus/licence-clean-room diff -U0 9ae845ea^ 9ae845ea -- Proteus/Gui/StatusWindow.cs Proteus/Gui/ModsTab.cs Proteus/Services/SidecarDiscoveryService.cs | grep "^@@"
+- git -C E:/orca/workspaces/Proteus/licence-clean-room diff -U1 9ae845ea^ 9ae845ea -- Proteus/Interop/GlamourerBridge.cs Proteus/Interop/IpcProvider.cs Proteus/Plugin.cs Proteus/Services/CompositorService.Carriers.cs Proteus/Interop/PenumbraBridge.cs
+- python -I "C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentD/idgrep.py" "C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentD"   (runs, inside the script: the two diffs above, git ls-tree -r --name-only 9ae845ea^ -- Proteus, git show 9ae845ea^:<each .cs file>)
+- python -I -c "exec(open(r'C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentD/idgrep.py').read().replace('print(\"identifier-grep hits in B','print(sorted(hits));print(\"x'))" "C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentD"
+- python -I -c "exec(open(r'C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentD/idgrep.py').read().replace('only_removed = rem_ids - spec_ids - pre','low={x.lower() for x in spec_ids|pre};only_removed={x for x in rem_ids if x.lower() not in low}'))" "C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentD"
+- tail -n 30 E:/orca/workspaces/Proteus/licence-clean-room/docs/contrib-clean-room-log.md
+- python -I -c "open(r'E:/orca/workspaces/Proteus/licence-clean-room/docs/contrib-clean-room-log.md','a',encoding='utf-8').write(open(r'C:/Users/solon/AppData/Local/Temp/claude/861b008b34a06d0d/5936bcc1-21b0-4a70-8eb3-e82d4006af47/scratchpad-agentD/section.md',encoding='utf-8').read())"
+Sub-agents: none
+Identifier-grep hits: 0 (the grep: identifiers found in the removed set but in neither the spec nor the pre-B tree, then searched in B's lines. Exact-case pass: 3 hits, all forced: one BCL enum member named by the spec's wording, and two camelCase field names made from type names the spec pins. Case-folded pass: 1 hit, the BCL member. None is a contributor-coined identifier.)
+First measurement (B commit 9ae845ea):
+- Removed set: 369 lines, 145 non-trivial, 1681 distinct 5-grams
+- Proteus/Gui/ModsTab.cs: non-trivial 5; exact 5 (interface 3, idiomatic/forced 2, expressive 0); Jaccard 0.0379 (containment 0.914)
+- Proteus/Gui/StatusWindow.cs: non-trivial 19; exact 8 (interface 2, idiomatic/forced 6, expressive 0); Jaccard 0.0858 (containment 0.659)
+- Proteus/Interop/GlamourerBridge.cs: non-trivial 9; exact 3 (interface 3, idiomatic/forced 0, expressive 0); Jaccard 0.0174 (containment 0.423)
+- Proteus/Interop/IpcProvider.cs: non-trivial 112; exact 3 (interface 1, idiomatic/forced 2, expressive 0); Jaccard 0.1156 (containment 0.261)
+- Proteus/Interop/PenumbraBridge.cs: non-trivial 5; exact 4 (interface 3, idiomatic/forced 1, expressive 0); Jaccard 0.0297 (containment 0.909)
+- Proteus/Plugin.cs: non-trivial 12; exact 2 (interface 1, idiomatic/forced 1, expressive 0); Jaccard 0.0220 (containment 0.226)
+- Proteus/Services/CompositorService.Carriers.cs: non-trivial 4; exact 2 (interface 2, idiomatic/forced 0, expressive 0); Jaccard 0.0254 (containment 0.827)
+- Proteus/Services/CompositorService.cs: non-trivial 4; exact 0; Jaccard 0.0193 (containment 0.516)
+- Proteus/Services/SidecarDiscoveryService.cs: non-trivial 5; exact 5 (interface 4, idiomatic/forced 1, expressive 0); Jaccard 0.0405 (containment 1.000)
+- Overall: non-trivial 175; exact 32 (interface 19, idiomatic/forced 13, expressive 0); Jaccard 0.2602 (containment 0.394)
+- Files at Jaccard >= 0.40: none
+Expressive hits: 0 (none)
+
+## Orchestrator (steps 5-7)
+
+Phases delivered: A
+
+### Step 5: Agent B
+
+- **Run 1 was void** (see "Agent B (run 1, void)"). One build command was piped through grep and head, outside the allowlist. Its edits were discarded unseen with `git checkout --` on the eight files and `git clean -f` on the new `IpcProvider.cs`.
+- **Run 2 is clean,** with every count at 0. It was committed as `9ae845ea`.
+  - `git status --short` listed only the eight mixed files, the new `Proteus/Interop/IpcProvider.cs` and the log.
+  - B named no other new file and made no Localization change.
+- **The extraction script was fixed** before run 1 was counted. It now parses content-Grep context lines (`path-N-text`) and `--` separators. Before the fix, 31 lines were reported as "unparseable" hits. None of them was a forbidden location.
+
+### Step 6: proof on the clean code
+
+- **The step-2 filter without the CleanRoom exclusions** gave 1032 passed, 0 failed and 0 skipped: the 1009 step-2 tests plus 23 NewSeam cases (7 in `IpcProviderSpecTests` and 16 refresh-parse cases). The skip set equals step 2's (empty), and there are no baselines.
+- **`git grep` for `CLEAN-ROOM HOLE` under `Proteus/`:** none.
+- **Blame at `9ae845ea`:**
+  - `-w -M -C`: contributor non-trivial 0; Caraxi `using` 3 (ColorTableEditor). No per-file change since `<R>`.
+  - `-w -M -C -C`: contributor non-trivial 0; Caraxi blank 6, `using` 204, namespace 3, brace 0, game fact 3. The one change since `<R>` is in `Proteus/Interop/IpcProvider.cs`: `using` +2, with the reason "a new file by B". B's new file header was copy-matched.
+
+### Step 7: Agent D
+
+- **First measurement** (B commit `9ae845ea`): 0 expressive matches.
+  - Of 175 non-trivial B lines, 32 match the removed set exactly: 19 interface, 13 idiomatic or forced.
+  - No file is at 0.40 Jaccard; the overall figure is 0.2602.
+  - No rewrite was needed, so this first measurement is also the last.
+- **One command is missing from D's own list** because it ran after D's append: `git -C E:/orca/workspaces/Proteus/licence-clean-room status --short`. D reported it.
+- **`T_A`** is the commit holding this section.
