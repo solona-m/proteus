@@ -144,12 +144,15 @@ public class TbseSizeSetPinLocalTests(ITestOutputHelper o)
         // equinox-legs-slits: Sheer's top is sized in "Chest size", the group the game draws it from (priority 1, over
         // "Content Type"), so its men's TBSE top is cut from that group's nearest size, Perky - Small, not Perky - Medium:
         // 114 folds before, 123 now, both over the site's drop limit; TBSE-X (113) and the legs (8, 14) as they were.
-        => Check("sheer", SizeSetCrossSexLocalTests.Sheer, SheerRows, SheerFiles, newlyMade: ["c0101e6010_top.mdl"]);
+        // featureless-bulge: Sheer's legs onto TBSE Gen A go onto it made featureless (its penis out, the owner's bulge in).
+        => Check("sheer", SizeSetCrossSexLocalTests.Sheer, SheerRows, SheerFiles, newlyMade: ["c0101e6010_top.mdl", "c0101e6107_dwn.mdl"]);
 
     [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Stormblessed, CrossSexRefitLocalTests.Bibo,
                    CrossSexRefitLocalTests.Tbse, CrossSexNudeLegsLocalTests.LavaBod, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-tbsex-nude-legs-4")]
     [Trait("Plan", "EDGE-tbsex-nude-legs-10")]
     public void Stormblessed_tbse_size_set_is_unchanged() // [AC-tbsex-nude-legs-4] [EDGE-tbsex-nude-legs-10]
-        => Check("stormblessed", SizeSetCrossSexLocalTests.Stormblessed, StormblessedRows, StormblessedFiles);
+        // featureless-bulge: Stormblessed's legs onto TBSE Gen A go onto it made featureless (69 -> 36 folds through the job).
+        => Check("stormblessed", SizeSetCrossSexLocalTests.Stormblessed, StormblessedRows, StormblessedFiles,
+                 newlyMade: ["c0101e0633_dwn.mdl"]);
 }
