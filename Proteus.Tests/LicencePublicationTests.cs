@@ -176,6 +176,8 @@ public class LicencePublicationTests
         // [AC-featureless-bulge-10] the shipped bulge is carved out under its own block, never under the Proteus Licence.
         Assert.Contains(rows, r => r[0] == "(embedded) Resources/lava_bulge.mdl" && r[1] == "carved-out" && r[2] == "lava_bulge");
         Assert.Matches(new Regex("^lava_bulge — featureless bulge mesh \\(carved out; not covered by the Proteus Licence\\)", RegexOptions.Multiline), notices);
+        Assert.Contains(rows, r => r[0] == "(embedded) Resources/tbse_bulge.json" && r[1] == "carved-out" && r[2] == "tbse_bulge");
+        Assert.Matches(new Regex("^tbse_bulge — featureless bulge for The Body SE \\(carved out; not covered by the Proteus Licence\\)", RegexOptions.Multiline), notices);
         Assert.DoesNotContain(rows, r => r[0] is "Luna.dll" or "Penumbra.Api.dll" or "Glamourer.Api.dll");
     }
 

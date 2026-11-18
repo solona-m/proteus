@@ -17,7 +17,7 @@ namespace Proteus.Tests;
 /// ship as a list of indices; no LavaBod geometry ships.
 /// </summary>
 [Trait("Speed", "Slow")]
-public class BulgeAssetLocalTests(ITestOutputHelper output)
+public partial class BulgeAssetLocalTests(ITestOutputHelper output)
 {
     internal const string Common64 = LocalData.Mods + ":LavaBod+ 2.2/common/64/c0201e0000_dwn.mdl";
 
