@@ -258,14 +258,30 @@ public class MatcapRowWriterTests
         using var f = new RowFixture(materialInOption: true);
         f.ColourOptions();
         var before = f.Snapshot();
-        var p = f.Prepare();
-        Assert.True(p.Ok);
-        // A crash after the redirects (the model not yet written): the entry stays pending.
-        MatcapWriter.AfterStep = s => { if (s == "redirects") throw new InvalidOperationException("crash"); };
-        try { MatcapWriter.Apply(f.ModRoot, p.Request!); }
-        finally { MatcapWriter.AfterStep = null; }
-        Assert.DoesNotContain(PenumbraModMeta.ReadContainerRedirects(f.ModRoot), r => r.GamePath.Contains("_mcut"));
-        Assert.Equal(before.Keys.Order(), f.Snapshot().Keys.Order());
+        Assert.True(f.Apply().Ok);
+        // A real crash leaves no rollback: files and every container's redirects placed, the model not yet written, the
+        // entry still pending. Recreate that state: pending again, the model back to its original bytes.
+        var path = MatcapRecord.PathOf(f.ModRoot);
+        var json = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        json["Materials"]![0]!["Pending"] = true;
+        File.WriteAllText(path, json.ToJsonString());
+        File.WriteAllBytes(MatcapWriter.Full(f.ModRoot, RowFixture.ModelRel), f.Model);
+        Assert.Contains(PenumbraModMeta.ReadContainerRedirects(f.ModRoot), r => r.GamePath.Contains("_mcut"));
+
+        var undo = MatcapWriter.Undo(f.ModRoot, RowFixture.ModelRel);
+        Assert.True(undo.Ok, undo.Message);
+        Assert.DoesNotContain(PenumbraModMeta.ReadContainerRedirects(f.ModRoot), r => r.GamePath.Contains("_mcut") || r.GamePath.Contains("_mcap"));
+        var after = f.Snapshot();
+        Assert.Equal(before.Keys.Order(), after.Keys.Order());
+        foreach (var (rel, sha) in before) Assert.True(sha == after[rel], $"{rel} differs after undo");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-row-28")]
+    public void Imported_piece_refused_in_row_mode()
+    {
+        using var f = new RowFixture(folder: SidecarDiscoveryService.ManagedModDir);
+        Assert.Equal(MatcapWriter.CodeManaged, f.Prepare().Code);
     }
 
     [Fact]

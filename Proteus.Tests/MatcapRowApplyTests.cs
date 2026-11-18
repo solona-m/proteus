@@ -48,7 +48,7 @@ internal sealed class RowFixture : IDisposable
     }
 
     public RowFixture(float? threshold = null, byte[]? normal = null, byte[]? index = null, bool materialInOption = false,
-                      byte[]? model = null)
+                      byte[]? model = null, string folder = "Row Mod")
     {
         Model = model ?? SyntheticModel.Build([], [new SyntheticModel.Mesh(Mat, new SyntheticModel.Sub(0, Corners: Corners()))],
                                               SyntheticModel.V6, (IReadOnlyList<string>?)null);
@@ -60,7 +60,7 @@ internal sealed class RowFixture : IDisposable
             [IndexPath] = ("tex/id.tex", index ?? Tex(IndexRgba())),
         };
         if (!materialInOption) published[MatPath()] = ("mat/top_a.mtrl", Material(threshold));
-        ModRoot = SyntheticMatcapMod.TargetMod(Mods, "Row Mod", published);
+        ModRoot = SyntheticMatcapMod.TargetMod(Mods, folder, published);
     }
 
     public void Dispose()

@@ -216,8 +216,12 @@ internal static class MatcapStudio
         Directory.CreateDirectory(env.TempDir);
         if (env.RowOnly > 0)
         {
+            // A cut name is skipped while any file of ours carries its stem (a kept, hand-edited "<stem>_2.mtrl" or cut normal
+            // included), so a new cut never writes over one.
+            var ours = Directory.Exists(filesDir) ? Directory.EnumerateFiles(filesDir).Select(Path.GetFileName).OfType<string>().ToList() : [];
             cutName = MatcapPlan.NewCutName(sources[0], token, taken,
-                c => MatcapPlan.MaterialGamePaths(target, c, publishedAll, folders).Any(gp => usedPaths.Contains(Norm(gp))));
+                c => MatcapPlan.MaterialGamePaths(target, c, publishedAll, folders).Any(gp => usedPaths.Contains(Norm(gp)))
+                     || ours.Any(f => f.StartsWith(MatcapWriter.StemOf(c) + "_", StringComparison.OrdinalIgnoreCase)));
             taken.Add(cutName);
             foreach (var gp in MatcapPlan.MaterialGamePaths(target, cutName, publishedAll, folders)) usedPaths.Add(Norm(gp));
             var (plan, refused) = MatcapRowCut.Make(new MatcapRowCut.Inputs(modRoot, target, sources[0],

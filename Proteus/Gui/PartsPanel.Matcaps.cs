@@ -235,8 +235,12 @@ public sealed partial class PartsPanel
         if (matcapRowOnly <= 0 || ModRoot() is not { } root || MatcapRowMaterial() is not { } mat) return false;
         var folder = Path.GetFileName(root.TrimEnd('\\', '/'));
         var meta = compositor.LastDiscovered.FirstOrDefault(e => string.Equals(e.ModDirectory, folder, StringComparison.OrdinalIgnoreCase))?.Metadata;
-        // Keyed by the metadata object itself (a new composite or edit replaces it), never by a value hash.
-        var key = $"{root}|{mat}|{(meta == null ? 0 : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(meta))}";
+        // The material files with colour rows, snapshotted here on the framework thread (the Colors window edits that
+        // dictionary on this thread) — the worker only reads the snapshot, and its contents key the cache.
+        var coloured = (meta?.ContentMaterials ?? [])
+            .Where(kv => kv.Value?.ColorTableRows is { Count: > 0 }).Select(kv => kv.Key.Replace('\\', '/'))
+            .Order(StringComparer.OrdinalIgnoreCase).ToList();
+        var key = $"{root}|{mat}|{string.Join("|", coloured)}";
         if (matcapRowFollow is { } c && c.Key == key) return c.Warn;
         if (matcapRowFollowTask is { IsCompleted: false }) return false;   // being read
         if (matcapRowFollowTask is { IsCompletedSuccessfully: true } done && done.Result.Key == key)
@@ -245,9 +249,10 @@ public sealed partial class PartsPanel
             return done.Result.Warn;
         }
         // The manifest read goes to a worker: the framework thread never waits on it.
+        var colouredSet = new HashSet<string>(coloured, StringComparer.OrdinalIgnoreCase);
         matcapRowFollowTask = Task.Run(() =>
         {
-            bool warn = meta != null && MatcapRowCut.FollowWarn(root, mat, f => meta.PeekMaterialSettings(f)?.ColorTableRows is { Count: > 0 });
+            bool warn = colouredSet.Count > 0 && MatcapRowCut.FollowWarn(root, mat, f => colouredSet.Contains(f));
             return (key, warn);
         });
         return false;
@@ -483,7 +488,7 @@ public sealed partial class PartsPanel
                 if (done.Result.States is { } states) matcapStates = states;
                 matcapManifestStamps = done.Result.Stamps;
             }
-            else log.Warning("[Proteus] matcap states: {0}", done.Exception?.GetBaseException().Message ?? "cancelled");
+            else log.Warning("[Proteus] matcap states: the check failed ({0}); it runs again shortly", done.Exception?.GetBaseException().GetType().Name ?? "cancelled");
             matcapStatesTask = null;
         }
         if (root != null && MatcapStatesSchedule.Due(Environment.TickCount64, matcapStatesCheckedAt, matcapStatesTask == null))
