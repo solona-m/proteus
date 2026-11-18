@@ -127,6 +127,14 @@ public sealed partial class PartsPanel
         PumpMatcapPreview();
     }
 
+    /// <summary>No row picked (and the Row A / Row B toggles off): the matcap goes on the ticked parts, whole.</summary>
+    private void ClearMatcapRow()
+    {
+        if (matcapRowOnly == 0 && !matcapSubA && !matcapSubB) return;
+        (matcapSubA, matcapSubB) = (false, false);
+        SetMatcapRow(0, SubRowPick.Both);
+    }
+
     /// <summary>
     /// The parts Apply and the click preview cover: the ticked ones; or, with a row picked and nothing ticked, every whole
     /// submesh of the row material that can take a matcap (<see cref="MatcapPlan.RowPool"/>) — the row picks the pixels,
@@ -169,7 +177,9 @@ public sealed partial class PartsPanel
     private void DrawMatcapRowPicker()
     {
         var s = Strings.Matcap;
-        if (parts == null) return;
+        // Wherever the rows can't be shown (no model, the game's own gear, a material without colour rows), no row is
+        // picked: a pick made on another model must not linger where nothing can show or clear it.
+        if (parts == null) { ClearMatcapRow(); return; }
 
         // Several materials and nothing ticked: pick which one the row is on.
         bool anyTicked = parts.Parts.Any(p => ticked.Contains(p.Label));
@@ -190,7 +200,7 @@ public sealed partial class PartsPanel
 
         // The rows of the material, read once per (mod, model, material) on a worker.
         var root = ModRoot();
-        if (mat == null || root == null || modelIndex < 0 || modelIndex >= models.Count) return;
+        if (mat == null || root == null || modelIndex < 0 || modelIndex >= models.Count) { ClearMatcapRow(); return; }
         var model = models[modelIndex];
         var key = $"{root}|{model.File}|{mat}";
         if (key != matcapRowInfoKey)
@@ -207,6 +217,7 @@ public sealed partial class PartsPanel
         if (matcapRowInfo is not { IsCompleted: true } task) { ImGui.TextDisabled(s.RowReading); return; }
         if (task.Result is not { } info)
         {
+            ClearMatcapRow();
             ProteusStyle.DisabledWrapped(s.RowNoRows);
             return;
         }

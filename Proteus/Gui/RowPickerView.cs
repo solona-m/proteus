@@ -48,6 +48,14 @@ internal static class RowPickerView
     public static Proteus.Services.SubRowPick Sub(bool a, bool b) =>
         a == b ? Proteus.Services.SubRowPick.Both : a ? Proteus.Services.SubRowPick.A : Proteus.Services.SubRowPick.B;
 
+    /// <summary>The toggles with a column the index never uses (<paramref name="usedSubRow"/> names the only one) off.</summary>
+    public static (bool A, bool B) Usable(bool a, bool b, string? usedSubRow) => usedSubRow switch
+    {
+        "A" => (a, false),
+        "B" => (false, b),
+        _ => (a, b),
+    };
+
     private static int LandOne(int selected, IReadOnlyList<int> visible, bool showAll, Func<int, bool> inUse)
     {
         if (selected is <= 0 or > 16)

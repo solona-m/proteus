@@ -379,6 +379,22 @@ public class MatcapRowUnitTests
     }
 
     [Fact]
+    public void A_row_picked_elsewhere_is_cleared_wherever_the_rows_cant_be_shown()
+    {
+        // No checkbox: the row buttons are the only way to unpick a row, so every early return that draws none — no model,
+        // the game's own gear (no mod root), a material without colour rows — clears it. The "Reading…" frame keeps it.
+        var panel = Source("Gui/PartsPanel.Matcaps.cs");
+        var picker = panel[panel.IndexOf("private void DrawMatcapRowPicker()", StringComparison.Ordinal)..];
+        picker = picker[..picker.IndexOf("ColorTableEditor.DrawRowPicker(", StringComparison.Ordinal)];
+        Assert.Contains("if (parts == null) { ClearMatcapRow(); return; }", picker);
+        Assert.Contains("|| root == null || modelIndex < 0 || modelIndex >= models.Count) { ClearMatcapRow(); return; }", picker);
+        int noRows = picker.IndexOf("if (task.Result is not { } info)", StringComparison.Ordinal);
+        Assert.True(noRows > 0 && picker.IndexOf("ClearMatcapRow();", noRows, StringComparison.Ordinal) > noRows);
+        Assert.Contains("{ ImGui.TextDisabled(s.RowReading); return; }", picker);
+        Assert.Contains("SetMatcapRow(0, SubRowPick.Both);", panel[panel.IndexOf("private void ClearMatcapRow()", StringComparison.Ordinal)..]);
+    }
+
+    [Fact]
     [Trait("Plan", "AC-matcap-row-1")]
     [Trait("Plan", "AC-matcap-row-12")]
     [Trait("Plan", "EDGE-matcap-row-44")]

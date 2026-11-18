@@ -42,6 +42,16 @@ public class RowPickerViewTests
     }
 
     [Fact]
+    public void A_toggle_for_a_column_the_index_never_uses_doesnt_count()
+    {
+        Assert.Equal((true, false), RowPickerView.Usable(true, true, "A"));
+        Assert.Equal((false, false), RowPickerView.Usable(false, true, "A"));   // B left on from another material: both, not B
+        Assert.Equal((false, true), RowPickerView.Usable(true, true, "B"));
+        Assert.Equal((true, true), RowPickerView.Usable(true, true, null));
+        Assert.Equal(SubRowPick.Both, RowPickerView.Sub(RowPickerView.Usable(false, true, "A").A, RowPickerView.Usable(false, true, "A").B));
+    }
+
+    [Fact]
     public void A_sub_row_hover_lights_one_game_row_a_row_hover_both()
     {
         Assert.Equal(ColorRowMask.Pair(16), new RowHoverOffer("s", 16, HighlightRoute.Gear, ["m.mtrl"], null).GearMask);

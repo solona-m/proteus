@@ -465,6 +465,8 @@ public static partial class ColorTableEditor
         bool beforeA = subA, beforeB = subB;
         bool onlyA = string.Equals(usedSubRow, "A", StringComparison.Ordinal);
         bool onlyB = string.Equals(usedSubRow, "B", StringComparison.Ordinal);
+        // A toggle left on from another material, for a column this index never uses, isn't drawn: it must not count.
+        (subA, subB) = RowPickerView.Usable(subA, subB, usedSubRow);
         var mode = RenderModeInference.ModeOf(OverlayLayer.Gear, OverlayDescriptor.DefaultGearShader);
         DrawRowButtons(idScope, rows, usedRows, mode, materialLeaves, null, ref selectedRow, false, onlyA, onlyB, allowNone: true);
 
@@ -500,7 +502,7 @@ public static partial class ColorTableEditor
         return selectedRow != before || subA != beforeA || subB != beforeB;
     }
 
-    /// <summary>A <see cref="DrawRowPicker"/> drew since the last call: its hover and Glow pin must be kept, not cleared,
+    /// <summary>A <see cref="DrawRowPicker"/> drew since the last call: its hover must be kept, not cleared,
     /// even while the Colors window is closed. Reading it resets it, once per frame.</summary>
     internal static bool TakePickerDrew()
     {
