@@ -897,7 +897,7 @@ The shipped-zip cross-check was done instead by the orchestrator at C2. All 21 e
 
 ## Orchestrator (step 9: final)
 
-- **Critic pass and re-merge.** `<critic-pass-commit>` is `1abd8e8a` (round 5; the record-test exemption was narrowed in rounds 4 and 5 after `b1cd19ba`). `test` was unchanged since `T8` (`1e2c5cc6`, equal to origin/test after a fresh fetch), so there is no step-9 re-merge.
+- **Critic pass and re-merge.** `<critic-pass-commit>` is `9f5d2034` (round 7; after `b1cd19ba` the record-test exemption was narrowed in rounds 4 and 5, and the AGPL scan fixed in rounds 6 and 7). `test` was unchanged since `T8` (`1e2c5cc6`, equal to origin/test after a fresh fetch), so there is no step-9 re-merge.
 - **Agent D.** B's commits haven't changed since step 7, so D was not re-run. B2's and the orchestrator's later commits are not D's input.
 - **Licence files.** `git diff test...HEAD --name-only` lists only the D10 sets of Phases A, B and C. The licence and notice files changed only in Phase C (and the step-8 fixes): `LICENSE`, `XivLiveMesh/LICENSE`, `XivLiveMesh/NOTICE.md`, `THIRD_PARTY_NOTICES.txt` and `docs/LICENSE-DRAFT.md` (removed).
 - **self-check 1 (whole session): 0 beyond disclosed exceptions.**
@@ -918,11 +918,16 @@ The shipped-zip cross-check was done instead by the orchestrator at C2. All 21 e
 - **The final bump:** 1475, which is max(branch 1474, test 1473) + 1.
 - **Phases delivered:** A, B and C, as the line in the steps 5–7 section says.
 
+
+- **Blame on the merged tip `4fafbc7c`** ("merged with test"):
+  - `-w -M -C`: contributor non-trivial 0, no change.
+  - `-w -M -C -C`: contributor non-trivial 0. Caraxi trivial: blank 6, using 206, namespace 3, game fact 3. No change since the Phase C tip.
+
 ## Code-critic
 
 Start commit: `4fafbc7c`. Extracted from its transcript by agent ID (extract_contrib.py, role b).
 
-Five rounds on the D8 clean diffs and the fix diffs: round 1 FAIL at 4fafbc7c (tests and records only; every spec section 12 row and contract section 4 row confirmed in the code); round 2 FAIL at 021053f8 (ND-6 incomplete); round 3 PASS at b1cd19ba; round 4 FAIL at d2f415ec (the blocked-step exemption in the record test too broad); round 5 PASS at 1abd8e8a, the critic-pass commit. A path-narrowed post-removal diff (diff b1cd19ba HEAD -- Proteus.Tests) is accepted as the allowlisted post-removal diff form.
+Seven rounds on the D8 clean diffs and the fix diffs: round 1 FAIL at 4fafbc7c (tests and records only; every spec section 12 row and contract section 4 row confirmed in the code); round 2 FAIL at 021053f8 (ND-6 incomplete); round 3 PASS at b1cd19ba; round 4 FAIL at d2f415ec (record-test exemption too broad); round 5 PASS at 1abd8e8a; round 6 FAIL at 63e9d843 (the AGPL scan's /.claude/ skip too broad; that fix followed the quick suite on merged test, 8868 passed, 8 skipped, 1 failed: No_file_claims_AGPL_for_Proteus_code walked the agents' nested worktrees under .claude/worktrees in the owner's checkout); round 7 PASS at 9f5d2034, the critic-pass commit. A path-narrowed post-removal diff (diff <sha> HEAD -- Proteus.Tests) is accepted as the allowlisted post-removal diff form.
 
 Opened:
 - Read docs/contrib-clean-room-plan.md
@@ -979,10 +984,11 @@ Shell commands:
 - git -C E:/orca/workspaces/Proteus/licence-clean-room diff b1cd19ba HEAD -- Proteus.Tests
 - git -C E:/orca/workspaces/Proteus/licence-clean-room diff b1cd19ba HEAD -- Proteus.Tests
 - git -C E:/orca/workspaces/Proteus/licence-clean-room log --format=%h%x20%an%x20%s test..HEAD
+- git -C E:/orca/workspaces/Proteus/licence-clean-room diff 68b8942b HEAD -- Proteus.Tests
+- git -C E:/orca/workspaces/Proteus/licence-clean-room log --format=%h%x20%an%x20%s test..HEAD
+- git -C E:/orca/workspaces/Proteus/licence-clean-room diff 68b8942b HEAD -- Proteus.Tests
+- git -C E:/orca/workspaces/Proteus/licence-clean-room log --format=%h%x20%an%x20%s test..HEAD
 Sub-agents: none
 Grep without line numbers: 0
 Shell commands outside the allowlist: 0
 forbidden locations in listing/search results: 0
-- **Blame on the merged tip `4fafbc7c`** ("merged with test"):
-  - `-w -M -C`: contributor non-trivial 0, no change.
-  - `-w -M -C -C`: contributor non-trivial 0. Caraxi trivial: blank 6, using 206, namespace 3, game fact 3. No change since the Phase C tip.
