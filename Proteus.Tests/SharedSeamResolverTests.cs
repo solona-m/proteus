@@ -182,6 +182,17 @@ public sealed class SharedSeamResolverTests : IDisposable
         var gate = Gate(_ => Pick("Body"), notes: notes, redirects: redirects);
         Assert.Equal("top/a.mdl", gate.Top!.File);
         Assert.Contains(notes, n => n.Contains("missing.mdl", StringComparison.Ordinal));
+
+        // A missing file is so until its stamp changes: the answer is kept. A file there but locked now is not.
+        var onlyMissing = Gate(_ => Pick("Body"), redirects: Redirects((TopPath, "top/missing.mdl", "Top Size / Missing"),
+                                                                       (LegsPath, "legs/a.mdl", "Leg Size / A")));
+        Assert.False(onlyMissing.Transient);
+        using (new FileStream(Path.Combine(root, "legs/a.mdl"), FileMode.Open, FileAccess.Read, FileShare.None))   // the only legs file
+        {
+            var locked = Gate(_ => Pick("Body"));
+            Assert.Null(locked.Top);
+            Assert.True(locked.Transient);
+        }
     }
 
     [Fact]
