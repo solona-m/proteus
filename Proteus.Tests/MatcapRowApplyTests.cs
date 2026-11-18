@@ -446,7 +446,7 @@ public class MatcapRowApplyTests
     [InlineData("row-no-normal")]
     [InlineData("row-ambiguous-option")]
     [InlineData("row-file-swap")]
-    [InlineData("row-owned-by-feature")]
+    [Trait("Plan", "EDGE-upgrade-vs-matcap-15")]
     public void Row_refusals_write_nothing(string code)
     {
         using var f = new RowFixture(materialInOption: code == "row-ambiguous-option");
@@ -464,11 +464,6 @@ public class MatcapRowApplyTests
             case "row-ambiguous-option": f.ColourOptions(sameName: true); break;
             case "row-file-swap":
                 f.EditDefaults(swaps => swaps[RowFixture.NormalPath] = "chara/x/other_n.tex", "FileSwaps");
-                break;
-            case "row-owned-by-feature":
-                var rec = Path.Combine(f.ModRoot, "Proteus", ShaderUpgradeWriter.RecordFile);
-                Directory.CreateDirectory(Path.GetDirectoryName(rec)!);
-                File.WriteAllText(rec, "{\"Files\":[{\"Rel\":\"mat/top_a.mtrl\"}]}");
                 break;
         }
         var before = f.Snapshot();

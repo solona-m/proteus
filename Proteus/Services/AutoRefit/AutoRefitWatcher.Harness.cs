@@ -33,9 +33,26 @@ public sealed partial class AutoRefitWatcher
         if (v >= 0) on = v == 1;
     }
 
+    /// <summary>The pubes override: −1 none, 0 off, 1 on.</summary>
+    private volatile int harnessPubesOverride = -1;
+
+    /// <summary>The session override of <see cref="Configuration.AutoRefitPubes"/>: null for none (the user's setting
+    /// decides). Never saved.</summary>
+    internal bool? HarnessPubesOverride
+    {
+        get => harnessPubesOverride switch { 1 => true, 0 => false, _ => null };
+        set => harnessPubesOverride = value switch { true => 1, false => 0, null => -1 };
+    }
+
+    partial void HarnessPubes(ref bool pubes)
+    {
+        int v = harnessPubesOverride;
+        if (v >= 0) pubes = v == 1;
+    }
+
     partial void HarnessNoteRefit(string modDir)
     {
-        if (harnessOverride >= 0) harnessRefits.TryAdd(modDir, 0);
+        if (harnessOverride >= 0 || harnessPubesOverride >= 0) harnessRefits.TryAdd(modDir, 0);
     }
 
     /// <summary>The mods refitted while the override stood, in name order; the list is emptied.</summary>

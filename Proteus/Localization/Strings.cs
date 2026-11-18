@@ -396,6 +396,13 @@ public sealed class SizeSetStrings
         "On: each body's piercings come in with its skin where the piece shows that skin. Nails always come along.\n"
       + "Sizes already made change only when made again.");
 
+    public readonly string Pubes = ProteusLoc.Localize("SizeSet.Pubes", "Keep the new bodies' pubes") + "###sizeSetPubes";
+
+    public readonly string PubesTip = ProteusLoc.Localize("SizeSet.Pubes.Tip",
+        "On: each body's pubes (its crotch mesh and pubic hair) come in with its skin where the piece shows that skin and "
+      + "no cloth covers it.\n"
+      + "Sizes already made change only when made again.");
+
     public readonly string KeepHiddenSkin = ProteusLoc.Localize("SizeSet.KeepHiddenSkin", "Keep hidden skin")
                                           + "###sizeSetKeepHiddenSkin";
 
@@ -625,6 +632,13 @@ public sealed class AutoRefitStrings
 
     public readonly string PiercingsTip = ProteusLoc.Localize("AutoRefit.Piercings.Tip",
         "Off: gear is refitted without your body mod's piercings. Nails always come along.\n"
+      + "Gear already refitted keeps what it was made with; undo and refit what you're wearing to change it.");
+
+    public readonly string Pubes = ProteusLoc.Localize("AutoRefit.Pubes.Label",
+        "Keep my body's pubes on refitted gear") + "###autoRefitPubes";
+
+    public readonly string PubesTip = ProteusLoc.Localize("AutoRefit.Pubes.Tip",
+        "Off: gear is refitted without your body mod's pubes (its crotch mesh and pubic hair).\n"
       + "Gear already refitted keeps what it was made with; undo and refit what you're wearing to change it.");
 
     public readonly string Collection = ProteusLoc.Localize("AutoRefit.Collection", "Collection");
@@ -1529,6 +1543,8 @@ public sealed class SettingsStrings
         "a Proteus pack (Proteus draws it itself)");
     public readonly string GearShadersReasonDeclined = ProteusLoc.Localize("Settings.GearShaders.Reason.Declined",
         "undone by you");
+    public readonly string GearShadersReasonRowMatcap = ProteusLoc.Localize("Settings.GearShaders.Reason.RowMatcap",
+        "a row matcap was cut from its earlier upgrade (undo the matcap first)");
     public readonly string GearShadersUpgradeNow = ProteusLoc.Localize("Settings.GearShaders.UpgradeNow",
         "Upgrade what I'm wearing now") + "###shaderUpgradeNow";
     public readonly string GearShadersUpgradeNowTip = ProteusLoc.Localize("Settings.GearShaders.UpgradeNow.Tip",
@@ -3747,6 +3763,13 @@ public sealed class PartsStrings
     public readonly string RetargetPiercingsTip = ProteusLoc.Localize("Parts.Retarget.Piercings.Tip",
         "On: the new body's piercings come in with its skin where the garment shows that skin.\n"
       + "Nails always come along.");
+
+    public readonly string RetargetPubes = ProteusLoc.Localize("Parts.Retarget.Pubes", "Keep the new body's pubes")
+                                         + "###partsRetargetPubes";
+
+    public readonly string RetargetPubesTip = ProteusLoc.Localize("Parts.Retarget.Pubes.Tip",
+        "On: the new body's pubes (its crotch mesh and pubic hair) come in with its skin where the garment shows that "
+      + "skin and no cloth covers it.");
 
     public readonly string RetargetCutForcedTip = ProteusLoc.Localize("Parts.Retarget.CutForcedTip",
         "Always on while the shoe keeps its own foot or the glove its own hand: otherwise the whole new legs or arms "

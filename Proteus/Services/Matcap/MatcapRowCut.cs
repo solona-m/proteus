@@ -31,7 +31,7 @@ internal static class MatcapRowCut
     public const float CutThreshold = 0.5f;
 
     public const string CodeEmpty = "row-empty", CodeShader = "row-shader", CodeNoNormal = "row-no-normal", CodeBake = "row-bake",
-                        CodeTextureVaries = "row-texture-varies", CodeFileSwap = "row-file-swap", CodeOwned = "row-owned-by-feature",
+                        CodeTextureVaries = "row-texture-varies", CodeFileSwap = "row-file-swap",
                         CodeAmbiguous = "row-ambiguous-option", CodeUnreadable = "row-unreadable", CodeNoSource = "row-no-source";
 
     public sealed record Inputs(string ModRoot, MatcapPlan.Target Target, string Source, IReadOnlyCollection<int> Folders,
@@ -93,8 +93,10 @@ internal static class MatcapRowCut
             return Refuse(CodeFileSwap, string.Format(ProteusLoc.Localize("Matcap.Refused.RowFileSwap.Fmt",
                 "{0} swaps this part's material for another file, so a row matcap can't follow it."), Describe(swap.Container)));
 
-        var shaderUpgradeFiles = (ShaderUpgradeWriter.ReadRecord(i.ModRoot)?.Files ?? [])
-            .SelectMany(e => e.Mask is { } m ? new[] { e.Rel, m.Rel } : [e.Rel]).ToList();
+        // A material the gear shader upgrade rewrote is cut like any other (for old gear it is the only way onto
+        // character.shpk); the upgrade in turn won't undo a file a row matcap depends on (Dependencies). Its declines
+        // only shape the refusal for a part still on the old shader.
+        var declined = i.Env.GearShadersOn is true ? ShaderUpgradeWriter.ReadRecord(i.ModRoot)?.Declined ?? [] : [];
 
         // ── per folder: the case and the sources ──
         var sources = new List<(int Folder, string Case, PenumbraModMeta.ContainerRef? Container, string? File, byte[] Bytes, string GamePath)>();
@@ -152,17 +154,12 @@ internal static class MatcapRowCut
             var where = s.Container is { } c ? Describe(c) : ProteusLoc.Localize("Matcap.Row.GameFile", "the game's own file");
             var h = MatcapMaterial.ReadHeader(s.Bytes);
             if (h == null || !string.Equals(h.Shader, CutShader, StringComparison.OrdinalIgnoreCase))
-                return Refuse(CodeShader, string.Format(ProteusLoc.Localize("Matcap.Refused.RowShader.Fmt",
-                    "A row matcap needs the part on character.shpk, and {0} uses {1}."), where, h?.Shader ?? "?"));
+                return Refuse(CodeShader, ShaderRefusal(where, h?.Shader, s.File, i.Env.GearShadersOn, declined));
             var normalPath = h.TextureOf(MatcapMaterial.SamplerNormal);
             if (string.IsNullOrEmpty(normalPath))
                 return Refuse(CodeNoNormal, ProteusLoc.Localize("Matcap.Refused.RowNoNormal",
                     "This part's material has no normal map, which a row matcap cuts by."));
             var indexPath = h.TextureOf(ShaderUpgradePlan.SamplerIndex);
-
-            if (s.File != null && shaderUpgradeFiles.Any(r => PenumbraModMeta.SameFile(r, s.File)))
-                return Refuse(CodeOwned, string.Format(ProteusLoc.Localize("Matcap.Refused.RowOwnedByFeature.Fmt",
-                    "{0} was rewritten by Proteus's gear shader upgrade. Undo that first, then add the row matcap."), s.File));
 
             // The textures as this source's container sees them, and no other container serving them differently.
             var normal = ResolveTexture(i, redirects, s.Container, normalPath);
@@ -177,9 +174,6 @@ internal static class MatcapRowCut
             foreach (var (path, got) in new[] { (normalPath, normal), (indexPath ?? "", index ?? default) })
             {
                 if (path.Length == 0) continue;
-                if (shaderUpgradeFiles.Any(r => got.File != null && PenumbraModMeta.SameFile(r, got.File)))
-                    return Refuse(CodeOwned, string.Format(ProteusLoc.Localize("Matcap.Refused.RowOwnedByFeature.Fmt",
-                        "{0} was rewritten by Proteus's gear shader upgrade. Undo that first, then add the row matcap."), got.File));
                 if (swaps.FirstOrDefault(sw => PenumbraModMeta.SameFile(sw.GamePath, path)) is { GamePath.Length: > 0 } tsw)
                     return Refuse(CodeFileSwap, string.Format(ProteusLoc.Localize("Matcap.Refused.RowMapSwap.Fmt",
                         "{0} swaps this part's normal or index map for another file, so a row matcap can't follow it."), Describe(tsw.Container)));
@@ -405,6 +399,203 @@ internal static class MatcapRowCut
             if (recordedCase == MatcapRecord.RowFingerprint.CaseContainer && cutHolders.Count > 0) return "container";
         }
         return null;
+    }
+
+    // ── what recorded row matcaps depend on (asked by the gear shader upgrade) ──
+
+    /// <summary>
+    /// Why the matcap that holds a file can or can't simply be undone, as its own Undo would decide
+    /// (<see cref="MatcapWriter.ClassifyForUndo"/>): a later feature changed its model, the model was edited on top, refits
+    /// or hair ports still draw it (its Undo already ran and kept it), or none of these (an Undo clears it).
+    /// </summary>
+    internal enum RowHoldKind { Active, KeptForRegenerated, Edited, LaterFeature }
+
+    /// <summary>A hold, with the model it names and (for <see cref="RowHoldKind.LaterFeature"/>) the later feature.</summary>
+    internal sealed record RowHold(RowHoldKind Kind, string Model, string? Later);
+
+    /// <summary>
+    /// One recorded row matcap's dependencies: the mod files its cut was made from, the textures its cut files name, and its
+    /// own models (classified only when its hold is asked for).
+    /// </summary>
+    internal sealed record RowEntryDeps(HashSet<string> Files, HashSet<string> CutTextures, IReadOnlyList<string> Models);
+
+    /// <summary>What every recorded row matcap depends on; <see cref="Unreadable"/> holds everything.</summary>
+    internal sealed class RowDependencies(bool unreadable, IReadOnlyList<RowEntryDeps> entries, Func<RowEntryDeps, RowHold> hold,
+                                          bool manifestUnreadable = false)
+    {
+        public bool Unreadable { get; } = unreadable;
+        /// <summary>Row matcaps are recorded but the mod's meta.json can't be read, so which option files their cuts follow
+        /// can't be told: hold everything, as for an unreadable record.</summary>
+        public bool ManifestUnreadable { get; } = manifestUnreadable;
+        public IReadOnlyList<RowEntryDeps> Entries { get; } = entries;
+
+        /// <summary>
+        /// The hold on a gear shader upgrade entry, or null: its material or mask is a file a cut was made from, or its
+        /// mask's game path is named by a recorded cut file (a content-addressed mask shared with a sibling). Only the
+        /// matching row matcaps are classified; of several, the one that needs the most done first speaks.
+        /// </summary>
+        public RowHold? HoldOf(string rel, string? maskRel, string? maskGamePath)
+        {
+            rel = MeshVolumeService.Rel(rel);
+            var mr = string.IsNullOrEmpty(maskRel) ? null : MeshVolumeService.Rel(maskRel);
+            var mg = string.IsNullOrEmpty(maskGamePath) ? null : NormGamePath(maskGamePath);
+            RowHold? best = null;
+            foreach (var e in Entries)
+            {
+                if (!(e.Files.Contains(rel) || (mr != null && e.Files.Contains(mr)) || (mg != null && e.CutTextures.Contains(mg)))) continue;
+                var h = hold(e);
+                if (best == null || Rank(h.Kind) > Rank(best.Kind)) best = h;
+            }
+            return best;
+        }
+
+        private static int Rank(RowHoldKind k) => k switch
+        {
+            RowHoldKind.LaterFeature => 3, RowHoldKind.Edited => 2, RowHoldKind.KeptForRegenerated => 1, _ => 0,
+        };
+    }
+
+    /// <summary>Test seam: called for every model <see cref="Dependencies"/> classifies (only with <c>classify</c>).</summary>
+    [ThreadStatic] internal static Action<string>? AfterClassify;
+
+    private static string NormGamePath(string p) => p.Replace('\\', '/').ToLowerInvariant();
+
+    /// <summary>A gear item from a material game path (<c>chara/accessory/a0153/material/v0001/mt_c0201a0153_wrs_…</c>).</summary>
+    private static VariantRepointPlan.Item? ItemOfMaterialPath(string gamePath)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(gamePath.Replace('\\', '/'),
+            @"chara/(?:equipment|accessory)/[ea](\d{4})/material/v\d{4}/mt_c\d{4}[ea]\d{4}_([a-z]{3})",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return m.Success && int.TryParse(m.Groups[1].Value, out var id) ? VariantRepointPlan.ItemFor(m.Groups[2].Value.ToLowerInvariant(), id) : null;
+    }
+
+    /// <summary>
+    /// What recorded row matcaps depend on, per entry (Pending and superseded ones too: only the matcap pane's Undo or
+    /// Forget drops them): every mod file a cut was made from (source material, normal, index); every file a container
+    /// that holds a cut redirects at the item's own material path of the same name (byte-identical files folded into one
+    /// cut); and every texture a cut file names. With <paramref name="classify"/>, a matching entry's own models are
+    /// classified when its hold is asked for, as its Undo would (<see cref="MatcapWriter.ClassifyForUndo"/>), to say what
+    /// has to happen first; otherwise no model is read. Pure: no locks, no writes; IO failures read as "not there". Record
+    /// paths are contained by <see cref="MatcapRecord.Read"/>; it ships in the mod, so null lists are read as empty.
+    /// </summary>
+    public static RowDependencies Dependencies(string modRoot, bool classify)
+    {
+        var record = MatcapRecord.Read(modRoot);
+        if (record.Unreadable) return new RowDependencies(true, [], _ => new RowHold(RowHoldKind.Active, "", null));
+        RowHold Hold(RowEntryDeps e) => classify ? Classify(modRoot, record, e.Models)
+                                                 : new RowHold(RowHoldKind.Active, e.Models.FirstOrDefault() ?? "", null);
+        var rows = record.Materials.Where(m => m?.Row != null).ToList();
+        if (rows.Count == 0) return new RowDependencies(false, [], Hold);
+        var redirects = PenumbraModMeta.TryReadContainerRedirects(modRoot);   // null: rule (4) is skipped, the rest stands
+        var entries = new List<RowEntryDeps>();
+        foreach (var mat in rows)
+        {
+            var row = mat.Row!;
+            var rowFiles = (row.Files ?? []).Where(f => f != null).ToList();
+            var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var textures = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var f in rowFiles)
+                foreach (var s in new[] { f.Source, f.Normal, f.Index })
+                    if (s is { Game: false, File: { Length: > 0 } sf }) files.Add(MeshVolumeService.Rel(sf));
+
+            var models = (mat.Meshes ?? []).Concat(row.CutMeshes ?? []).Select(x => x?.Model ?? "")
+                            .Where(x => x.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var cutRedirects = rowFiles.SelectMany(f => f.Redirects ?? []).Where(r => r != null).ToList();
+            // Rule (4): what each cut redirect's container serves at the item's own material path of the source's name. The
+            // item from a recorded model, else from the cut's own recorded game paths (a kept entry's models are gone).
+            var item = models.Select(m => record.Model(m)?.GamePath).OfType<string>()
+                             .Select(gp => MatcapPlan.TargetOf(gp, out _)?.Item).FirstOrDefault(x => x != null)
+                       ?? cutRedirects.Select(r => ItemOfMaterialPath(r.GamePath ?? "")).FirstOrDefault(x => x != null);
+            if (item is { } it && redirects != null && !string.IsNullOrEmpty(row.Cut))
+            {
+                var src = SourceNameOf(row.Cut).Replace('\\', '/');
+                var leaf = src[(src.LastIndexOf('/') + 1)..];
+                foreach (var rr in cutRedirects)
+                {
+                    var c = new PenumbraModMeta.ContainerRef(rr.Group ?? "", rr.Option, rr.Index);
+                    foreach (var r in redirects)
+                    {
+                        if (!r.Container.SameAs(c)) continue;
+                        var gp = r.GamePath.Replace('\\', '/');
+                        if (!string.Equals(gp[(gp.LastIndexOf('/') + 1)..], leaf, StringComparison.OrdinalIgnoreCase)) continue;
+                        var m = System.Text.RegularExpressions.Regex.Match(gp, @"/v(\d{4})/[^/]+$");
+                        if (m.Success && int.TryParse(m.Groups[1].Value, out var folder) && folder > 0
+                            && gp.StartsWith(it.MaterialDir(folder), StringComparison.OrdinalIgnoreCase))
+                            files.Add(MeshVolumeService.Rel(r.File));
+                    }
+                }
+            }
+
+            foreach (var f in rowFiles)
+                if (!string.IsNullOrEmpty(f.File) && ReadModFile(modRoot, f.File) is { } bytes && MatcapMaterial.ReadHeader(bytes) is { } h)
+                    foreach (var t in h.Textures)
+                        if (!string.IsNullOrEmpty(t)) textures.Add(NormGamePath(t));
+
+            entries.Add(new RowEntryDeps(files, textures, models));
+        }
+        return new RowDependencies(false, entries, Hold, manifestUnreadable: redirects == null);
+    }
+
+    /// <summary>The hold's kind from the entry's own models, by priority: a later feature, edited on top, every model
+    /// already undone (kept for refits or ports), else active (its Undo would succeed).</summary>
+    private static RowHold Classify(string modRoot, MatcapRecord record, IReadOnlyList<string> models)
+    {
+        var classes = new List<(string Model, MatcapWriter.UndoClass Class, string? Later)>();
+        foreach (var m in models)
+        {
+            AfterClassify?.Invoke(m);
+            try
+            {
+                var c = MatcapWriter.ClassifyForUndo(modRoot, record, m, forgetOnly: false, out var later, out _);
+                classes.Add((m, c, later));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { classes.Add((m, MatcapWriter.UndoClass.Restore, null)); }
+        }
+        if (classes.FirstOrDefault(x => x.Class == MatcapWriter.UndoClass.LaterFeature) is { Model: not null } lf)
+            return new RowHold(RowHoldKind.LaterFeature, lf.Model, lf.Later);
+        if (classes.FirstOrDefault(x => x.Class == MatcapWriter.UndoClass.Edited) is { Model: not null } ed)
+            return new RowHold(RowHoldKind.Edited, ed.Model, null);
+        if (classes.Count > 0 && classes.All(x => x.Class == MatcapWriter.UndoClass.AlreadyUndone))
+            return new RowHold(RowHoldKind.KeptForRegenerated, classes[0].Model, null);
+        return new RowHold(RowHoldKind.Active, models.FirstOrDefault() ?? "", null);
+    }
+
+    /// <summary>The shader every legacy gear material uses until the gear shader upgrade moves it to <see cref="CutShader"/>.</summary>
+    public const string LegacyShader = "characterlegacy.shpk";
+
+    /// <summary>
+    /// Why a source's shader refuses the cut. A part still on <see cref="LegacyShader"/> (a mod file, while the Gear shaders
+    /// setting is known) is told how the upgrade gets it onto <see cref="CutShader"/>: switch Gear shaders on, use "Upgrade
+    /// what I'm wearing now" for a piece the user undid, or wear it once. Everything else keeps the plain text.
+    /// </summary>
+    internal static string ShaderRefusal(string where, string? shader, string? file, bool? gearShadersOn, IReadOnlyCollection<string> declined)
+    {
+        var text = LegacyShaderRefusal(where, shader, file, gearShadersOn, declined);
+        // The place leads these sentences and reads "the option …": a sentence starts with a capital.
+        return text.Length > 0 && char.IsLower(text[0])
+            ? char.ToUpper(text[0], System.Globalization.CultureInfo.CurrentCulture) + text[1..] : text;
+    }
+
+    private static string LegacyShaderRefusal(string where, string? shader, string? file, bool? gearShadersOn, IReadOnlyCollection<string> declined)
+    {
+        if (file != null && gearShadersOn is { } on && string.Equals(shader, LegacyShader, StringComparison.OrdinalIgnoreCase))
+        {
+            // "Settings > Gear shaders" in the user's language, from the tab and section names themselves.
+            var section = $"{ProteusLoc.Localize("Tab.Settings", "Settings")} > {ProteusLoc.Localize("Settings.Section.GearShaders", "Gear shaders")}";
+            if (!on)
+                return string.Format(ProteusLoc.Localize("Matcap.Refused.RowLegacyOff.Fmt",
+                    "{0} is still on the old shader (characterlegacy.shpk), and a row matcap needs character.shpk. Switch on \"{1}\" under {2} and wear it once, then add the row matcap."),
+                    where, ProteusLoc.Localize("Settings.GearShaders.AutoUpgrade.Label", "Upgrade old gear to Dawntrail shaders"), section);
+            if (declined.Contains(MeshVolumeService.Rel(file), StringComparer.OrdinalIgnoreCase))
+                return string.Format(ProteusLoc.Localize("Matcap.Refused.RowLegacyDeclined.Fmt",
+                    "{0} is still on the old shader (characterlegacy.shpk) because you undid its upgrade, and a row matcap needs character.shpk. Wear it and press \"{1}\" under {2}, then add the row matcap."),
+                    where, ProteusLoc.Localize("Settings.GearShaders.UpgradeNow", "Upgrade what I'm wearing now"), section);
+            return string.Format(ProteusLoc.Localize("Matcap.Refused.RowLegacyWear.Fmt",
+                "{0} is still on the old shader (characterlegacy.shpk), and a row matcap needs character.shpk. Wear it once so Gear shaders moves it to character.shpk, then add the row matcap. If it stays on the old shader, hover the count under {1} to see why."),
+                where, section);
+        }
+        return string.Format(ProteusLoc.Localize("Matcap.Refused.RowShader.Fmt",
+            "A row matcap needs the part on character.shpk, and {0} uses {1}."), where, shader ?? "?");
     }
 
     /// <summary>"15", "15 A" or "15 B", for messages.</summary>

@@ -51,6 +51,7 @@ internal static partial class CrossSexRefitJob
     /// <param name="limbFrom">The leg or arm size it was made on: an option of <paramref name="madeFor"/>, or of a bent
     /// copy of it (Studio's lists are bent) — matched by its group, section, name and slot, as the CLI matches.</param>
     /// <param name="targetRels">The sizes of <paramref name="onto"/> to make, by file.</param>
+    /// <param name="carryPubes">Bring the new body's pubes in with its skin (see <see cref="BodyRetarget.Rebuild"/>).</param>
     /// <param name="heldLabels">Parts held where they are with the foot or hand (Studio's unticked parts).</param>
     /// <param name="bakedModel">Studio's bake of the garment, when it has one: handing it in as the garment would bend it
     /// twice, so that throws. The CLI passes null.</param>
@@ -59,7 +60,7 @@ internal static partial class CrossSexRefitJob
                                       BodyOption limbFrom, BodySizeCatalog onto, IReadOnlyCollection<string> targetRels,
                                       OtherRaceWearer.Inputs wearer, UVRemapService uv, IPluginLog log, bool pushOut,
                                       bool carryPiercings, IReadOnlyCollection<string>? heldLabels, byte[]? bakedModel,
-                                      out string? refusal)
+                                      out string? refusal, bool carryPubes = false)
     {
         if (bakedModel != null && (ReferenceEquals(garment, bakedModel) || garment.AsSpan().SequenceEqual(bakedModel)))
             throw new InvalidOperationException(
@@ -80,7 +81,7 @@ internal static partial class CrossSexRefitJob
         string? limb = AutoRefitDecisions.LimbOf(slot);
         return new Inputs(garment, gamePath, to, NarrowMadeFor(madeFor, unbent, slot, race), null, onto,
                           o => wanted.Contains(RefitCore.Normal(o.Rel)), wearer, uv, log,
-                          PushOut: pushOut, CarryPiercings: carryPiercings,
+                          PushOut: pushOut, CarryPiercings: carryPiercings, CarryPubes: carryPubes,
                           Nude: slot == "_sho" && limb != null ? NudeOf(OtherRaceRefit.OnlyRace(onto, to).For(limb)) : null,
                           HeldParts: heldLabels is { Count: > 0 } ? heldLabels.ToHashSet(StringComparer.Ordinal) : null);
     }

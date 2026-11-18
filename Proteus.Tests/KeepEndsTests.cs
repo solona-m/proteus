@@ -638,12 +638,36 @@ public class KeepEndsTests
         Assert.Equal(1, on.Report.Swap!.Value.Adorned);
     }
 
+    [Fact]
+    [Trait("Plan", "EDGE-refit-keep-pubes-12")]
+    public void A_kept_end_refit_carries_pubes_only_when_asked()
+    {
+        // [EDGE-refit-keep-pubes-12] A boot's leg skin swapped for legs that draw pubes on uncovered skin: through
+        // KeepEnds.Plan, as the automatic refit and the size set call it, the pubes follow the setting.
+        const string Pubes = "/mt_c0201b0001_bibopube.mtrl";
+        var bytes = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)));
+        var legs = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(Pubes, new SyntheticModel.Sub(0, OffsetZ: 0.001f)));
+        var parts = ModelPartReader.Read(bytes)!;
+        var reading = new KeepEnds.Reading("_sho", "_dwn", new HashSet<int>(), parts, [], 0, parts.Positions.Length / 3);
+
+        var off = KeepEnds.Plan(parts, bytes, reading, Resized("_dwn", legs), null, across: true);
+        var on = KeepEnds.Plan(parts, bytes, reading, Resized("_dwn", legs), null, across: true, carryPubes: true);
+
+        Assert.Equal(0, off.Report.Swap!.Value.Adorned);
+        Assert.Equal(1, on.Report.Swap!.Value.Adorned);
+    }
+
     // ── a refit made before ──────────────────────────────────────────────────────────────────────────────
 
     [Fact]
     [Trait("Plan", "AC-keep-hand-foot-skin-10")]
     [Trait("Plan", "EDGE-keep-hand-foot-skin-16")]
     [Trait("Plan", "EDGE-refit-piercings-option-8")]
+    [Trait("Plan", "AC-refit-keep-pubes-4")]
+    [Trait("Plan", "EDGE-refit-keep-pubes-14")]
     public void A_refit_made_before_is_put_back_as_it_always_was()
     {
         // Unchanged for every slot: an option this tool saved before, automatic or by hand, still offered, is put back;
@@ -666,6 +690,10 @@ public class KeepEndsTests
             Assert.True(AutoRefitWatcher.Existing(root, "Size", "Neolithe — L", GamePath));
             Assert.False(AutoRefitWatcher.Existing(root, "Size", "Neolithe — S", GamePath));
             Assert.False(AutoRefitWatcher.Existing(root, "Size", "Neolithe — M", "chara/equipment/e6070/model/c0201e6070_top.mdl"));
+
+            // [AC-refit-keep-pubes-4] [EDGE-refit-keep-pubes-14] Nor the pubes setting: Existing's source never names it.
+            Assert.DoesNotContain("Pubes", SourceText.Method("Proteus/Services/AutoRefit/AutoRefitWatcher.cs",
+                                                             "internal static bool Existing("));
         }
         finally
         {

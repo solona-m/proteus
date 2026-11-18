@@ -366,6 +366,11 @@ public class Configuration : IPluginConfiguration
     /// config saved before it existed has no such key and reads false (no migration). Nails come in either way.</summary>
     public bool SizeSetPiercings { get; set; }
 
+    /// <summary>With <see cref="SizeSetBodies"/>, bring each new body's pubes (any body material named "pube") in with its
+    /// skin, where the piece shows that skin and no cloth covers it. Off by default; a config saved before it existed has
+    /// no such key and reads false (no migration).</summary>
+    public bool SizeSetPubes { get; set; }
+
     /// <summary>With <see cref="SizeSetBodies"/>, keep each new body's skin whole on chest and legs sizes, rather than
     /// leaving it out where the author deleted theirs. Off by default; a config saved before it existed has no such key
     /// and reads false (no migration). Shoes and gloves are cut either way.</summary>
@@ -389,6 +394,13 @@ public class Configuration : IPluginConfiguration
     /// already made keep what they were made with.
     /// </summary>
     public bool AutoRefitPiercings { get; set; }
+
+    /// <summary>
+    /// With <see cref="AutoRefitEnabled"/>, bring the new body's pubes (any body material named "pube") in with its skin.
+    /// Off by default; a config saved before it existed has no such key and reads false (no migration). Refits already
+    /// made keep what they were made with.
+    /// </summary>
+    public bool AutoRefitPubes { get; set; }
 
     /// <summary>
     /// The body and sizes gear is refitted onto, per Penumbra collection, keyed by the collection's id

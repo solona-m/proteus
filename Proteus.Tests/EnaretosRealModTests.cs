@@ -1,0 +1,168 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using NSubstitute;
+using Proteus.Services;
+using Proteus.Services.Matcap;
+using Xunit;
+
+namespace Proteus.Tests;
+
+/// <summary>
+/// The user's real mod (<see cref="LocalData.EnaretosMod"/>): a row matcap on the Enaretos bracelet the gear shader
+/// upgrade moved to character.shpk — the case that was refused. Every test works on a whole-folder temp copy and checks
+/// the original is untouched.
+/// </summary>
+public class EnaretosRealModTests : IDisposable
+{
+    private const string ModelPath = "chara/accessory/a0153/model/c0201a0153_wrs.mdl";
+    private const string ModelRel = "body shape/bibo+/chara/accessory/a0153/model/c0201a0153_wrs.mdl";
+    private const string Mat = "/mt_c0201a0153_wrs_a.mtrl";
+    private const string MatRel = "enaretos bracelet/chara/accessory/a0153/material/v0001/mt_c0201a0153_wrs_a.mtrl";
+
+    private readonly string temp = Path.Combine(Path.GetTempPath(), "proteus-enaretos-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly TextureLoader loader = new(Substitute.For<Dalamud.Plugin.Services.IDataManager>(),
+                                                Substitute.For<Dalamud.Plugin.Services.IPluginLog>());
+
+    public void Dispose()
+    {
+        try { Directory.Delete(temp, true); } catch { }
+    }
+
+    private static Dictionary<string, string> Hashes(string root) =>
+        Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+                 .ToDictionary(f => Path.GetRelativePath(root, f), f => HairPortPlan.Sha8(File.ReadAllBytes(f)));
+
+    /// <summary>The original's hashes, and a whole-folder copy of it under a temp mods root.</summary>
+    private (Dictionary<string, string> Original, string Copy) CopyMod()
+    {
+        var src = LocalData.Path(LocalData.EnaretosMod);
+        var original = Hashes(src);
+        var copy = Path.Combine(temp, "mods", Path.GetFileName(src));
+        foreach (var f in Directory.EnumerateFiles(src, "*", SearchOption.AllDirectories))
+        {
+            var to = Path.Combine(copy, Path.GetRelativePath(src, f));
+            Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+            File.Copy(f, to);
+        }
+        return (original, copy);
+    }
+
+    private void Untouched(Dictionary<string, string> original)
+    {
+        var now = Hashes(LocalData.Path(LocalData.EnaretosMod));
+        Assert.Equal(original.Keys.Order(), now.Keys.Order());
+        foreach (var (k, v) in original) Assert.True(v == now[k], $"the original mod's {k} changed");
+    }
+
+    private MatcapStudio.Environment Env(Func<string, byte[]?> game) =>
+        new(p => p == MatcapMaterial.VanillaTemplatePath ? SyntheticMatcapMod.Reflection() : game(p),
+            loader, false, Path.Combine(temp, "work"), WornFolder: 1, Affordable: () => false, GearShadersOn: true);
+
+    private static IReadOnlyList<ModelPart> Pool(byte[] model) =>
+        MatcapPlan.RowPool(ModelPartReader.Read(model)!.Parts, MatcapPlan.Kind.Gear, [], Mat);
+
+    private int UsedRow(string mod, MatcapStudio.Environment env)
+    {
+        var info = MatcapStudio.ReadRowInfo(mod, ModelRel, ModelPath, Mat, env);
+        Assert.NotNull(info);
+        Assert.NotNull(info!.UsedRows);
+        return info.UsedRows!.Order().First();
+    }
+
+    private static MatcapImage Image(string dir, TextureLoader loader)
+    {
+        var rgba = new byte[32 * 32 * 4];
+        for (int i = 0; i < 32 * 32; i++) { rgba[i * 4] = (byte)i; rgba[i * 4 + 1] = 90; rgba[i * 4 + 2] = 200; rgba[i * 4 + 3] = 255; }
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "gem.tex");
+        Assert.True(loader.WriteTex(rgba, 32, 32, path));
+        return new MatcapImage("gem.tex", path, false);
+    }
+
+    [LocalDataFact(LocalData.EnaretosMod)]
+    [Trait("Plan", "AC-upgrade-vs-matcap-1")]
+    public void Make_cuts_the_real_upgraded_bracelet()
+    {
+        var (original, mod) = CopyMod();
+        var env = Env(_ => null);
+        var row = UsedRow(mod, env);
+        var target = MatcapPlan.TargetOf(ModelPath, out _)!;
+        var (plan, refused) = MatcapRowCut.Make(new MatcapRowCut.Inputs(mod, target, Mat, [1], 1, env with { RowOnly = row }, row,
+            SubRowPick.Both, "abc123", "/mt_c0201a0153_wrs_a_mcutabc1231.mtrl"));
+        Assert.True(refused == null, refused?.Code + ": " + refused?.Message);
+        var file = Assert.Single(plan!.Files);
+        Assert.True(PenumbraModMeta.SameFile(MatRel, file.Source.File!));
+        Assert.True(PenumbraModMeta.SameFile("enaretos bracelet/chara/accessory/a0153/texture/c0201a0153_wrs_n.tex", file.Normal.File!));
+        Assert.True(PenumbraModMeta.SameFile("enaretos bracelet/chara/accessory/a0153/texture/c0201a0153_wrs_id.tex", file.Index!.File!));
+        Untouched(original);
+    }
+
+    [LocalDataFact(LocalData.EnaretosMod, LocalData.GameData)]
+    [Trait("Plan", "AC-upgrade-vs-matcap-1")]
+    public void Prepare_follows_a0153s_real_imc()
+    {
+        var (original, mod) = CopyMod();
+        var game = new Lumina.GameData(LocalData.Path(LocalData.GameData));
+        byte[]? Read(string p) { try { return game.GetFile(p)?.Data; } catch { return null; } }
+        var env = Env(Read);
+        var row = UsedRow(mod, env);
+        var item = MatcapPlan.TargetOf(ModelPath, out _)!.Item!.Value;
+        var gameImc = ImcEntrySource.GameEntries(Read, item.SetTag, item.SlotLabel);
+        Assert.NotNull(gameImc);
+        Assert.NotEmpty(gameImc!);
+        var redirects = PenumbraModMeta.ReadAllRedirects(mod);
+        var expected = MatcapPlan.GearFolders(item, gameImc, MatcapPlan.ModImcEntries(mod, item), redirects.Select(r => r.GamePath), 1);
+
+        var model = File.ReadAllBytes(MatcapWriter.Full(mod, ModelRel));
+        var p = MatcapStudio.Prepare(mod, ModelRel, ModelPath, model, Pool(model), MatcapChoice.OfImage(Image(Path.Combine(temp, "img"), loader)),
+                                     env with { RowOnly = row });
+        Assert.True(p.Ok, p.Code + ": " + p.Message);
+        var folders = p.Request!.Materials.Single().Row!.Cut.Folders;
+        Assert.Equal(expected.Order(), folders.Select(x => x.Folder).Order());
+
+        var containers = PenumbraModMeta.ReadContainerRedirects(mod);
+        string MatAt(int f) => item.MaterialDir(f).TrimEnd('/') + Mat;
+        bool wornHeld = containers.Any(r => PenumbraModMeta.SameFile(r.GamePath, MatAt(1)));
+        foreach (var x in folders)
+        {
+            var want = containers.Any(r => PenumbraModMeta.SameFile(r.GamePath, MatAt(x.Folder))) ? MatcapRecord.RowFingerprint.CaseContainer
+                     : Read(MatAt(x.Folder)) != null ? MatcapRecord.RowFingerprint.CaseGame
+                     : wornHeld ? MatcapRecord.RowFingerprint.CaseWorn
+                     : MatcapRecord.RowFingerprint.CaseNone;
+            Assert.True(want == x.Case, $"folder {x.Folder}: expected {want}, planned {x.Case}");
+        }
+        // The game's IMC was really read: a0153 lists the worn folder at least (the c0201 material is the mod's own, so
+        // no folder is the game's case unless the game ships a c0201 copy — recorded in the PR either way).
+        Assert.Contains(1, folders.Select(x => x.Folder));
+        Assert.True(gameImc!.Length >= 1);
+        Untouched(original);
+    }
+
+    [LocalDataFact(LocalData.EnaretosMod)]
+    [Trait("Plan", "AC-upgrade-vs-matcap-3")]
+    [Trait("Plan", "AC-upgrade-vs-matcap-5")]
+    public void Real_bracelet_copy_round_trip()
+    {
+        var (original, mod) = CopyMod();
+        var env = Env(_ => null);
+        var row = UsedRow(mod, env);
+        var model = File.ReadAllBytes(MatcapWriter.Full(mod, ModelRel));
+        var p = MatcapStudio.Prepare(mod, ModelRel, ModelPath, model, Pool(model), MatcapChoice.OfImage(Image(Path.Combine(temp, "img"), loader)),
+                                     env with { RowOnly = row });
+        Assert.True(p.Ok, p.Code + ": " + p.Message);
+        var applied = MatcapWriter.Apply(mod, p.Request!);
+        Assert.True(applied.Ok, applied.Message);
+
+        var rel = MeshVolumeService.Rel(MatRel);
+        Assert.Equal(ShaderUpgradeWriter.Undone.Refused, ShaderUpgradeWriter.RevertOrForget(mod, rel, false, out var message));
+        Assert.Contains(rel, message);
+        Assert.True(MatcapWriter.Undo(mod, ModelRel).Ok);
+        Assert.Equal(ShaderUpgradeWriter.Undone.Restored, ShaderUpgradeWriter.RevertOrForget(mod, rel, false, out _));
+        var backup = File.ReadAllBytes(Path.Combine(LocalData.Path(LocalData.EnaretosMod), "Proteus", ShaderUpgradeWriter.BackupSubdir,
+                                                    MatRel.Replace('/', Path.DirectorySeparatorChar)));
+        Assert.Equal(backup, File.ReadAllBytes(MatcapWriter.Full(mod, MatRel)));
+        Untouched(original);
+    }
+}

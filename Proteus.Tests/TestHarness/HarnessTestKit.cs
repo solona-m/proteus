@@ -345,7 +345,8 @@ internal sealed partial class FakeGame : IHarnessGame
 
     /// <summary>The Studio's saved "Keep hidden skin", as the game's config would hold it. Never set by the harness.</summary>
     public bool ConfigKeepHiddenSkin { get; set; }
-    public RefitOptions Options(bool remake) => new(true, true, false, remake, ConfigKeepHiddenSkin);
+    public bool ConfigPubes { get; set; }
+    public RefitOptions Options(bool remake) => new(true, true, false, remake, ConfigKeepHiddenSkin, ConfigPubes);
 
     /// <summary>The options and request the last PrepareSizeSet was handed and made; null until one ran.</summary>
     public RefitOptions? LastOptions { get; private set; }
@@ -359,7 +360,8 @@ internal sealed partial class FakeGame : IHarnessGame
         if (PrepareThrows != null) throw PrepareThrows;
         LastOptions = options;
         LastPrepared = new SizeSetLaunch.Prepared(new SizeSetRefit.Request(modRoot, keys, options.Yas, options.Remake, [],
-                                                                           KeepHiddenSkin: options.KeepHiddenSkin),
+                                                                           KeepHiddenSkin: options.KeepHiddenSkin,
+                                                                           Pubes: options.Pubes),
                                                   mods.Mods, mods.ModsRoot);
         return LastPrepared;
     }
