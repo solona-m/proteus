@@ -3,7 +3,7 @@
   XivLiveMesh: pose a worn model's vertices onto the live FFXIV character, and pick a point on it.
   Shared between Dalamud plugins, so it references Dalamud's own copies of FFXIVClientStructs and never
   ships them (Private="false"): the plugin that loads it already has them loaded.
-  License: AGPL-3.0-or-later (see LICENSE and NOTICE.md).
+  License: the Proteus Licence, with the rest of Proteus (see LICENSE and NOTICE.md).
 -->
 <Project Sdk="Microsoft.NET.Sdk">
 
@@ -16,7 +16,6 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <IsPackable>false</IsPackable>
-    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <!-- DalamudLibPath comes from Directory.Build.props. -->
     <AssemblySearchPaths>$(AssemblySearchPaths);$(DalamudLibPath)</AssemblySearchPaths>
   </PropertyGroup>

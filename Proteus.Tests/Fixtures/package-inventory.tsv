@@ -1,0 +1,26 @@
+# Every entry of the plugin package (latest.zip), classified for THIRD_PARTY_NOTICES.txt (plan D29).
+# entry	class	block id   (class: own | package | native | carved-out; block id names a THIRD_PARTY_NOTICES.txt heading)
+BCnEncoder.dll	package	BCnEncoder.NET
+BitMiracle.LibTiff.NET.dll	package	BitMiracle.LibTiff.NET
+CommunityToolkit.HighPerformance.dll	package	CommunityToolkit.HighPerformance
+LICENSE.txt	own	-
+Meshes\toecap.bibo.bind	own	-
+Meshes\toecap.bibo.mdl	own	-
+Meshes\toecap.neolithe.bind	own	-
+Meshes\toecap.neolithe.mdl	own	-
+Meshes\toecap.rue.bind	own	-
+Meshes\toecap.rue.mdl	own	-
+Meshes\toecap.yab.bind	own	-
+Meshes\toecap.yab.mdl	own	-
+Proteus.deps.json	own	-
+Proteus.dll	own	-
+Proteus.json	own	-
+proteus_bcn.dll	native	bc7enc
+StbImageSharp.dll	package	StbImageSharp
+StbImageWriteSharp.dll	package	StbImageWriteSharp
+THIRD_PARTY_NOTICES.txt	own	-
+XivLiveMesh.dll	own	-
+XivLiveMesh.pdb	own	-
+# Embedded in Proteus.dll, not separate zip entries:
+(embedded) Resources/sphere_d_array.png	carved-out	Game assets
+(embedded) Resources/tile_norm_array.png	carved-out	Game assets

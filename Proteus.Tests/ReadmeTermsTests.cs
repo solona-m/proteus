@@ -122,11 +122,26 @@ public sealed class ReadmeTermsTests
     [Trait("Plan", "AC-readme-tos-10")]
     [Trait("Plan", "EDGE-readme-tos-21")]
     [Trait("Plan", "EDGE-readme-tos-22")]
-    public void Licence_stays_AGPL_and_drafts_are_drafts()
+    [Trait("Plan", "AC-contrib-clean-room-11")]
+    [Trait("Plan", "EDGE-contrib-clean-room-21")]
+    [Trait("Plan", "EDGE-contrib-clean-room-22")]
+    [Trait("Plan", "AC-proteus-licence-2-1")]
+    [Trait("Plan", "EDGE-proteus-licence-2-1")]
+    public void Licence_is_the_Proteus_Licence_2_0()   // [AC-contrib-clean-room-11] [EDGE-contrib-clean-room-21] [EDGE-contrib-clean-room-22] [AC-proteus-licence-2-1] [EDGE-proteus-licence-2-1]
     {
-        Assert.Contains("GNU AFFERO GENERAL PUBLIC LICENSE", Read("LICENSE"));
-        // In docs/, not the root: GitHub reads any root LICENSE-* file as a second licence and stops showing AGPL-3.0.
-        Assert.Contains("DRAFT, not yet in force", Read(Path.Combine("docs", "LICENSE-DRAFT.md")));
+        // AC-contrib-clean-room-11 was the 1.0 criterion ("Version 1.0 — in force"); AC-proteus-licence-2-1 supersedes
+        // it. 1.0 itself stays in git history only (61c8c7b6:LICENSE).
+        var licence = Read("LICENSE").Replace("\r\n", "\n");
+        var lines = licence.Split('\n');
+        Assert.Equal("PROTEUS LICENCE", lines[0].Trim());
+        Assert.Equal("Version 2.0, 18 November 2026", lines[1].Trim());
+        Assert.DoesNotContain("DRAFT", licence);
+        Assert.DoesNotContain("GNU AFFERO GENERAL PUBLIC LICENSE", licence);
+        Assert.False(File.Exists(Repo(Path.Combine("docs", "LICENSE-DRAFT.md"))), "docs/LICENSE-DRAFT.md is still there.");
+        // The whole text, pinned: any change to the licence has to be deliberate (update this hash with it).
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(licence)));
+        Assert.Equal("B9A1CE90DB32E7DAB1BFA3F79C19203C02A21727B03EB2B0882530C266E57570", hash);
+        // GitHub reads any root LICENSE-* file as a second licence.
         Assert.False(Directory.GetFiles(Root.Value!, "LICENSE*")
                          .Any(f => Path.GetFileName(f).StartsWith("LICENSE-", StringComparison.OrdinalIgnoreCase)),
             "A LICENSE-* file sits at the repository root; GitHub would read it as a second licence.");
@@ -135,10 +150,7 @@ public sealed class ReadmeTermsTests
         foreach (var lang in LocSetup.Shipped)
         {
             var doc = ReadmeLinks.DocPathFor(lang);
-            var text = Read(doc);
-            Assert.False(text.Contains("LICENSE-DRAFT", StringComparison.Ordinal) ||
-                         text.Contains("Proteus Licence", StringComparison.Ordinal),
-                $"{doc} mentions the draft licence, which isn't in force.");
+            Assert.False(Read(doc).Contains("LICENSE-DRAFT", StringComparison.Ordinal), $"{doc} links the old draft licence.");
         }
     }
 }
