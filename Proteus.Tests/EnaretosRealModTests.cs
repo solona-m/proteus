@@ -131,7 +131,10 @@ public class EnaretosRealModTests : IDisposable
 
         // The whole row was moved: no triangle still drawn as glass touches a row texel of any bake.
         var bakes = p.Request!.Materials.Single().Row!.Cut.Bakes;
-        foreach (var part in ModelPartReader.Read(drawn)!.Parts.Where(x => x.Island < 0 && x.Material == glassMat))
+        var stillGlass = ModelPartReader.Read(drawn)!.Parts
+            .Where(x => x.Island < 0 && string.Equals(x.Material, glassMat, StringComparison.OrdinalIgnoreCase)).ToList();
+        Assert.NotEmpty(stillGlass);   // the rest of the part is still the author's glass (AC-2)
+        foreach (var part in stillGlass)
             Assert.DoesNotContain(ModelMaterialWriter.TriangleUvs(drawn, [part]), t => MatcapRowCut.Touches(t, bakes));
 
         Assert.True(MatcapWriter.Undo(mod, ModelRel).Ok);
