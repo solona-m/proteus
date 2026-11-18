@@ -70,7 +70,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly WindowSystem windowSystem;
     private readonly StatusWindow statusWindow;
     private readonly Gui.WhatsNewWindow whatsNewWindow;
-    // CLEAN-ROOM HOLE: spec §3
+    private readonly IpcProvider ipcProvider;
     private readonly SphereMapPreview spherePreview;
     private readonly TilePreview tilePreview;
     private readonly Gui.PartViewport partViewport;
@@ -180,7 +180,8 @@ public sealed class Plugin : IDalamudPlugin
         designBindings.PresetsSuperseded += presets.ClearAllApplied;
         editRouter = new OverlayEditRouter(presets, designBindings);
 
-        // CLEAN-ROOM HOLE: spec §3
+        // Proteus's public IPC (docs/contrib-clean-room-spec.md §2, §3).
+        ipcProvider = new IpcProvider(pluginInterface, compositor, discovery, config, log);
 
         // Sphere-map thumbnails for the colour table editor.
         spherePreview = new SphereMapPreview(TextureProvider, log);
@@ -470,6 +471,32 @@ public sealed class Plugin : IDalamudPlugin
     // The gear icon in the plugin installer — settings live in the status window's Settings tab.
     private void OpenConfigUi() => statusWindow.OpenToSettings();
 
+    /// <summary>
+    /// The words after <c>/proteus refresh</c> (docs/contrib-clean-room-spec.md §4). <paramref name="args"/> is the
+    /// command's whole trimmed argument string, starting with the word refresh. Whatever follows that word is trimmed
+    /// and split on single spaces; <c>full</c>, <c>-full</c> or <c>all</c> asks for a full rebuild, <c>silent</c> or
+    /// <c>-silent</c> for no chat line. Any order, repeats allowed, unknown words ignored. Never throws.
+    /// </summary>
+    internal static (bool Full, bool Silent) ParseRefreshArguments(string args)
+    {
+        const int wordLength = 7;   // "refresh"
+        if (string.IsNullOrEmpty(args) || args.Length <= wordLength)
+            return (false, false);
+
+        bool full = false, silent = false;
+        foreach (var token in args[wordLength..].Trim().Split(' '))
+        {
+            if (token.Equals("full", StringComparison.OrdinalIgnoreCase)
+                || token.Equals("-full", StringComparison.OrdinalIgnoreCase)
+                || token.Equals("all", StringComparison.OrdinalIgnoreCase))
+                full = true;
+            else if (token.Equals("silent", StringComparison.OrdinalIgnoreCase)
+                     || token.Equals("-silent", StringComparison.OrdinalIgnoreCase))
+                silent = true;
+        }
+        return (full, silent);
+    }
+
     private void OnCommand(string command, string args)
     {
         // "/proteus models [filter]": what the RENDERER loaded, not what we wrote.
@@ -546,15 +573,16 @@ public sealed class Plugin : IDalamudPlugin
         }
 #endif
 
-        // "/proteus refresh [full]": the tab bar's Refresh button, and its shift-click, from a macro.
+        // "/proteus refresh [full] [silent]": the tab bar's Refresh button, and its shift-click, from a macro.
         if (a.StartsWith("refresh", StringComparison.OrdinalIgnoreCase))
         {
-            bool full = a[7..].Trim() is "full" or "-full" or "all";
-            // CLEAN-ROOM HOLE: spec §4
+            var (full, silent) = ParseRefreshArguments(a);
             compositor.RefreshAndRecomposite(full);
             // The Studio lists every Penumbra mod, so refresh that too: a recomposite alone would miss a new one.
             partsPanel.Refresh();
-            // CLEAN-ROOM HOLE: spec §4
+            // "silent" (for macros): do the work, say nothing in chat.
+            if (silent)
+                return;
             ChatGui.Print("[Proteus] " + (full
                 ? ProteusLoc.Localize("Command.Refreshing.Full", "Rebuilding everything and recompositing. This takes longer than a plain refresh.")
                 : ProteusLoc.Localize("Command.Refreshing", "Recompositing now.")));
@@ -632,7 +660,7 @@ public sealed class Plugin : IDalamudPlugin
 
         partViewport.Dispose();
         fonts.Dispose();
-        // CLEAN-ROOM HOLE: spec §3
+        ipcProvider.Dispose();
         designWatcher.Dispose();
         modMoves.Dispose();   // before every service it calls
         designBindings.PresetsSuperseded -= presets.ClearAllApplied;

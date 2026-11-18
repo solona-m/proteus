@@ -736,6 +736,11 @@ public partial class CompositorService : IDisposable
     /// </remarks>
     private static string BodyShapeSignature(IReadOnlyDictionary<string, HashSet<string>>? shapes)
     {
-        // CLEAN-ROOM HOLE: spec §6
+        if (shapes == null || shapes.Count == 0) return string.Empty;
+        // Keys are not part of it: each set's names in ordinal order, then the sets themselves in ordinal order.
+        var sets = shapes.Values
+            .Select(set => string.Join(",", set.OrderBy(s => s, StringComparer.Ordinal)))
+            .OrderBy(s => s, StringComparer.Ordinal);
+        return string.Join("|", sets);
     }
 }

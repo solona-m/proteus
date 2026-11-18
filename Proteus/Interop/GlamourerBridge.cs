@@ -196,7 +196,10 @@ public class GlamourerBridge : IDisposable
             var ec = reapplyState.Invoke(0, 0, ApplyFlag.Equipment);
             if (ec != GlamourerApiEc.Success)
             {
-                // CLEAN-ROOM HOLE: spec §8
+                // InvalidKey here: another plugin holds a lock on the character's state, so Glamourer refuses us.
+                if (ec == GlamourerApiEc.InvalidKey)
+                    log.Warning("[Proteus] Glamourer would not reapply the character: another plugin has locked its state. Using a full redraw instead.");
+                else
                     log.Debug("[Proteus] ReapplyState -> {0} (falling back to redraw)", ec);
                 return false;
             }
@@ -225,7 +228,9 @@ public class GlamourerBridge : IDisposable
             finally { ownCarrierWriteDepth--; }
             if (ec != GlamourerApiEc.Success)
             {
-                // CLEAN-ROOM HOLE: spec §8
+                if (ec == GlamourerApiEc.InvalidKey)
+                    log.Warning("[Proteus] Glamourer refused glasses item {0}: another plugin has locked the Glasses slot.", itemId);
+                else
                     log.Debug("[Proteus] SetBonusItem(Glasses,{0}) -> {1}", itemId, ec);
                 return false;
             }
@@ -335,7 +340,9 @@ public class GlamourerBridge : IDisposable
             finally { ownCarrierWriteDepth--; }
             if (ec != GlamourerApiEc.Success)
             {
-                // CLEAN-ROOM HOLE: spec §8
+                if (ec == GlamourerApiEc.InvalidKey)
+                    log.Warning("[Proteus] Glamourer refused item {1} in the {0} slot: another plugin has locked that slot.", slot, itemId);
+                else
                     log.Debug("[Proteus] SetItem({0},{1}) -> {2}", slot, itemId, ec);
                 return false;
             }
@@ -433,7 +440,17 @@ public class GlamourerBridge : IDisposable
         // An equipped or bonus item moved: BonusItem matters too, since a shell can be hosted on the facewear slot.
         if (changeType is StateChangeType.Equip or StateChangeType.BonusItem)
         {
-            // CLEAN-ROOM HOLE: spec §8
+            // Our own reapply sends an Equip for every slot; passing those on would set off composite after composite.
+            // The cost: a player's own equip that lands inside that short window waits for the next trigger.
+            // Our own carrier write sends the same signal, on the writing thread, while the call is still running.
+            bool carrierWrite = ownCarrierWriteDepth > 0;
+            if (!GlamourerSignals.RaisesEquipmentChange(changeType, WithinOwnReapplyEcho(), carrierWrite))
+            {
+                if (carrierWrite)
+                    log.Debug("[Proteus] glamourer signal: {0} came from our own carrier write, skipped", changeType);
+                return;
+            }
+
             LocalPlayerEquipmentChanged?.Invoke();
             return;
         }

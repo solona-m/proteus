@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
-// CLEAN-ROOM HOLE: spec §8
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Penumbra.Api.Enums;
@@ -320,12 +321,13 @@ public partial class CompositorService
                 ScheduleCarrierRetry((int)(GlassesInjectCooldownMs - sinceInject), "glasses");
 
             if (MetSnapshotKnown && !AnyMetWorn()
-                && sinceInject > GlassesInjectCooldownMs
-                && SetGlassesOnFramework(g.ItemId))
+                && sinceInject > GlassesInjectCooldownMs)
             {
-                // CLEAN-ROOM HOLE: spec §8
+                bool equipped = SetGlassesOnFramework(g.ItemId);
+                // The cooldown runs from the attempt, not from a success: a slot another plugin has locked refuses
+                // every equip, and must not be asked again on every redraw.
                 _lastGlassesInjectTick = Environment.TickCount64;
-                // CLEAN-ROOM HOLE: spec §8
+                if (!equipped) return;
                 _injectedGlasses = true;
                 if (alreadyHosted)
                 {
@@ -504,8 +506,11 @@ public partial class CompositorService
 
             // Equip. Counted atomically first: two reconciles can race on one slot.
             if (!_carrierAsks.TryBeginAsk(ringSlot, epoch, CarrierDecisions.AskCap, now)) return;
-        if (SetAccessoryOnFramework(r.ItemId, ringSlot))
-            // CLEAN-ROOM HOLE: spec §8
+            // The cooldown starts at the attempt, whatever it returns: a slot another plugin has locked refuses every
+            // equip, and is then asked at most once per window instead of on every redraw.
+            _carrierCooldowns.Charge(ringSlot, now);
+            if (SetAccessoryOnFramework(r.ItemId, ringSlot))
+            {
                 MarkCarrierInjected(ringSlot);
                 _carrierRemovedAt.TryRemove(ringSlot, out _);
                 // No follow-up recomposite: the shell is already published at the path this piece loads.

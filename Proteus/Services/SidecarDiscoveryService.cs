@@ -53,8 +53,15 @@ public record OverlayEntry(
 /// </summary>
 public record ResolvedOverlay(
     OverlayDescriptor Descriptor,
-    List<ColorTableRowPreset>? ColorTableRows
-    // CLEAN-ROOM HOLE: spec §5
+    List<ColorTableRowPreset>? ColorTableRows,
+    string? OptionGroup,
+    string? Option,
+    /// <summary>
+    /// Where the owning group sits in the mod's <c>meta.json</c> group list, numbered as Penumbra numbers it. Lower
+    /// outranks higher: the compositor hides an outranked group's overlays beneath wherever an outranking group draws.
+    /// Overlays that belong to no group carry <see cref="int.MaxValue"/>.
+    /// </summary>
+    int GroupOrder = int.MaxValue
 );
 
 /// <summary>
@@ -64,7 +71,8 @@ public record ResolvedOverlay(
 /// </summary>
 public record ResolvedContent(
     ContentPiece Piece,
-    // CLEAN-ROOM HOLE: spec §5
+    List<ColorTableRowPreset>? ColorTableRows,
+    string? OptionGroup,
     string? Option,
     int GroupOrder = int.MaxValue,
     /// <summary>
@@ -469,8 +477,7 @@ public partial class SidecarDiscoveryService
         {
             diag = ResolutionDiagnostic.None with { Unconditional = true };
             return entry.Metadata.Overlays
-                .Select(d => new ResolvedOverlay(d, entry.Metadata.ColorTableRows))
-                // CLEAN-ROOM HOLE: spec §5
+                .Select(d => new ResolvedOverlay(d, entry.Metadata.ColorTableRows, null, null))
                 .ToList();
         }
 
@@ -519,16 +526,16 @@ public partial class SidecarDiscoveryService
             else
             {
                 if (known || groupOrder.Count == 0) emptyGroups.Add(group.PenumbraGroupName);
-                active = [group.Options[0]];
-                // CLEAN-ROOM HOLE: spec §5
+                // Nothing selected (or Penumbra's settings unreadable): the group adds nothing, single- or
+                // multi-select alike. No first-option fallback.
+                continue;
             }
 
             foreach (var opt in active)
             {
                 var rows = opt.ColorTableRows ?? entry.Metadata.ColorTableRows;
                 foreach (var desc in opt.Overlays)
-                    resolved.Add(new ResolvedOverlay(desc, rows));
-                    // CLEAN-ROOM HOLE: spec §5
+                    resolved.Add(new ResolvedOverlay(desc, rows, group.PenumbraGroupName, opt.Name, order));
             }
         }
 

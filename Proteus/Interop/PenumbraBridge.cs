@@ -37,7 +37,7 @@ public class PenumbraBridge : IDisposable
     private readonly TrySetModSetting trySetModSetting;
     private readonly TrySetModSettings trySetModSettings;
     private readonly RedrawObject redrawObject;
-    // CLEAN-ROOM HOLE: spec §7
+    private readonly OpenMainWindow openMainWindow;
     private readonly GetGameObjectResourcePaths getGameObjectResourcePaths;
     private readonly AddTemporaryMod addTemporaryMod;
     private readonly RemoveTemporaryMod removeTemporaryMod;
@@ -130,7 +130,7 @@ public class PenumbraBridge : IDisposable
         trySetModSetting = new TrySetModSetting(pluginInterface);
         trySetModSettings = new TrySetModSettings(pluginInterface);
         redrawObject = new RedrawObject(pluginInterface);
-        // CLEAN-ROOM HOLE: spec §7
+        openMainWindow = new OpenMainWindow(pluginInterface);
         getGameObjectResourcePaths = new GetGameObjectResourcePaths(pluginInterface);
         addTemporaryMod = new AddTemporaryMod(pluginInterface);
         removeTemporaryMod = new RemoveTemporaryMod(pluginInterface);
@@ -848,7 +848,17 @@ public class PenumbraBridge : IDisposable
         catch (Exception ex) { log.Error(ex, "RedrawObject failed"); return false; }
     }
 
-    // CLEAN-ROOM HOLE: spec §7
+    /// <summary>
+    /// Bring up Penumbra's window on its Mods tab with <paramref name="modDirectory"/> selected. Runs on the caller's
+    /// thread; Penumbra's answer is not checked, and an unknown folder is Penumbra's to handle. Never throws.
+    /// </summary>
+    public void OpenToMod(string modDirectory)
+    {
+        if (!IsAvailable) return;
+        try { openMainWindow.Invoke(TabType.Mods, modDirectory); }
+        catch (Exception ex) { log.Error(ex, "[Proteus] Penumbra's OpenMainWindow call failed"); }
+    }
+
     public void Dispose()
     {
         modSettingChangedSub.Dispose();

@@ -323,3 +323,110 @@ Identifier-grep hits: 0
   - A first attempt without `--include-references false` also pulled in the Luna projects. It was discarded and regenerated with `--force` before the commit.
 - **Deleting `bin/` and `obj/` in the four projects was refused** by the session's permission system, and was not worked around. Agent B's allowlist forbids those folders, the transcript extraction checks for them, and B's own build overwrites the outputs.
 - **The "not passing" run** (the spec tests on the removed code) fails to compile, with 74 `error CS` lines. This is the expected state: the spec tests don't pass.
+
+## Agent B (run 1, void)
+
+Start commit: `6c167978`. Extracted from its transcript by agent ID (extract_contrib.py, role b).
+
+VOID: one build command was piped through grep/head, outside the allowlist (plan EDGE-13). It read nothing forbidden, but its work was discarded unseen by the orchestrator (git checkout of the eight files, git clean of the new IpcProvider.cs) and redone by a fresh Agent B (run 2). The 24 "unparseable" listing hits first reported came from the extraction script not parsing context lines (path-N-text) and -- separators; both are fixed and the recount is 0.
+
+Opened:
+- Read docs/contrib-clean-room-spec.md
+- Grep Proteus
+- Grep docs/contrib-clean-room-plan.md
+- Read Proteus/Services/SidecarDiscoveryService.cs
+- Edit Proteus/Services/SidecarDiscoveryService.cs
+- Read Proteus/Interop/PenumbraBridge.cs
+- Edit Proteus/Interop/PenumbraBridge.cs
+- Read Proteus/Interop/GlamourerBridge.cs
+- Grep Proteus.Tests/StutterFixesWiringTests.cs
+- Edit Proteus/Interop/GlamourerBridge.cs
+- Grep Proteus/Interop/GlamourerSignals.cs
+- Read Proteus/Services/CompositorService.Carriers.cs
+- Edit Proteus/Services/CompositorService.Carriers.cs
+- Read Proteus.Tests/StutterFixesWiringTests.cs
+- Grep Proteus/Services/CarrierDecisions.cs
+- Read Proteus/Services/CompositorService.cs
+- Edit Proteus/Services/CompositorService.cs
+- Read Proteus/Gui/StatusWindow.cs
+- Grep Proteus/Gui/StatusWindow.cs
+- Grep Proteus/Services/TextureLoader.cs
+- Read Proteus/Models/ColorTable.cs
+- Edit Proteus/Gui/StatusWindow.cs
+- Read Proteus/Gui/ModsTab.cs
+- Edit Proteus/Gui/ModsTab.cs
+- Read Proteus/Plugin.cs
+- Grep Proteus.Tests
+- Read Proteus.Tests/ContribSpecTests.cs
+- Grep Proteus/Plugin.cs
+- Edit Proteus/Plugin.cs
+- Read Proteus.Tests/IpcProviderSpecTests.cs
+- Grep Proteus/Services
+- Read Proteus/Models/OverlayDescriptor.cs
+- Write Proteus/Interop/IpcProvider.cs
+Shell commands:
+- OUTSIDE ALLOWLIST: dotnet build E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Proteus.csproj -c Release 2>&1 | grep -E "error|Warn|Build succeeded|Time Elapsed" | grep -v "warning" | head -40
+- dotnet build E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Proteus.csproj -c Release
+- dotnet test E:/orca/workspaces/Proteus/licence-clean-room/Proteus.Tests/Proteus.Tests.csproj -c Release --filter "(FullyQualifiedName~IpcProviderSpecTests|FullyQualifiedName~ContribSpecTests)&Speed!=Slow"
+- dotnet test E:/orca/workspaces/Proteus/licence-clean-room/Proteus.Tests/Proteus.Tests.csproj -c Release --filter "(FullyQualifiedName~SidecarDiscoveryTests|FullyQualifiedName~ContentPieceSelectionTests|FullyQualifiedName~FaceUvDoublingTests|FullyQualifiedName~ShellMensLayoutTests|FullyQualifiedName~WomensArtOnMenTests|FullyQualifiedName~StutterFixesWiringTests|FullyQualifiedName~StutterFixesPureTests|FullyQualifiedName~HarnessBindingsWiringTests)&Speed!=Slow"
+- dotnet test E:/orca/workspaces/Proteus/licence-clean-room/Proteus.Tests/Proteus.Tests.csproj -c Release --filter "(FullyQualifiedName~LocalizationTests|FullyQualifiedName~SidecarCache|FullyQualifiedName~DesignBinding|FullyQualifiedName~PlayerSettingsFilterTests|FullyQualifiedName~HarnessBridgeWrapperTests|FullyQualifiedName~IdleDiskIoWiringTests)&Speed!=Slow"
+Sub-agents: none
+Grep without line numbers: 0
+Shell commands outside the allowlist: 1
+forbidden locations in listing/search results: 0
+
+## Agent B
+
+Start commit: `6c167978`. Extracted from its transcript by agent ID (extract_contrib.py, role b).
+
+Run 2, the delivered implementation. Files: the eight mixed files and a new Proteus/Interop/IpcProvider.cs; no Localization change, no other new file. Seams: internal IpcProvider(IDalamudPluginInterface, Func<List<OverlayEntry>>, Func<OverlayEntry, List<ResolvedOverlay>>, Func<OverlayEntry, bool>, Action<string>, Configuration, IPluginLog); internal static (bool Full, bool Silent) Plugin.ParseRefreshArguments(string). Its tests: 40 + 183 + 795 passed, 0 failed.
+
+Opened:
+- Read AGENTS.md
+- Read docs/contrib-clean-room-spec.md
+- Grep docs/contrib-clean-room-plan.md
+- Read docs/contrib-clean-room-plan.md
+- Grep Proteus
+- Read Proteus/Plugin.cs
+- Edit Proteus/Plugin.cs
+- Grep Proteus/Plugin.cs
+- Grep Proteus.Tests
+- Read Proteus.Tests/ContribSpecTests.cs
+- Read Proteus.Tests/IpcProviderSpecTests.cs
+- Grep Proteus/Models
+- Read Proteus/Models/OverlayDescriptor.cs
+- Read Proteus/Services/SidecarDiscoveryService.cs
+- Edit Proteus/Services/SidecarDiscoveryService.cs
+- Read Proteus/Interop/PenumbraBridge.cs
+- Edit Proteus/Interop/PenumbraBridge.cs
+- Grep docs
+- Read Proteus/Interop/GlamourerBridge.cs
+- Edit Proteus/Interop/GlamourerBridge.cs
+- Grep Proteus.Tests/StutterFixesWiringTests.cs
+- Read Proteus.Tests/StutterFixesWiringTests.cs
+- Read Proteus/Services/CompositorService.Carriers.cs
+- Grep Proteus/Services/CompositorService.Carriers.cs
+- Edit Proteus/Services/CompositorService.Carriers.cs
+- Read Proteus/Services/CompositorService.cs
+- Edit Proteus/Services/CompositorService.cs
+- Grep Proteus/Services/CompositorService.cs
+- Read Proteus/Gui/ModsTab.cs
+- Edit Proteus/Gui/ModsTab.cs
+- Read Proteus/Gui/StatusWindow.cs
+- Grep Proteus/Services
+- Grep Proteus/Gui/StatusWindow.cs
+- Read Proteus/Models/ColorTable.cs
+- Edit Proteus/Gui/StatusWindow.cs
+- Glob E:/orca/workspaces/Proteus/licence-clean-room
+- Write Proteus/Interop/IpcProvider.cs
+- Edit Proteus/Interop/IpcProvider.cs
+- Grep Proteus/Interop/IpcProvider.cs
+Shell commands:
+- dotnet build E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Proteus.csproj -c Release
+- dotnet test E:/orca/workspaces/Proteus/licence-clean-room/Proteus.Tests/Proteus.Tests.csproj -c Release --filter "FullyQualifiedName~IpcProviderSpecTests|FullyQualifiedName~ContribSpecTests&Speed!=Slow"
+- dotnet test E:/orca/workspaces/Proteus/licence-clean-room/Proteus.Tests/Proteus.Tests.csproj -c Release --filter "FullyQualifiedName~SidecarDiscoveryTests|FullyQualifiedName~ContentPieceSelectionTests|FullyQualifiedName~FaceUvDoublingTests|FullyQualifiedName~ShellMensLayoutTests|FullyQualifiedName~WomensArtOnMenTests|FullyQualifiedName~StutterFixesWiringTests|FullyQualifiedName~StutterFixesPureTests|FullyQualifiedName~HarnessBindingsWiringTests&Speed!=Slow"
+- dotnet test E:/orca/workspaces/Proteus/licence-clean-room/Proteus.Tests/Proteus.Tests.csproj -c Release --filter "FullyQualifiedName~LocalizationTests|FullyQualifiedName~SidecarCache|FullyQualifiedName~DesignBinding|FullyQualifiedName~PlayerSettingsFilterTests|FullyQualifiedName~HarnessBridgeWrapperTests|FullyQualifiedName~IdleDiskIoWiringTests&Speed!=Slow"
+Sub-agents: none
+Grep without line numbers: 0
+Shell commands outside the allowlist: 0
+forbidden locations in listing/search results: 0

@@ -9,7 +9,7 @@ using Dalamud.Interface;
 using Dalamud.Interface.Components;
 using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Utility;
-// CLEAN-ROOM HOLE: spec §6
+using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using Proteus.Interop;
 using Proteus.Localization;
@@ -1371,7 +1371,38 @@ public class StatusWindow : Window
                                      + "folder — its colour rows cannot be narrowed", entry.ModDirectory, mtrlRel);
                 else
                 {
-                    // CLEAN-ROOM HOLE: spec §6
+                    var mtrlBytes = File.ReadAllBytes(mtrlPath);
+                    var slots = TextureLoader.ParseMtrlBytes(mtrlBytes);
+                    // A missing index is only meaningful when the parse got as far as the samplers: a material that
+                    // failed to parse also reports no index, and must not be read as "no sampler".
+                    if (!slots.Parsed)
+                        Plugin.Log.Warning("[Proteus] content: could not parse material {0} in {1}, so the colour grid "
+                                         + "cannot tell which rows it uses", mtrlRel, entry.ModDirectory);
+                    else if (!slots.HasColorTable)
+                    {
+                        // No rows to edit. A piece left on the hair shader keeps it on purpose: it follows the hair colour.
+                        var shader = TextureLoader.GetMtrlInfo(mtrlBytes).shader;
+                        result = new ContentIndex(null, null,
+                            string.Equals(shader, HairShader, StringComparison.OrdinalIgnoreCase)
+                                ? ContentIndexState.FollowsHairColor
+                                : ContentIndexState.NoColorTable);
+                    }
+                    else if (string.IsNullOrEmpty(slots.Index))
+                        result = new ContentIndex(new HashSet<int> { DefaultContentRow }, "A", ContentIndexState.NoSampler);
+                    else
+                    {
+                        // Asked through Penumbra, since the selected option may swap the index texture itself.
+                        var indexPath = ResolveContentTexture(entry, modRoot, slots.Index);
+                        if (indexPath != null && textureLoader.LoadTexAsRgba(indexPath) is { } decoded)
+                        {
+                            result = ScanContentIndex(decoded.rgba);
+                            // A compressed index can blur a texel into the next row: still used, but flagged.
+                            if (result.State == ContentIndexState.Scanned && TextureLoader.IsUncompressed(indexPath) == false)
+                                result = result with { State = ContentIndexState.Compressed };
+                        }
+                        else
+                            Plugin.Log.Warning("[Proteus] content: {0}'s index texture {1} was not found or could not be "
+                                             + "read, so its colour rows cannot be narrowed", entry.ModDirectory, slots.Index);
                     }
 
                     // Recorded whatever the index said: the glow warning and the physical values are separate questions.
