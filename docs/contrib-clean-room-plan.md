@@ -1,1068 +1,858 @@
-> **Hand-off copy, revision 10.** Revision 7 (passed by plan-critic 7, Confidence HIGH) was committed at step 0. At step 1 the D3 tripwire fired, so the plan was revised through the planner. Plan-critic 8 rated revision 8 MEDIUM-HIGH, plan-critic 9 rated revision 9 HIGH, and plan-critic 10 passed revision 10 with Confidence HIGH and no findings. Every critique amendment was folded in through the planner.
->
-> **Log inputs from the planning session.** The planning participants' reads (Planner rev 1–10, Plan-critic 1–10, and the Planning orchestrator with its disclosures and exceptions) are under *Environment & Preconditions* below. The orchestrator copies them into `docs/contrib-clean-room-log.md`.
-> - **Plan-critic 7** opened only the rev-7 plan output (lines 1–28 and 293–392). Its one shell command: `grep -n -E "^## |^1[25]\. \*\*|Delta|self-check 2|name-only|critic-pass|QA-bump|\(f\)" "C:/Users/solon/.claude/projects/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/toolu_01Y91ZpRto4LnGvgWTBYBWcP.txt"`.
-> - **Plan-critic 10** opened only the rev-10 plan output (lines 1–23 and 309–342). Its one shell command: `grep -n -E "^## |^11\. \*\*|^12\. \*\*" "C:/Users/solon/.claude/projects/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/toolu_01JhiPxTHv2eiBz3a5qGiDpj.txt"`.
->
-> Neither opened a forbidden path or ran sub-agents.
+# Implementation Plan: Clean-room replacement, Proteus without Luna, and publishing the Proteus Licence (revision 11)
 
-# Implementation Plan: Clean-room replacement of Caraxi's and AzureRavie's code (revision 10)
+## Delta (rev 11 vs rev 10)
+The user changed the scope. Their message, verbatim: "Do the Luna work as well. Keep going until you've pushed that and all the other needed changes." That reverses their earlier ND-1 choice, so the goal is again to publish the Proteus Licence, pushed to `test` only.
 
-## Delta (rev 10 vs rev 9)
-Plan-critic 9 rated rev 9 HIGH and asked for two wording fixes. Both are folded in. Steps 0 and 1 are done (`71d450fb` for the plan, `1a2cd3ef` for the spec and A's self-report). Step 1b and everything after it are still to come.
+**Where Phase A stands:**
+- Steps 0, 1, 1b and 2 are done.
+- `<R0>` = `7ce8851b`. `restored-check.ps1` printed: added 39, markers 27, restored verified 12, unmatched 0, other 0.
+- The blame at `<R>` is running.
 
-- **M-1: The game-fact limit is per file, not per line number.**
-  - Game-fact lines may appear only in the files spec §1 lists. Each file may hold no more of them than §1 gives it, and the total is at most 3.
-  - §1 keeps each line's `file:line` as the record at `<R>`. Line moves inside those files are not failures.
-  - Changed in: D2, D11, D17's after-every-merge bullet, step 6, step 10.5, `Log_reports_no_contributor_lines` and EDGE-39.
-- **M-2: The `-w -M -C` trivial limit becomes a logged change, not a failure.**
-  - A trivial line in `-w -M -C` outside the three `ColorTableEditor*.cs` files is a logged change, with the reason "copy-detected import block from a test commit".
-  - Only a non-trivial line, or a line in no category, fails. Logged changes never start an A3 loop.
-  - The list of allowed change reasons is now:
-    - a new file by B (named);
-    - a file new from `test`;
-    - an import edit arriving from `test`;
-    - a copy-detected import block from a test commit.
-  - Changed in: AC-3, D11, D17, step 6, step 10.5, EDGE-26, EDGE-39 and `Log_reports_no_contributor_lines`.
-- **Log inputs:** Plan-critic 9's reads are added. Planner (rev 10) made no tool calls.
+**Changes in this revision:**
+- **N-1: Phase B and Phase C come back,** adapted from rev 1. They run on the same branch after Phase A's step 7, as steps B1–B6 and C1–C3.
+  - **Phase B** drops Luna, Penumbra.Api and Glamourer.Api from the plugin. Proteus gets its own call gates over Dalamud's `GetIpcSubscriber`. The work is done by Agent C (contract), the orchestrator (tests) and Agent B2 (implementation), followed by an in-game smoke check.
+  - **Phase C** publishes the licence.
+  - The single gate at step 8 now covers A, B and C. Each phase keeps its own proof.
+  - New decisions: D24–D31.
+- **N-2: Fallbacks (D27).**
+  - If Phase B can't pass, only Phase A merges, and the licence stays AGPL.
+  - If Phase C can't pass, A and B merge, and the licence stays AGPL.
+  - Either way, the blocker is reported.
+- **N-3: Plan-critic 1's Phase B/C notes are folded in:**
+  - owned types stay in the same namespaces (`Penumbra.Api.Enums`, `Glamourer.Api.Enums`), so the ~60 `using` lines don't change (D24);
+  - the contract test also compares each enum's underlying type and `[Flags]`, and member names exactly, because enum-keyed dictionaries cross by name (D26);
+  - Agent C may read Luna's IPC subscriber base classes, for facts about errors and availability only, and bridge-availability tests are added (D25, D26);
+  - B5 adds an in-game smoke check before Phase C (D27);
+  - the licence's completeness now covers the game-texture slices in `Resources/`, the submodules, the workflows and the XivLiveMesh usage check (D28, D29).
+- **N-4: The slnx keeps the two API entries (D30).** The test build still builds the APIs for the contract test.
+- **N-5: Clean-room interaction.**
+  - Agent C is dirty only for the API sources and the named Luna base classes, and never reads the contributors' commits.
+  - B2 starts after B's last commit and never reads C's sources or the removed set.
+  - D measures only B's lines. B2's lines get no similarity check, because B2 never saw the removed set.
+  - New forbidden location: `scratchpad-agentC`.
+- **N-6: The orchestrator's ND decisions are recorded:**
+  - ND-2: XivLiveMesh moves to the Proteus Licence, unless the C1 usage check finds another plugin using it. Then it stays AGPL as Solona's separately offered library, noticed under §7.
+  - ND-4: only the status line of the licence changes.
+  - ND-5: no README licence line.
+  - ND-6: the workflows' origins become a `known-issue` task. The workflows are still noted under §7.
+  - Penumbra.Api's missing licence is flagged for the owner's lawyer.
+  - The effective date is the day `test` is pushed.
+- **N-7: These rules change to fit the new phases:**
+  - AC-7 is now "Phases A and B change no licence or notice file", checked at the Phase B tip.
+  - New ACs 9–13 cover Phase B and Phase C.
+  - The three guard tests stay unchanged through Phases A and B. Phase C replaces `ReadmeTermsTests.Licence_stays_AGPL_and_drafts_are_drafts`, makes `PbdCleanRoomRecordTests.Header_names_the_spec_not_a_port` follow `LICENSE`, and edits only the Luna doc and message in `SupplyChainTests`.
+  - `IpcProvider.cs` line 1 follows `LICENSE`.
+  - The orchestrator may edit SPDX lines in Phase C.
+  - The short re-review also covers a `LICENSE` date line.
+  - The log's opening lines now describe all three phases.
+- **N-8: Why 13 ACs.** This is over the ~10 guideline. The user asked for the whole job in one run, every phase has its own proof and fallback, and splitting would leave the licence unpublished.
 
-Unchanged from rev 9: the scope (Phase A only; the licence stays AGPL), the slug, ACs 1, 2 and 4–8, D1–D23 (amended in place) and the step order.
+All rev-10 rules for Phase A stay as they were, except where N-7 changes them. Planner (rev 11) made no tool calls.
 
 ## Approval Summary
-**Goal:** Replace every non-trivial line Caraxi and AzureRavie wrote with code written by an agent that never saw theirs. Proteus's public IPC and the small fixes stay exactly as users and other plugins know them. The result is a record that makes a later relicensing possible. The licence stays AGPL-3.0 in this feature.
+**Goal:** Replace every non-trivial line Caraxi and AzureRavie wrote with code written by an agent that never saw theirs, keeping the public IPC and the small fixes exactly as before. Ship Proteus without Luna, Penumbra.Api and Glamourer.Api. Then publish the Proteus Licence on `test`.
 
 **Slug:** `contrib-clean-room`
 
 **Acceptance Criteria:**
-- AC-contrib-clean-room-1: A plugin calling Proteus's public IPC sees the same labels, argument types, return types and results as before. Tests written from the spec prove this: they pass on the old code and on the clean code.
+- AC-contrib-clean-room-1: A plugin calling Proteus's public IPC sees the same labels, argument types, return types and results as before. Tests written from the spec prove it: they pass on the old code and on the clean code.
 - AC-contrib-clean-room-2: The contributors' small features still work as before, unless the spec drops one with a reason:
-  - `/proteus refresh silent`, alone or with `full`;
-  - clicking a mod's name in the Mods tab opens it in Penumbra;
-  - the priority control edits the priority correctly;
-  - multi-select group defaults and per-option overlay tables;
-  - case-insensitive overlay lookup;
-  - the Glamourer cooldown counts from the equip attempt;
-  - lock conflicts are logged.
+  - `/proteus refresh silent`;
+  - clicking a mod's name opens it in Penumbra;
+  - the priority drag;
+  - multi-select defaults and per-option tables;
+  - case-insensitive lookup;
+  - the Glamourer cooldown counted from the attempt;
+  - lock-conflict logging.
 - AC-contrib-clean-room-3: No non-trivial contributor line remains.
-  - **The pass rule.** Whole-tree blame runs at `<R>`, the step-6 tip, the step-8 merged tip and any step-9 re-merge, in both `-w -M -C` and `-w -M -C -C`, and at the final tip in `-w -M -C`. Every line it gives to Caraxi or AzureRavie must be either:
-    - in a trivial category (blank, using, namespace or brace); or
-    - a game-fact line in a file §1 lists, within that file's §1 count (3 in total at most).
-  - **Count changes.** Every change in the counts is logged by file and category, with a reason from the allowed list.
-  - **The final re-check.** The step-10 re-check on `test` goes in the final report.
-  - **The derived closure is removed:** direct, derived, carried-over and merge-inherited lines. Its rounds and counts are logged.
-  - **Allowed additions.** `<R0>…<R>` and every merge add only C# markers, verified restored lines, blanks and, in merges only, the BuildNumber token. Unmatched and other are both 0.
-  - The sample folder is deleted and `proteus.slnx` is regenerated.
-- AC-contrib-clean-room-4: B's code is shown to be independent. At the final tip, Agent D finds 0 expressive non-interface lines in B's commits that are identical to any removed line. Every run's numbers are logged, starting with the first, together with each hit's category.
+  - Whole-tree blame runs at `<R>`, the step-6 tip, the Phase B tip, the step-8 merged tip and any step-9 re-merge, in both modes, and at the final tip in `-w -M -C`.
+  - Every line it gives to Caraxi or AzureRavie must fall in a trivial category, or be a game-fact line in a file §1 lists, within that file's §1 count (3 at most in total).
+  - Count changes are logged by file and category, with a reason.
+  - The derived closure is removed.
+  - `<R0>…<R>` and every merge add only allowed lines.
+  - The sample is deleted, and `proteus.slnx` is regenerated.
+- AC-contrib-clean-room-4: B's code is shown to be independent. At the final tip, D finds 0 expressive non-interface lines in B's surviving commits that match any removed line. Every run is logged, starting with the first.
 - AC-contrib-clean-room-5: The record is complete:
-  - the spec is facts only, with all 12 sections, the trivial class shown as excluded, and the game-fact lines listed;
-  - the log lists every participant's reads, with commands verbatim;
-  - the clean agents' sections are extracted from their transcripts and stay inside their allowlists;
-  - both orchestrator self-checks are 0 beyond their named exceptions;
-  - the dirty agents' self-reports give 0 identifier-grep hits;
-  - the tripwire re-plan is recorded;
+  - the spec (with its trivial class and game-fact lines) and the IPC contract are facts only;
+  - the log has every participant's reads, verbatim;
+  - the clean agents' sections are extracted from transcripts and stay inside their allowlists;
+  - both self-checks are 0 beyond their exceptions;
+  - the dirty agents give 0 identifier-grep hits;
+  - the tripwire re-plan and the scope change are recorded;
   - the record tests pass, and they only parse files.
-- AC-contrib-clean-room-6: The proof holds:
-  - before removal, the old-code gate (spec tests plus WIDE-A) is green, read only through the hashing TRX script;
-  - after removal, the spec tests don't pass;
-  - on the clean code and on every merged tip, everything passes. For tests that existed at step 2, the skip list is the same, and the only failures are baselines with equal normalised hashes. A classes any mismatch as "differs only in <kind>" or "different";
-  - tests that arrive with `test` pass, or skip on their own.
-- AC-contrib-clean-room-7: The licence is untouched:
-  - `LICENSE` is still the AGPL;
-  - `docs/LICENSE-DRAFT.md` still says "DRAFT, not yet in force";
-  - the three guard tests are unchanged and green;
-  - the step-9 file-list check lists no licence or notice file.
+- AC-contrib-clean-room-6: The proof holds in each phase:
+  - the old-code gate (read through the hashing TRX script), "not passing" after removal, then green on the clean code;
+  - the Phase B proof (WIDE-B plus WIDE-A, contract and shipped-assembly tests);
+  - green on every merged tip.
+
+  In each run, tests that existed at step 2 keep the same skips, and baseline hashes are equal (or A answers "differs only in <kind>"). New tests pass, or skip with a reason.
+- AC-contrib-clean-room-7: Phases A and B change no licence or notice file. `git diff test...<B tip> --name-only` lists none, and that is logged. The three guard tests pass, unchanged, through the end of Phase B.
 - AC-contrib-clean-room-8: Finish:
   - the branch merges into `test` locally, adding nothing beyond the last reviewed merge state;
   - the Records filter, the blame re-check and the quick suite pass on `test`;
-  - only `test` is pushed. Nothing goes to `main`, no tags are made, and no release or deploy workflow runs.
+  - only `test` is pushed. Nothing goes to `main`, there are no tags, and no release or deploy workflow runs.
+- AC-contrib-clean-room-9: The plugin package contains no `Luna.dll`, `Penumbra.Api.dll` or `Glamourer.Api.dll`. Neither `Proteus.csproj` nor `packages.lock.json` references them, and `Proteus.dll` references none of them.
+- AC-contrib-clean-room-10: Proteus talks to Penumbra and Glamourer exactly as before:
+  - every IPC label, kind and signature it uses matches the API submodules;
+  - so does every enum's name, member, value, underlying type and `[Flags]`;
+  - the bridges behave as the contract says when Penumbra or Glamourer is absent or not ready;
+  - the B5 smoke check and step 8's QA pass in game (equip and hold, redraw, design apply, bindings, mod settings).
+- AC-contrib-clean-room-11: `LICENSE` is the Proteus Licence, marked "*Version 1.0 — in force from <push date>*", with no DRAFT marker. `docs/LICENSE-DRAFT.md` is gone, there is no root `LICENSE-*` file, and the plugin package carries the licence.
+- AC-contrib-clean-room-12:
+  - Every SPDX header of Proteus's own code reads `LicenseRef-Proteus`.
+  - XivLiveMesh's `LICENSE`, `NOTICE.md` and csproj follow the C1 usage check: either the Proteus Licence (a byte-identical `LICENSE`), or AGPL as a separately noticed library.
+  - Both csproj files drop `PackageLicenseExpression`.
+  - Outside the historical records and the third-party listings, no file claims the AGPL for Proteus's own code.
+- AC-contrib-clean-room-13: `THIRD_PARTY_NOTICES.txt` keeps its existing MIT and public-domain blocks, and adds:
+  - every package that ships, with its licence taken from the nuspec;
+  - the Glamourer-derived types (Apache-2.0);
+  - an interoperability note for Penumbra's and Glamourer's IPC facts;
+  - the game-asset carve-out (`Resources/sphere_d_array.png`, `tile_norm_array.png`);
+  - the submodules, with their licences;
+  - a note on the workflows adapted from other projects.
 
 **Key decisions:**
-- **Agent A** (dirty) writes the spec. After the orchestrator's tests from it are proven on the old code, A removes the non-trivial contributor lines, everything derived from them (the transitive set), and every set line in the mixed-set files. A only deletes, restores word for word, and adds markers. It never commits. Trivial coincidental lines in other files stay in place and are logged.
-- **Agent B** (clean, fresh) fills the holes, rewrites `IpcProvider.cs`, and rebuilds the two coincidental Solona blocks.
-- **Agent D** (dirty, fresh) compares B's commits with the whole removed set, and reports numbers and categories only.
-- **The clean side never sees the old code.** The orchestrator, B, the critics, the security reviewer and QA view only the clean diffs. Before `<R>`, test output reaches the orchestrator only as names, outcomes, types, codes and normalised hashes. Scripts that touch mixed paths print counts only.
-- **The security review** runs as a clean sub-agent on the clean diffs, never as the `/security-review` skill in the orchestrator.
-- **`test` is merged in at the start of step 8,** so the review, the security review, D and QA all see the merged tip. A re-merge in step 9 gets its own critic check. The short re-review covers every commit after the critic's last pass.
+- **Phase A** (unchanged from rev 10):
+  - dirty A removes the lines and never commits;
+  - clean B rebuilds them;
+  - dirty D checks the similarity;
+  - the clean side sees only the clean diffs;
+  - trivial coincidental lines outside the mixed set stay, and are logged.
+- **Phase B:**
+  - Agent C (dirty only for the API sources and the named Luna base classes) writes `docs/ipc-contract.md`;
+  - the orchestrator writes Cecil contract tests, shipped-assembly tests and bridge-availability tests;
+  - clean B2 replaces every Penumbra.Api, Glamourer.Api and Luna use with Proteus-owned call gates, keeping the owned types in the APIs' namespaces;
+  - an in-game smoke check (B5) comes before Phase C.
+- **Phase C:**
+  - the orchestrator publishes the licence and the notices (licence text from the nuspec files);
+  - XivLiveMesh's licence follows a usage check;
+  - the effective date is the push day.
+- **One gate for all three phases:** merge `test`, then code-critic, then a clean security review, then the D re-run, then QA in game. The short re-review covers every commit after the critic's pass.
+- **Fallbacks:** A alone, or A and B, with the licence staying AGPL, if a later phase can't pass.
 
-**Risk flags:** security surface: yes (`Proteus/Interop/` bridges, Proteus's public IPC) · new persisted field: no · sensitive-category data: no · schema migration: no · new dependency: no · new/changed route: no
+**Risk flags:** security surface: yes (`Proteus/Interop/`, public IPC, `Proteus/TestHarness/`, licence and notices) · new persisted field: no · sensitive-category data: no · schema migration: no · new dependency: no (three removed) · new/changed route: no
 
-**NEEDS_DECISION:** None. The user decided ND-1. The orchestrator decided ND-3, the self-check option, and the rev-8 to rev-10 amendments. The other earlier items are owner follow-ups.
+**NEEDS_DECISION:** None. The user decided ND-1 (now reversed: full scope). The orchestrator decided ND-2 to ND-6, ND-3, the self-check option and the rev-8 to rev-11 amendments.
 
 *(The summary above is what the developer approves; everything below is the detailed contract it stands on.)*
 
 ## Source
-- The user's prompt, choices, decision and feature arguments, verbatim under Requirements.
-- The precedent: `docs/pbd-clean-room.md`, `docs/pbd-clean-room-plan.md` (rev 6), `docs/pbd-clean-room-log.md` and `Proteus.Tests/PbdCleanRoomRecordTests.cs`.
-- The committed spec `docs/contrib-clean-room-spec.md` (`1a2cd3ef`), and Agent A's stage-1 report as summarised by the orchestrator.
-- The orchestrator's step-0 blame figures, and its rev-8 amendments.
+- The user's prompt, choices, both decisions and the feature arguments (verbatim under Requirements).
+- The precedent:
+  - `docs/pbd-clean-room.md`
+  - `docs/pbd-clean-room-plan.md`
+  - `docs/pbd-clean-room-log.md`
+  - `Proteus.Tests/PbdCleanRoomRecordTests.cs`
+- The committed spec `docs/contrib-clean-room-spec.md` (`1a2cd3ef`, amended at 1b).
+- The orchestrator's state report.
+- Rev 1's Phase B/C design, and Plan-critic 1's notes on it.
 - The reports of Plan-critics 1–6, 8 and 9.
-- Context only, unchanged: `docs/LICENSE-DRAFT.md`, `THIRD_PARTY_NOTICES.txt` and `XivLiveMesh/NOTICE.md`.
+- `docs/LICENSE-DRAFT.md`, `THIRD_PARTY_NOTICES.txt`, `XivLiveMesh/NOTICE.md`, `Proteus/Proteus.csproj` and `Proteus/packages.lock.json`, as read in rev 1.
 - Not opened, and forbidden to the planner: the mixed files and their history, the contributors' commits, the Luna, Glamourer and Penumbra.Api sources, and the contributors' PRs.
 
 ## Context & Decisions
-**Problem.** Caraxi (11 commits) and AzureRavie (1 commit) still have surviving lines on `test`. Under §6 of the draft licence, those lines stay under the AGPL unless their authors agree. The user chose to have them rewritten, and to stop before relicensing.
+**Problem.** The Proteus Licence can't honestly take effect while any of these three hold:
+- the contributors' code survives, because licence §6 keeps it under AGPL;
+- the plugin zip ships `Luna.dll`, which is AGPL-3.0;
+- the zip ships `Penumbra.Api.dll`, which has no licence file.
 
-The code sits mostly inside files Solona wrote. So A, who may see it, removes it first. Four things prove the removal:
-- blame counts with a trivial classifier;
-- bounded additions;
-- D's similarity check;
-- tests that fail after the removal and pass again on the clean code.
+Shipped NuGet packages and game-derived assets also need notices. Phase A deals with the first, Phase B with the second and third, and Phase C with the notices and the publication.
 
-**Facts (from allowed files, the committed spec and the orchestrator's counts):**
-- **Step-0 blame** (`-w -M -C` on `test`):
-  - Caraxi: 274 lines, made up of the sample 100, IpcProvider 137, slnx 9, StatusWindow 4, PenumbraBridge 9, Plugin 6, SidecarDiscoveryService 6, and one line in each of the three `ColorTableEditor*.cs` files;
-  - AzureRavie: 12 lines, in GlamourerBridge;
-  - dependabot: 1 line.
-- **Spec §1** (at `test` `a25a3b56`):
+**Facts (from allowed files, the committed spec and the orchestrator's reports):**
+- **Phase A facts carry over from rev 10:**
+  - the step-0 blame;
+  - §1's totals;
+  - the 11-entry mixed set;
+  - the six IPC labels;
+  - the §9.1 seam reachability;
+  - the cooldown and lock locations;
+  - the §10 tests and the EDGE-5 hit, which is kept;
+  - the harness routes;
+  - 12 test files using `proteus.slnx`;
+  - pushing to `test` runs only `codeql.yml`;
+  - `BuildNumber` is 1467 on `test` and 1466 on the branch;
+  - `W = E:/orca/workspaces/Proteus/licence-clean-room`.
+- **Luna ships today.** `Proteus.csproj` has ProjectReferences to `Penumbra.Api`, `Luna` and `Glamourer.Api`. The csproj comment says Luna holds Penumbra.Api's IPC subscribers. `packages.lock.json` shows `glamourer.api` depending on `Luna`. `SupplyChainTests.Luna_IsOnTheCommitGlamourerPins` says "one Luna.dll ships".
+- **Licences:** `Luna/LICENSE` is AGPL-3.0, `Glamourer/LICENSE` is Apache-2.0, and `Penumbra.Api` has no licence file.
+- **API uses outside the bridges** are only `using Penumbra.Api.Enums` and `using Glamourer.Api.Enums`, in about 53 production and test files. `GameHarnessAdapter.cs` creates `Glamourer.Api.IpcSubscribers.ApplyDesign` and `ApplyState`. ADR 0002 says ApplyDesign is "created inside the harness, never in `Interop/`". `HarnessBindingsWiringTests` lines 36–54 pin that.
+- **Shipped packages** (direct, per the lock file): BCnEncoder.Net, BitMiracle.LibTiff.NET, CommunityToolkit.HighPerformance, StbImageSharp and StbImageWriteSharp. The transitive ones (Microsoft.Extensions.*, System.IO.Hashing, JetBrains.Annotations) come in through Luna and Penumbra.Api. DalamudPackager and DotNet.ReproducibleBuilds are build-time only.
+- **Packaging.** `release.yml` and `testing-release.yml` ship `latest.zip`, which is the build output. `THIRD_PARTY_NOTICES.txt` already ships as content. `LICENSE` doesn't ship.
+- **Game assets in the build.** The csproj comments call `Resources/sphere_d_array.png` and `tile_norm_array.png` slices extracted from game array textures.
+- **Licence mentions:**
+  - `Proteus.csproj:26` and `:175`;
+  - `XivLiveMesh.csproj:6` and `:19`;
+  - `XivLiveMesh/NOTICE.md` lines 6 and 18;
+  - SPDX lines in 7 `XivLiveMesh/*.cs` files;
+  - `ReadmeTermsTests`;
+  - `PbdCleanRoomRecordTests`.
 
-  | Category | Lines |
-  |---|---|
-  | Whole-file | 268 (in 8 files) |
-  | Direct in both modes, outside whole files | 40 (in 8 files) |
-  | Direct in `-C -C` only, outside whole files | 212 (in 179 files; import, blank and namespace lines, plus 3 game-path test lines) |
-  | Derived | 51 |
-  | Carried over | 19 |
-  | Merge-inherited | 0 |
-  | Restored candidates | 13 |
+  README and For Creators.md have none. TERMS.md points at `[LICENSE](LICENSE)`.
+- **The draft licence's preamble** names "the GNU Affero General Public License, version 3" for earlier versions. So the publication test checks for the AGPL's uppercase title, not for the word "Affero".
+- **XivLiveMesh.csproj** says "Shared between Dalamud plugins". Whether another plugin actually uses it is unknown (C1 checks).
 
-  The closure took three rounds: 58, 21, then 0.
-- **The mixed set has eleven entries:**
-  - `Proteus/Interop/IpcProvider.cs`
-  - `Proteus/Interop/PenumbraBridge.cs`
-  - `Proteus/Interop/GlamourerBridge.cs`
-  - `Proteus/Plugin.cs`
-  - `Proteus/Services/SidecarDiscoveryService.cs`
-  - `Proteus/Gui/StatusWindow.cs`
-  - `Proteus/Gui/ModsTab.cs`
-  - `Proteus/Services/CompositorService.Carriers.cs`
-  - `Proteus/Services/CompositorService.cs`
-  - `proteus.slnx`
-  - `samples/ExampleMultiGroupOverlayMod/**`
-
-  It grows only through the step-1b failure path or EDGE-6.
-- **Public IPC:** six labels (spec §2).
-- **Seams** (spec §9.1):
-  - reachable without a new seam: R1, R7, R8 and R10 (for R1);
-  - partly reachable: R5, R6 and R11;
-  - need a seam: R2, R3, R4, R9 and R12.
-- **The equip route reaches neither behaviour** (spec §9.3). The cooldown is in private carrier reconciles. The lock logging is in `ReapplyPlayerState()`, `SetGlasses(ulong)` and `SetAccessory(ulong, string)`. `POST /actions/equip` reaches only `SetGearItem`.
-- **Existing tests** (spec §10): `SidecarDiscoveryTests`, `ContentPieceSelectionTests`, `FaceUvDoublingTests`, `ShellMensLayoutTests`, `WomensArtOnMenTests`, `StutterFixesWiringTests`, `StutterFixesPureTests` and `HarnessBindingsWiringTests`. There is one EDGE-5 hit, and it is kept.
-- **Harness routes:** `GET /health`, `GET /log`, `POST /actions/equip`, `GET /sidecar` and `POST /actions/mod-settings`.
-- **Repo facts:**
-  - 12 test files find the repo root through `proteus.slnx`;
-  - record tests only read files;
-  - pushing `test` runs only `codeql.yml`.
-- **`BuildNumber`:** 1467 on `test` (`a25a3b56`), 1466 on the branch. The scripts match it with `^\s*public const int BuildNumber = \d+;\s*$`.
-- **Bot commits:** `8c787a80` (a version bump) and `d046b185` (a merge with no content).
-- **Paths:** `W = E:/orca/workspaces/Proteus/licence-clean-room`, on branch `solona-m/licence-clean-room`. Every agent uses absolute `W` paths.
-
-**Decisions (and rejected alternatives):**
+**Decisions (and rejected alternatives).** D1–D23 are the Phase A rules from rev 10, with the N-7 edits marked "(rev 11)". D24–D31 are new.
 
 1. **Roles.** Every sub-agent runs on model `opus`.
 
    | Role | Side | Reads | Writes | Shell / git |
    |---|---|---|---|---|
-   | Orchestrator | clean | anything D9 allows; the mixed set only at or after `<R>` | tests, docs, the log, the slnx regeneration, the `BuildNumber` line; **every commit** under D10, without viewing it | D10/D11; D5 before `<R>`; count-only scripts on mixed paths |
-   | Agent A (fresh `general-purpose`; stage 1, step 1b, stage 2, continued by SendMessage) | dirty | the whole repo and its history; the TRX files (D5, D18). Never the submodule sources, other checkouts, the web or memory topic files | the spec and self-report; the 1b amendment; the removal (deletions, word-for-word restores, C# markers); the manifest; the removal self-report | git read commands, `dotnet build`, `dotnet test`. **Never commits**, pushes or merges |
-   | A2 (stage-2 fallback) / A3 (EDGE-4, D17 "other") | dirty | as A; each recomputes the closure from history | as A | as A. **A3 alone** may run `git -C W merge --no-commit test`; the orchestrator commits |
-   | Agent D (fresh `general-purpose`) | dirty | the mixed set at `<R0>^` and its history, B's commits, A3's resolution lines, the spec | numbers, categories, clean-side `file:line`; self-report | git read commands, its own scripts |
-   | Agent B (fresh `general-purpose`, after `<R>`) | clean | everything at HEAD except what D9 forbids | the holes, the new `IpcProvider.cs`, the §6.3/§6.4 blocks, Localization entries, new `Proteus/**` files (each named), fixes to merged tips | D12; no git; no sub-agents |
-   | Code-critic | clean | the D8 diffs, files at HEAD, the spec, the log | findings; §12 table | D12 |
-   | Security reviewer | clean | as the code-critic | findings; §12 table | D12 |
-   | Adversarial QA | clean | `docs/agent-rules/adversarial-qa.md`, the Requirements, spec §4–9, files at HEAD after `<R>`, the harness config | QA report | `curl` to `127.0.0.1`/`localhost` only |
+   | Orchestrator | clean | anything D9 allows; the mixed set only at or after `<R>` | tests, docs, the log, the slnx, the `BuildNumber` line, SPDX lines and licence/notice files in Phase C (rev 11); **every commit**, made under D10 without viewing | D10/D11; D5 before `<R>`; count-only scripts |
+   | Agent A (stages 1/1b/2) | dirty | the repo and its history, the TRX files | the spec, the removal (deletions, restores, markers), the manifest, its self-reports | git reads, `dotnet`. **Never commits** |
+   | A2 / A3 | dirty | as A; each recomputes the closure from history | as A | as A; **A3 alone** may run `git merge --no-commit test` |
+   | Agent D | dirty | the mixed set at `<R0>^`, B's commits, A3's resolution lines, the spec | numbers, categories, clean-side `file:line` | git reads, its own scripts |
+   | Agent B (after `<R>`) | clean | HEAD, minus D9 | the holes, `IpcProvider.cs`, §6.3/§6.4, Localization, named new files, fixes to the merged tip | D12 |
+   | **Agent C (rev 11)** (fresh `general-purpose`, after step 7) | dirty only for the API sources | `Penumbra.Api/**`; `Glamourer/Glamourer.Api/**`; Glamourer's root LICENSE and NOTICE; the Luna IPC subscriber base classes that those API subscribers derive from (facts only; each file logged); Proteus's own sources at the Phase A tip. Never the contributors' commits, the mixed set before `<R>`, other `Glamourer/` folders or the rest of `Luna/` | `docs/ipc-contract.md`, its self-report | `git -C <submodule> ls-files`, Read/Grep; no `dotnet` |
+   | **Agent B2 (rev 11)** (fresh `general-purpose`, after C's commit) | clean; never reads C's sources or the removed set | HEAD minus D9, and `docs/ipc-contract.md` | `Proteus/Interop/**`, `Proteus/TestHarness/**` gate files and the adapter, `Proteus/Proteus.csproj` (reference removal), `Proteus/packages.lock.json` (through the build), named new files, Phase B fixes | D12 (same allowlist as B) |
+   | Code-critic | clean | the D8 diffs, HEAD, the spec, the contract, the log | findings, the §12 table, the contract §4 table | D12 |
+   | Security reviewer | clean | as the critic | findings, the §12 table | D12 |
+   | Adversarial QA | clean | `docs/agent-rules/adversarial-qa.md`, the Requirements, spec §4–9, the contract, HEAD after `<R>`, the harness config | QA report | `curl` to `127.0.0.1`/`localhost` |
    | Short re-reviewer | clean | the commits after `<critic-pass-commit>` | verdict | D15 |
-   | Planner, plan-critics | clean | the plan, allowed files, the committed spec | reports listing their reads | as reported |
+   | Planner, plan-critics | clean | the plan, allowed files, the spec, the contract | reports listing their reads | as reported |
 
-   - **Folders.** All sit outside `W`, as siblings of the session scratchpad, and are logged:
-     - `scratchpad-agentA\` (A, A2, A3);
-     - `scratchpad-agentD\`;
-     - `scratchpad-handover\` (the manifest only).
-   - **Rejected:**
-     - the orchestrator removing lines, because it would see them;
-     - A running the similarity check, because D must be independent;
-     - dirty agents committing, because D10 should be enforced in one place.
+   - **Folders.** All sit outside `W` and are logged: `scratchpad-agentA\`, `scratchpad-agentC\` (rev 11), `scratchpad-agentD\` and `scratchpad-handover\`.
 
-2. **The removal set.** A computes it and lists it in §1 by file, category and count, with no code.
-   - **Direct:** every line at the `test` tip that whole-tree blame gives to either contributor, in `-w -M -C` or `-w -M -C -C`.
-   - **The trivial coincidental class.** A direct line is in the class, and is **not removed**, when (a) or (b) holds, and (c) also holds:
-     - (a) after trimming, it matches the fixed trivial regex:
+2. **The removal set** (rev 10, unchanged).
+   - **Direct lines:** blame in either mode.
+   - **The trivial coincidental class:** lines that match the fixed regex (`^$`, `using`, `namespace`, `[{}];?`) or are game-fact lines (listed by `file:line` with a shape; the remainder trivial; a per-file limit from §1, at most 3 in total), in files with no non-trivial set line. These are not removed.
+   - **Derived lines:** the transitive closure, with the merge rule.
+   - **Carried-over lines:** including `87ae2e3d`.
+   - **Whole files.**
+   - **Restored lines,** with the manifest in `scratchpad-handover`.
+   - **A's operations:** delete, restore, add markers. Markers go in C# files only.
 
-       ```
-       ^$
-       ^using\s+(static\s+)?[A-Za-z_][\w.]*(\s*=\s*[\w.<>, ]+)?;$
-       ^namespace\s+[\w.]+;?$
-       ^[{}];?$
-       ```
+3. **The scope tripwire** (rev 10).
+   - **Condition 1:** derived + carried over + restored > 2 × (whole-file lines + non-trivial direct lines).
+   - **Condition 2:** a non-trivial set line in a Sensitive-Area file beyond the known Interop files.
+   - The step-1 firing and the rev-8 re-plan are logged.
+   - Phase B's changes are not set growth: B2 is clean.
 
-       The categories are blank, using, namespace and brace.
-     - (b) it is a game-fact line. A lists the 3 lines in §1 by `file:line` (the record at `<R>`), each with a one-word shape such as "const" or "assert". Each must:
-       - sit under `Proteus.Tests/`;
-       - contain the spec §9.5 literal;
-       - with the quoted literal removed, be trivial itself: at most one declaration or one assert call, as A judges.
+4. **Tests are written from the spec and proven on the old code** (rev 10).
+   - Tests that need a new seam carry the traits NewSeam and `Seam=§9.<row>`. Departure tests carry NewBehaviour.
+   - If the NewSeam share is above a third, it is reported as a weaker AC-1.
+   - The EDGE-5 test is kept.
 
-       From then on the limit is per file (M-1): game-fact lines appear only in the files §1 lists, each file at or below its §1 count, at most 3 in total.
-     - (c) its file holds no non-trivial set line.
+5. **The old-code output filter** (rev 10).
+   - TRX goes to the scratchpad, and console output to an unread file.
+   - `trx-summary.ps1` prints names, outcomes, skips, types and normalised hashes.
+   - `build-summary.ps1` prints codes only.
+   - Failures, CS1061 and CS1729 go to A.
 
-     Trivial lines in mixed-set files are removed, and B re-adds them.
-   - **Derived:** a transitive closure.
-     - Walk the commits in topological order.
-     - In a non-merge commit, every line added in a hunk of `git diff -U0 -w -M X^ X` that removed a contributor line or a derived line is derived.
-     - In a merge commit, a line inherits its status from its source parent. Only lines that are new against every parent get the hunk rule, applied against each parent.
-     - Repeat until a round adds nothing.
-   - **Carried over:** for each commit that deletes set lines without an in-hunk replacement, A inspects that commit and the next five commits touching `Proteus/`. A's `87ae2e3d` seeding is accepted.
-   - **Whole files:** `Proteus/Interop/IpcProvider.cs`, `proteus.slnx` and `samples/ExampleMultiGroupOverlayMod/**`.
-   - **Restored lines:**
-     - These are Solona's own lines, copied word for word from the contributor commit's parent, where blame gives them to Solona. They are restored only where they fit.
-     - The manifest is `<session scratch root>\scratchpad-handover\contrib-restored-manifest.tsv`, with columns `<path at R>\t<line at R>\t<source commit>\t<source path>\t<line at source^>`.
-   - **A's operations:** A only deletes lines, restores lines word for word, and adds markers. It never edits a line it keeps. A broken build after removal is expected.
-   - **Markers:** in C# files only, `// CLEAN-ROOM HOLE: spec §<n>`. Holes in non-C# files appear only in A's self-report. B removes every marker.
+6. **The strings rule** (rev 10). Text is described, not quoted. Only interface strings are exact. New UI text goes into all 8 locales.
 
-3. **The scope tripwire.** It is checked after step 1b, and again after any growth of the set.
-   - **Condition 1:** derived + carried over + restored > 2 × direct, where direct = whole-file lines + non-trivial direct lines outside whole files.
-   - **Condition 2:** the set, excluding the trivial class, includes an AGENTS.md Sensitive-Area file beyond the known Interop files.
-   - Either one firing means a re-plan through planner and plan-critic.
-   - **The step-1 firing and the rev-8 re-plan are logged:**
-     - both readings of condition 1;
-     - condition 2 before (21) and after (0) the trivial class;
-     - the `87ae2e3d` scope accepted.
+7. **D's similarity check** (rev 10).
+   - **Input:** B's commits' surviving lines (SHAs logged) and A3's resolution lines.
+   - **Categories:** interface, idiomatic or forced, expressive.
+   - **Record:** the first measurement and every later one. Expressive hits go to B until none are left.
+   - **Rev 11:** B2's lines are not measured. B2 never saw the removed set, and its work starts after D's step-7 measurement. D re-runs only if B's own lines change.
 
-4. **Tests are written from the spec and proven on the old code before removal.**
-   - Assertions come only from the spec.
-   - A test that needs a seam the old code lacks carries `[Trait("CleanRoom","NewSeam")]` and `[Trait("Seam","§9.<row>")]`. Departure tests carry `NewBehaviour`. Neither is gated.
-   - Counts are logged per class. If NewSeam tests are more than a third of the total, AC-1 is reported as weaker; that is expected here.
-   - No test is weakened.
-   - The EDGE-5 hit is kept unchanged.
-
-5. **The old-code output filter.** This applies to every orchestrator `dotnet` run before `<R>`.
-   - Runs log to TRX in the session scratchpad. Console output goes to an unread `.out` file, deleted afterwards. The step-2 `.trx` is kept.
-   - `trx-summary.ps1` prints, per test: name, outcome, skip reason, assertion type, and `sha256(norm(message))[0..16]`. For any other exception, it prints the type only.
-   - `norm` is fixed and logged:
-     - CRLF becomes LF, and the message is trimmed;
-     - paths become `<path>`;
-     - GUIDs become `<guid>`;
-     - digit runs become `<n>`.
-   - `build-summary.ps1` prints error codes and their counts only.
-   - Gated failures go to A, and so do CS1061 and CS1729. A answers "test bug: <fix>" or "spec error: §n amended", and never quotes output.
-
-6. **The strings rule.**
-   - The spec describes log and UI text; it never quotes it.
-   - Tests assert structured facts.
-   - Exact strings are allowed only for interface facts.
-   - New user-visible text is translated into all 8 locales.
-
-7. **Agent D's similarity check.** It runs after step 6, and again whenever B's commits change.
-   - **Input:** the surviving lines added by B's commits (SHAs logged, each taken from `git diff -U0 c^ c`), plus A3's resolution lines.
-   - **Normalisation:** comments stripped, whitespace collapsed. A line is trivial if it has fewer than 20 alphanumeric characters, or is a `using` directive.
-   - **Comparison:** against the whole removed set.
-   - **Categories:**
-     - interface;
-     - idiomatic or forced by context (with a reason; not rewritten);
-     - expressive.
-   - **Similarity:** the Jaccard index over 5-grams, per file.
-   - **The record:**
-     - the first measurement is logged before any rewrite, and every later one too;
-     - expressive hits go to B until there are none left;
-     - any file at 0.40 or above gets a reason.
-
-8. **The clean diffs.**
+8. **The clean diffs** (rev 10).
    - **Pre-removal:**
 
      ```
-     git -C W diff test...<R0>^ -- . ':!Proteus/Interop/IpcProvider.cs' ':!Proteus/Interop/PenumbraBridge.cs' ':!Proteus/Interop/GlamourerBridge.cs' ':!Proteus/Plugin.cs' ':!Proteus/Services/SidecarDiscoveryService.cs' ':!Proteus/Gui/StatusWindow.cs' ':!Proteus/Gui/ModsTab.cs' ':!Proteus/Services/CompositorService.Carriers.cs' ':!Proteus/Services/CompositorService.cs' ':!proteus.slnx' ':!samples' <any file added by the 1b failure path>
+     git -C W diff test...<R0>^ -- . ':!Proteus/Interop/IpcProvider.cs' ':!Proteus/Interop/PenumbraBridge.cs' ':!Proteus/Interop/GlamourerBridge.cs' ':!Proteus/Plugin.cs' ':!Proteus/Services/SidecarDiscoveryService.cs' ':!Proteus/Gui/StatusWindow.cs' ':!Proteus/Gui/ModsTab.cs' ':!Proteus/Services/CompositorService.Carriers.cs' ':!Proteus/Services/CompositorService.cs' ':!proteus.slnx' ':!samples'
      ```
 
-   - **Post-removal:**
-
-     ```
-     git -C W diff <R> HEAD
-     ```
-
-   - **Re-merge** (critic only): `git -C W diff <P9> HEAD`, or `--stat` alone.
-   - **Re-reviewer:** the D15 commands only.
+   - **Post-removal:** `git -C W diff <R> HEAD`. This covers Phases B and C too.
+   - **Re-merge:** `git -C W diff <P9> HEAD`, or `--stat`.
    - **Never:**
-     - an unexcluded `git diff test HEAD`;
+     - an unexcluded diff from `test`;
      - any show or diff of `<R0>…<R>`;
      - `log -p` or content blame of the mixed set before `<R>`;
      - a combined merge diff.
-   - **Logged:** `<R0>`, `<R>`, `P8`, `T8`, `P9`, `T9` and `<critic-pass-commit>`.
 
-9. **Forbidden for every clean participant:**
-   - every revision of the mixed set before `<R>`, including its paths on `test`;
-   - the contributors' commits, PRs and forks, and web searches for their code;
-   - the sources under `Luna/`, `Glamourer/` and `Penumbra.Api/` (their LICENSE and README files are allowed);
-   - `bin/` and `obj/`;
+9. **Forbidden for every clean participant** (rev 10, plus rev 11):
+   - the mixed set before `<R>`;
+   - the contributors' commits;
+   - the submodule sources (their LICENSE and README files are allowed);
+   - `bin/` and `obj/` contents, except the Phase B name-only checks (B4);
    - other checkouts;
-   - the files of `E:\repos\Proteus` (D16);
-   - the memory topic files, until the push;
-   - A's and D's folders and transcripts;
-   - `scratchpad-handover\` (scripts only);
-   - the pre-`<R>` `.out` and `.trx` files, except through the D5 scripts.
+   - the files of `E:\repos\Proteus`;
+   - the memory topic files;
+   - A's, C's and D's folders and transcripts (rev 11: C added);
+   - `scratchpad-handover\`;
+   - the pre-`<R>` `.out` and `.trx` files.
 
-   Trivial-class files outside the mixed set are **not** forbidden.
+   **Rev 11:** B2 and every clean agent are also barred from Luna's base classes and from all API sources.
 
-10. **Git hygiene.**
-    - Stage with `git add -u` plus explicit paths.
-    - Before every commit, `git status --short` must list only the expected paths:
-      - `<R0>…<R>`: the mixed set and the deleted whole files;
-      - the removal report: the log only;
-      - the slnx commit: `proteus.slnx` only;
-      - B's commits: the mixed set, `IpcProvider.cs`, `Proteus/Localization/*`, the log, and the named files;
-      - merges: whatever `git diff --name-only <branch>...test` lists;
-      - step 1b: the spec and the log;
-      - any other commit: the files its step names.
+10. **Git hygiene** (rev 10, plus rev 11 expected sets).
+    - Use `git add -u` plus explicit paths, after a `git status --short` check. Allowed paths per commit:
+      - `<R0>…<R>`: the mixed set and the whole files;
+      - removal report: the log;
+      - slnx commit: `proteus.slnx`;
+      - B's commits: the mixed set, `IpcProvider.cs`, Localization, the log, and the named files;
+      - merges: what `--name-only` lists against `test`;
+      - **C's commit:** `docs/ipc-contract.md` and the log;
+      - **Phase B test commit:** `Proteus.Tests/IpcContractTests.cs`, `ShippedAssembliesTests.cs`, `BridgeAvailabilityTests.cs`, `HarnessBindingsWiringTests.cs` (the lines-40/43/44 names only), `Proteus.Tests.csproj` and the log;
+      - **B2's commits:** `Proteus/Interop/**`, `Proteus/TestHarness/**`, `Proteus/Proteus.csproj`, `Proteus/packages.lock.json`, `Proteus/Plugin.cs` (wiring only, if any), the files B2 names, and the log;
+      - **Phase C commit:** `LICENSE`, `docs/LICENSE-DRAFT.md` (deleted), `XivLiveMesh/LICENSE`, `XivLiveMesh/NOTICE.md`, `XivLiveMesh/XivLiveMesh.csproj`, `XivLiveMesh/*.cs` (line 1 only), `Proteus/Interop/IpcProvider.cs` (line 1 only), any B2 file with an SPDX line (line 1 only), `Proteus/Proteus.csproj`, `THIRD_PARTY_NOTICES.txt`, `AGENTS.md`, `Proteus.Tests/ReadmeTermsTests.cs`, `PbdCleanRoomRecordTests.cs`, `SupplyChainTests.cs`, `LicencePublicationTests.cs`, and the log.
     - No commit touches a trivial-class line outside the mixed set.
-    - Summaries use only `--stat`, `--numstat`, `--name-only` and `--format`.
-    - BuildNumber tokens are read only with `git grep -h -o -E "BuildNumber = [0-9]+" <rev> -- Proteus/Plugin.cs`.
 
-11. **The count-only scripts.** They live in the session scratchpad, are written with Write, and are never committed. Content stays in memory.
-    - **`blame-authors.ps1 <repo> <rev> <mode> [<previous checkpoint file>]`.**
-      - **What it prints.** It applies the fixed regex, and the game-fact file list with its per-file counts, both written into the log. For every non-Solona email, per file, it prints:
+11. **The count-only scripts** (rev 10).
+    - **`blame-authors.ps1`.** The pass rule: `nontrivial` = 0, and game-fact lines stay within the per-file §1 limits. Changes are logged with an allowed reason:
+      - a new file by B, B2 or Phase C (named);
+      - a file new from `test`;
+      - an import edit from `test`;
+      - a copy-detected import block from a test commit.
 
-        ```
-        <path>\t<email>\tnontrivial:<n>\ttrivial:blank=<n>,using=<n>,namespace=<n>,brace=<n>,gamefact=<n>
-        ```
+      The baseline is `<R>`, compared with §1.
+    - **`restored-check.ps1`, `guard-classify.ps1`, `bump-resolve.ps1`, `trx-summary.ps1` and `build-summary.ps1`.**
+    - **The extraction script.**
+    - **Rev 11, `zip-entries.ps1`:** prints the entry names of `latest.zip` only.
 
-        It also prints totals per email and mode, and a "changed:" list against the previous checkpoint, giving each file with its old and new counts.
-      - **Pass rule (M-1, M-2):**
-        - `nontrivial` = 0 in every file;
-        - `gamefact` appears only in the files §1 lists, each at or below its §1 count, at most 3 in total.
-
-        Nothing else fails. That includes trivial lines in `-w -M -C` outside the `ColorTableEditor*.cs` files.
-      - **Changes.** Every trivial-count change is logged by file and category, with one of these reasons:
-        - a new file by B (named);
-        - a file new from `test`;
-        - an import edit arriving from `test`;
-        - a copy-detected import block from a test commit.
-
-        A logged change never starts an A3 loop.
-      - **Baseline:** what `<R>` measures. It is compared per file and category with §1: each count must be at or below §1, or the difference is logged with its file. Any non-trivial difference fails.
-      - **Modes:**
-        - `-w -M -C` at step 0, after later fixes, and at the final tip;
-        - both modes at `<R>`, at step 6, after every merge, and at step 10.
-    - **`restored-check.ps1`.** It validates the manifest and verifies each restore.
-      - On non-merge ranges: marker (C# only), restored, blank or other.
-      - On merges: only lines that appear in neither parent are checked, as marker, restored, blank, bump or other.
-      - Unmatched and other must be 0. Bump must be 0 on non-merge ranges.
-    - **`guard-classify.ps1`:** prints `<sha> bump-only` or `<sha> other`.
-    - **`bump-resolve.ps1`:** accepts one conflict hunk made only of BuildNumber lines and prints `conflict hunks: 1, all bump-only`. Otherwise it refuses, the merge is aborted, and A3 takes it.
-    - **Also:** `trx-summary.ps1`, `build-summary.ps1`, and the extraction script.
-
-12. **Allowlists and extraction.**
-    - **B** may run only:
+12. **Allowlists and extraction** (rev 10, plus rev 11).
+    - **B and B2** may run only:
       - `dotnet build W/Proteus/Proteus.csproj -c Release`;
-      - `dotnet test W/Proteus.Tests/Proteus.Tests.csproj -c Release --filter "…"`, optionally with `--logger "console;verbosity=normal"`.
-    - **The code-critic** may run only:
-      - the D8 pre- and post-removal diffs;
-      - `git -C W diff <P9> HEAD`, or the same with `--stat`;
-      - `git -C W log --format=%h%x20%an%x20%s test..HEAD`;
-      - targeted `dotnet test`.
+      - `dotnet test W/Proteus.Tests/Proteus.Tests.csproj -c Release --filter "…"`, optionally with a logger.
+    - **The critic** may run the D8 diffs, the re-merge diffs, `git -C W log --format=%h%x20%an%x20%s test..HEAD` and targeted `dotnet test`.
     - **The security reviewer** may run the same, minus the re-merge diffs.
-    - **QA** may run only `curl`, to `127.0.0.1` or `localhost`.
+    - **QA** may run `curl` to `127.0.0.1` or `localhost` only.
     - **The re-reviewer** may run only:
 
       ```
       git -C W show --stat HEAD
       git -C W show HEAD -- docs/contrib-clean-room-log.md
       git -C W show HEAD -- Proteus/Plugin.cs
+      git -C W show HEAD -- LICENSE
       git -C W log --format=%h%x20%s <critic-pass-commit>..HEAD
       git -C W show <QA-bump commit> -- Proteus/Plugin.cs
       git -C W diff --stat <critic-pass-commit> HEAD
       ```
 
-    - **Everyone:** Read, Grep and Glob with absolute paths; content Greps keep line numbers on; no sub-agents.
-    - **Extraction for clean agents.** Per agent ID, it prints:
-      - `Opened:`;
-      - `Shell commands:` (verbatim);
-      - `Sub-agents:`;
-      - "Grep without line numbers: N";
-      - "Shell commands outside the allowlist: N";
-      - "forbidden locations in listing/search results: N".
+      `git -C W show HEAD -- LICENSE` is the one command added in rev 11.
+    - **Leak-check forbidden locations:** those from rev 10, plus `scratchpad-agentC` (rev 11).
+    - **Self-checks** (rev 10):
+      - **Self-check 1:** Reads of the mixed set before `<R>`, in any checkout. The exception is the meddle `Plugin.cs` lines 31–34.
+      - **Self-check 2:** content access only, from the window start. Named exceptions (a)–(e). The sanctioned class is as before.
 
-      Forbidden locations are:
-      - `glamourer/`, `penumbra.api/` and `luna/` at the repo root;
-      - any `bin` or `obj` segment;
-      - `samples/examplemultigroupoverlaymod`;
-      - `e:/repos/proteus/`;
-      - other checkouts;
-      - `/memory/`;
-      - `scratchpad-agent`;
-      - `scratchpad-handover`.
-    - **The orchestrator's self-checks** run over its own session transcript, up to the final commit.
-      - **Self-check 1 (whole session).** It counts every Read of a mixed-set repo-relative path, in any checkout, before `<R>`'s commit time.
-        - Disclosed exception: the meddle `Plugin.cs` Read of lines 31–34.
-        - Any earlier Read of `ModsTab.cs`, `CompositorService.Carriers.cs`, `CompositorService.cs`, or a file added by the 1b failure path, is listed as a further disclosed exception, with its range and what it showed.
-        - Logged as "self-check 1 (whole session): 0 beyond disclosed exceptions".
-      - **Self-check 2 (from the window start).** The window starts at the `worktree add` call, logged as an ISO time.
-        - **Counted locations:** the forbidden locations, `scratchpad-handover`, A's and D's folders, and mixed-set paths in their pre-`<R>` state.
-        - **What counts:** content access only, meaning Read paths, content-mode Grep result lines, and content-reading shell commands that name a counted location.
-        - **Sanctioned class** (never counted):
-          - Grep in `count` or `files_with_matches` mode;
-          - Glob, `ls` and `git ls-files`;
-          - `Remove-Item` and `Test-Path` on `bin/` and `obj/`;
-          - `Copy-Item` to the dev-load folder;
-          - the timestamp check;
-          - the D16 git commands;
-          - the D11 count-only scripts.
-        - **Named exceptions:**
-          - (a) the `worktree add` call;
-          - (b) the `-L 31,34` count-only blame;
-          - (c) the greps of the transcript jsonl;
-          - (d) `head -n 3 Luna/LICENSE Glamourer/Glamourer.Api/LICENSE Penumbra.Api/LICENSE Luna/ImSharp/LICENSE`;
-          - (e) `head -n 3 Glamourer/LICENSE`.
-        - The in-window Grep facts (i)–(iv) and the one Glob are logged. No exception (f) is needed.
-        - The orchestrator's count and files-with-matches greps over `Proteus/*.cs` are sanctioned.
-        - Logged as "self-check 2 (from <ISO time>): 0 beyond named exceptions".
-    - **Start commits** of the clean agents are logged.
-    - **Dirty agents** self-report. Their transcripts are never read.
+        Rev 11 additions:
+        - C's folder joins the counted locations;
+        - the B4 `Test-Path` checks of three DLL names in `Proteus/bin/Release/win-x64/` join the sanctioned class;
+        - `zip-entries.ps1` joins the sanctioned class;
+        - the C1 name-only usage search joins the sanctioned class.
+    - **Extraction.** Clean agents, B2 included, are extracted by agent ID. Dirty agents (A, A2, A3, C, D) self-report.
 
-13. **`IpcProvider.cs` is rewritten whole by B,** from the spec.
+13. **`IpcProvider.cs`** is rewritten whole by B. Rev 11: its line 1 follows `LICENSE` (AGPL until Phase C).
 
-14. **The bot commits** are recorded, not replaced.
+14. **Bot commits** are recorded, not replaced.
 
 15. **The final commit, the bump and the short re-review.**
-    - **Final bump:** `max(branch BuildNumber, last merged T's BuildNumber) + 1`. If `test`'s number is N or higher, QA item 1 is re-run on the final build.
-    - **`<critic-pass-commit>`** is logged. After it, only the QA-bump commit, log-only commits and the final commit may land. A code commit sends the work back to the critic, and the pass commit moves.
-    - **The final commit** holds the remaining log sections and the bump.
-    - **The short re-review** runs the six D12 commands and checks:
+    - **The final bump:** `max(branch, last merged T) + 1`. QA item 1 is re-run if N is taken on `test`.
+    - **`<critic-pass-commit>` is logged.** After it, only these may land: the QA-bump commit, log-only commits, and the final commit.
+    - **The final commit** holds the log sections, the bump, and (rev 11) the `LICENSE` effective-date line (D31) if the push day differs from Phase C's date.
+    - **The short re-review** runs the seven D12 commands. It checks:
       - the commit list;
-      - that `--stat` shows only the log and `Plugin.cs`;
-      - that the bumps change only BuildNumber lines.
+      - `--stat` shows only the log, `Plugin.cs` and `LICENSE`;
+      - the bumps change only BuildNumber lines;
+      - a `LICENSE` change, if any, touches only line 3's date.
 
-      Its reads go into the merge message.
+16. **`E:\repos\Proteus` takes commands only.**
 
-16. **`E:\repos\Proteus`: commands only.**
-    - Allowed: `git pull`, `git rev-parse`, the guard and the classifier, `git merge`, `blame-authors.ps1`, `dotnet test` (the Records filter and the quick suite), and `git push origin test`.
-    - Never open a file there.
-    - Warn other sessions before each `dotnet test`.
-
-17. **The guard and merging `test` in** (at the start of step 8, and in step 9 if `test` has moved).
-    - **The guard:** `git rev-list --count <branch>..<T> -- <mixed set paths>`. If it is above 0, the classifier runs and its output is logged. At step 3 it is logged only; step 8 handles it.
-    - **Guard at 0, or every counted commit bump-only:**
-      - the orchestrator runs `git -C W merge --no-ff --no-edit <T>`;
-      - on a conflict: `bump-resolve.ps1`, then the orchestrator commits. If the resolver refuses: `--abort`, and A3 takes over;
-      - `restored-check.ps1 <merge>` must show only bump and blank lines.
-    - **Any commit classed "other":**
-      - A3 runs `git merge --no-commit` and applies D2, including the trivial-class rule, to the lines that arrived;
-      - the orchestrator commits;
-      - `restored-check.ps1 <merge>` passes;
-      - D re-runs if A3 touched B's lines;
-      - the tripwire is re-checked if the set grew.
+17. **The guard and merging `test`** (rev 10).
+    - **Guard and classifier.** At step 3 the result is only logged.
+    - **Bump-only:** the orchestrator merges, with the resolver. **Other:** A3 merges.
     - **After every merge:**
-      - the D18 proof;
-      - blame in both modes, logged as "merged with test". The pass rule is D11's: `nontrivial` = 0, and `gamefact` only in the files §1 lists, each within its §1 count, at most 3 in total;
-      - each trivial-count change is logged by file and category, with an allowed reason. For a `-w -M -C` trivial line outside the `ColorTableEditor*.cs` files, the reason is "copy-detected import block from a test commit". These changes don't fail.
-    - **A merged tip that fails to build or test:**
-      - B fixes it, and the fix SHA is logged;
-      - the critic re-reviews;
-      - D re-runs;
-      - if QA has already run, QA item 1 is re-run on a re-copied build;
-      - then the run resumes.
+      - the restore check;
+      - the proof (rev 11: WIDE-A, plus WIDE-B and the Records filter once Phase B and C exist);
+      - blame under the D11 rule;
+      - D, if B's lines changed;
+      - if the merge touched `Proteus/Interop/**` or the API submodule pointers, `IpcContractTests` must pass.
+    - **A failing tip** goes to B or B2: then the critic, D, and QA item 1.
 
-18. **"Fails the same way."** For tests present in step 2's TRX:
-    - the skips are the same;
-    - the normalised hashes are equal;
-    - a mismatch goes to A, who answers "differs only in <kind>" or "different". "Different" is a failure;
-    - a step-2 test that newly fails or skips is a failure;
-    - a test new from `test` must pass, or skip with a reason.
+18. **"Fails the same way"** (rev 10). This applies to step-2 tests. New tests must pass, or skip with a reason.
 
-19. **The clean security review and §12.**
-    - A clean sub-agent applies the security-review method to the D8 diffs at the step-8 merged tip.
-    - The critic and the reviewer each confirm S1–S10.
-    - A non-bump re-merge gets the critic's security re-check.
-    - Findings are handled per D20.
+19. **The clean security review and §12** (rev 10, plus rev 11). The critic and the reviewer also confirm contract §4 (threads, availability and errors) row by row.
 
-20. **Who fixes what.**
-    - B, or a fresh clean implementer with B's allowlist and its own section, fixes B's code, the §6.3 and §6.4 blocks, and failing merged tips. Every fix SHA is logged.
-    - The orchestrator fixes only tests, docs and the `BuildNumber` line.
+20. **Who fixes what** (rev 10, plus rev 11).
+    - B fixes Phase A code. B2 fixes Phase B code. Either can be replaced by a fresh clean implementer, who gets its own section.
+    - The orchestrator fixes tests, docs, the `BuildNumber` line and the Phase C licence, notice and SPDX lines.
 
-21. **The filters.** Targeted runs only, plus the quick suite once before the push.
-    - **WIDE-A:**
+21. **Filters.**
+    - **WIDE-A:** as in rev 10.
+    - **WIDE-B (rev 11):**
 
       ```
-      FullyQualifiedName~IpcProviderSpecTests|FullyQualifiedName~ContribSpecTests|FullyQualifiedName~SidecarDiscovery|FullyQualifiedName~SidecarCache|FullyQualifiedName~ContentPieceSelectionTests|FullyQualifiedName~FaceUvDoublingTests|FullyQualifiedName~ShellMensLayoutTests|FullyQualifiedName~WomensArtOnMenTests|FullyQualifiedName~StutterFixesWiringTests|FullyQualifiedName~StutterFixesPureTests|FullyQualifiedName~DesignBinding|FullyQualifiedName~PlayerSettingsFilterTests|FullyQualifiedName~HarnessBridgeWrapperTests|FullyQualifiedName~HarnessBindingsWiringTests|FullyQualifiedName~LocalizationTests|FullyQualifiedName~IdleDiskIoWiringTests
+      FullyQualifiedName~IpcContractTests|FullyQualifiedName~ShippedAssembliesTests|FullyQualifiedName~BridgeAvailabilityTests|FullyQualifiedName~HairPortScanScheduleTests|FullyQualifiedName~ModMoveServiceTests|FullyQualifiedName~ToeCapToggleTests|FullyQualifiedName~SupplyChainTests|FullyQualifiedName~Proteus.Tests.TestHarness|FullyQualifiedName~HarnessBuildFlagTests|FullyQualifiedName~HarnessReleaseGuardTests|FullyQualifiedName~HarnessBindingsWiringTests|FullyQualifiedName~DesignBinding|FullyQualifiedName~PlayerSettingsFilterTests|FullyQualifiedName~StutterFixesPureTests|FullyQualifiedName~SidecarDiscoveryCoreTests
       ```
 
-      with `&Speed!=Slow`, plus the existing test classes for `ModsTab`, `CompositorService` and the carriers, found by name.
+      plus every test class that imports `Penumbra.Api.Enums` or `Glamourer.Api.Enums` (found by name with `git grep -l`), with `&Speed!=Slow`.
     - **Records:**
 
       ```
-      FullyQualifiedName~ContribCleanRoomRecordTests|FullyQualifiedName~ReadmeTermsTests|FullyQualifiedName~PbdCleanRoomRecordTests
+      FullyQualifiedName~ContribCleanRoomRecordTests|FullyQualifiedName~ReadmeTermsTests|FullyQualifiedName~PbdCleanRoomRecordTests|FullyQualifiedName~LicencePublicationTests
       ```
 
-22. **The licence stays unchanged.**
+22. **The licence** is unchanged through Phases A and B (AC-7). Phase C publishes it (D28).
 
-23. **The slnx is regenerated** in its own commit, from §1's project list:
-    - `dotnet new sln --name proteus --format slnx`;
-    - then `dotnet sln proteus.slnx add <csproj>`, one project per call.
+23. **The slnx** is regenerated at step 4 from §1's list, which is Glamourer.Api, Penumbra.Api, Proteus and XivLiveMesh. Phase B keeps it as it is (D30).
 
-    It must exist before any test runs after `<R>`.
+24. **Phase B design (rev 11).**
+    - B2 writes Proteus-owned call gates over `IDalamudPluginInterface.GetIpcSubscriber<…>(label)`, using only Dalamud's public API and `docs/ipc-contract.md`. They cover every Penumbra and Glamourer call and event the Phase-A-tip code uses.
+    - **Owned types keep the APIs' namespaces** (Plugin-critic 1's suggestion). They are `Penumbra.Api.Enums` and `Glamourer.Api.Enums`, plus any non-enum data types the contract lists.
+      - The type names, member names, values, underlying types and `[Flags]` match the API's. This is interface fact only; no doc comments are copied.
+      - Files:
+        - `Proteus/Interop/Ipc/PenumbraApiTypes.cs`;
+        - `Proteus/Interop/Ipc/GlamourerApiTypes.cs`, which carries an Apache-2.0 attribution header and is noticed in D29.
+      - The ~60 existing `using` lines don't change.
+    - The three ProjectReferences and the Luna comment are removed from `Proteus.csproj`. The build regenerates `packages.lock.json`.
+    - **The harness's Glamourer gates** are `GlamourerApplyDesign` and `GlamourerApplyState`, in `Proteus/TestHarness/`. Each exposes `Invoke(...)` with the parameters the adapter already passes. They don't appear in `Interop/` or in `IpcContract.Entries` (ADR 0002).
+    - **Events** keep firing on the caller's thread, as before.
+    - **Behaviour when Penumbra or Glamourer is absent, not ready, or a call throws** follows contract §4. The bridges keep their existing guards.
+    - **Rejected:**
+      - keeping Penumbra.Api for its enums only, because the DLL would still ship unlicensed, and Glamourer.Api pulls Luna non-privately;
+      - `PrivateAssets` and `ExcludeAssets` tricks, because they're unreliable for copy-local;
+      - a new namespace for the owned types, because it means ~60 `using` edits for no gain.
+
+25. **Agent C and the IPC contract (rev 11).**
+    - **What C reads:**
+      - `Penumbra.Api/**`;
+      - `Glamourer/Glamourer.Api/**`;
+      - Glamourer's root LICENSE and NOTICE (names only, apart from the LICENSE text);
+      - the specific Luna IPC subscriber base classes those API subscribers derive from, for facts only (behaviour when unavailable, on errors and on version mismatch), each file logged;
+      - Proteus's own sources at the Phase A tip, which are clean, to list which IPC Proteus uses.
+    - **C never reads** the contributors' commits, the mixed set before `<R>`, other `Glamourer/` folders, or the rest of `Luna/`.
+    - **C writes `docs/ipc-contract.md`** with these headings:
+      - `## 1. Calls Proteus makes`, with a table `| Owner | Label | Kind | Arguments | Returns | Used in |`;
+      - `## 2. Events Proteus subscribes to`;
+      - `## 3. Types that cross the boundary`, with a table `| Type | Member | Value | Underlying | Flags |`, plus any records and tuples;
+      - `## 4. Threading, availability and errors`, as a table of rows A1… that the critic and the reviewer confirm;
+      - `## 5. How to check it mechanically`, saying where the labels and generic signatures sit in the API assemblies' metadata;
+      - `## 6. Calls only the harness makes`.
+    - **Form:**
+      - facts only;
+      - no fences;
+      - no code;
+      - an identifier self-check: 0 hits for any Luna private identifier.
+    - C writes "Agent C (self-report)".
+
+26. **The Phase B tests (rev 11).** The orchestrator writes them from the contract. They are red until B3.
+    - **`IpcContractTests`** reads the API assemblies with Mono.Cecil. `Proteus.Tests.csproj` gets ProjectReferences to the two API projects with `ReferenceOutputAssembly="false"`, and their output DLLs are copied to the test output. The test checks:
+      - every `IpcContract.Entries` row (owner, label, kind, argument and return types) against the matching API subscriber's label and generic signature;
+      - every owned type against the API type with the same full name: member names, values, underlying type and `[Flags]`;
+      - that shipped code reaches Penumbra and Glamourer only through `IpcContract` gates;
+      - that the harness gates live only in `TestHarness/`.
+    - **`ShippedAssembliesTests`** checks that:
+      - `Proteus.csproj` has no Luna, Penumbra.Api or Glamourer.Api reference;
+      - `packages.lock.json` has none of them;
+      - `typeof(Plugin).Assembly.GetReferencedAssemblies()` has none of them.
+    - **`BridgeAvailabilityTests`** works through a substitute `IDalamudPluginInterface` whose gates are absent, not ready or throwing. The bridges must behave as contract §4 says. Event wrappers must fire on the caller's thread.
+    - **`HarnessBindingsWiringTests`:** lines 40, 43 and 44 move to the pinned harness gate names, keeping their meaning.
+    - Phase B's Cecil reading of the API DLLs is a mechanical test read, and is logged.
+
+27. **The Phase B smoke check and the fallbacks (rev 11).**
+    - **B5:**
+      1. Bump to `N0` and build Release. Warn other sessions, copy to the dev-load folder, and check the timestamp.
+      2. A clean QA-lite agent checks through the harness:
+         - `/health` and `/log` show no IPC errors;
+         - one `POST /actions/equip` and put-back (Glamourer, enum-typed return);
+         - one `POST /actions/mod-settings` hold and put-back with a redraw (Penumbra);
+         - one `glamourer-apply` of a design (state-changed events with enums).
+      3. Failures go to B2. If a failure can't be fixed from here, the fallback applies.
+    - **Fallback A:** Phase B can't pass. Cut `solona-m/contrib-clean-room-a` at the Phase A tip `T_A` (after step 7), and run steps 8–10 on it. The licence stays AGPL.
+    - **Fallback B:** Phase C can't pass (for example, an unreadable package licence). Cut at the Phase B tip `T_B`, and run steps 8–10 on it. The licence stays AGPL.
+    - Either way, the blocker is reported.
+
+28. **The licence publication (rev 11, Phase C).**
+    - **`LICENSE`** becomes the text of `docs/LICENSE-DRAFT.md`, with line 3 changed to `*Version 1.0 — in force from <YYYY-MM-DD>*` (the planned push day; D31). Nothing else changes (ND-4).
+    - **`git rm docs/LICENSE-DRAFT.md`.**
+    - **`Proteus.csproj`:**
+      - adds `<Content Include="..\LICENSE" Link="LICENSE.txt">`, copied to the output, so the zip carries the licence;
+      - drops `PackageLicenseExpression`;
+      - updates its comments.
+    - **XivLiveMesh,** decided by the C1 usage check (ND-2):
+      - **Not used elsewhere:**
+        - `XivLiveMesh/LICENSE` becomes a byte-identical copy of `LICENSE`;
+        - `NOTICE.md` lines 6 and 18 name the Proteus Licence;
+        - the csproj comment changes, and `PackageLicenseExpression` is dropped;
+        - the SPDX lines in its 7 `.cs` files become `LicenseRef-Proteus`.
+      - **Used elsewhere:**
+        - XivLiveMesh stays AGPL-3.0-or-later as Solona's separately offered library;
+        - its SPDX lines stay AGPL;
+        - `THIRD_PARTY_NOTICES.txt` lists it under §7;
+        - it is flagged for the lawyer.
+    - **SPDX lines elsewhere:** `IpcProvider.cs` line 1, and any B2 file with an SPDX line (except `GlamourerApiTypes.cs`, which is Apache), become `LicenseRef-Proteus`.
+    - **Tests:**
+      - `ReadmeTermsTests.Licence_stays_AGPL_and_drafts_are_drafts` is replaced by `Licence_is_the_Proteus_Licence_in_force`, which checks:
+        - line 1 of `LICENSE` is `# Proteus Licence`;
+        - line 3 matches the in-force pattern;
+        - there's no "DRAFT" and no uppercase "GNU AFFERO GENERAL PUBLIC LICENSE";
+        - the body equals the draft's text minus the status line (embedded in the test);
+        - `docs/LICENSE-DRAFT.md` is gone, and there is no root `LICENSE-*` file;
+        - `docs/pbd-clean-room.md` exists;
+        - no README mentions `LICENSE-DRAFT`.
+      - `PbdCleanRoomRecordTests.Header_names_the_spec_not_a_port` and the contrib record test's `IpcProvider` header check now expect the SPDX identifier that `LICENSE` implies.
+      - `SupplyChainTests`: only the Luna doc comment and message change ("Luna builds the APIs for the contract test only").
+    - **`AGENTS.md`:** the submodules line now says "IPC contracts, checked by tests; not shipped".
+    - **Untouched:** README, its translations, For Creators.md and TERMS.md (ND-5). TERMS.md's wording stays true.
+
+29. **The notices (rev 11).** `THIRD_PARTY_NOTICES.txt` keeps the LTC uvmaps, BCnEncoder.NET and bc7enc blocks, and adds:
+    - **A block for every shipped package** left in `Proteus/packages.lock.json` after Phase B, Direct or Transitive, minus the build-only DalamudPackager and DotNet.ReproducibleBuilds. Each block's licence and copyright are taken from the package's `.nuspec` and licence file in `%USERPROFILE%\.nuget\packages\<id>\<ver>\`. An unreadable licence is a blocker, and leads to Fallback B.
+    - **The Glamourer-derived types file** (`GlamourerApiTypes.cs`), with the Apache-2.0 text, and NOTICE content if Glamourer has a NOTICE file.
+    - **An interoperability note:** Penumbra's and Glamourer's IPC labels, signatures and enum names and values are used to talk to them, and no code from them ships. Penumbra.Api carries no licence file; this is flagged for the lawyer.
+    - **A game-assets carve-out:** `Proteus/Resources/sphere_d_array.png` and `tile_norm_array.png` are derived from FINAL FANTASY XIV game data (© SQUARE ENIX). They are not covered by the Proteus Licence.
+    - **The submodules:**
+      - `Glamourer/` (Apache-2.0);
+      - `Penumbra.Api/` (no licence file);
+      - `Luna/` (AGPL-3.0; used only to build the APIs for the test build, never shipped).
+
+      All three are pointers, not part of Proteus's code.
+    - **A workflows note:** some steps in `.github/workflows` were adapted from other open-source projects (per `AI-DECLARATION.md`), and those parts stay under their own licences. Their origins are a `known-issue` task for the owner (ND-6).
+    - **XivLiveMesh,** if C1 keeps it AGPL.
+    - Dalamud and its bundled libraries are host-provided and not shipped. Whether a plugin may carry this licence is flagged for the lawyer.
+
+30. **The slnx (rev 11).** It keeps the Glamourer.Api and Penumbra.Api entries. The test build still builds them for `IpcContractTests`. The slnx only serves IDEs and the root-finding tests, and doesn't affect the plugin. Rejected: removing the entries, because IDE builds of the test project would then miss them.
+
+31. **The effective date (rev 11).** The date in `LICENSE` is the day `test` is pushed.
+    - Phase C writes the planned date.
+    - If step 10's push happens on another day, the final commit (step 9) corrects line 3 to the push day before the short re-review.
+    - If the push then slips past midnight, the final commit is redone, re-reviewed, and the push follows.
 
 ## Requirements
 **User prompt (verbatim):** "publish the new licence"
 
 **User's first choice (verbatim):** "Rewrite their code first (Recommended) — Clean-room rewrite of Caraxi's and AzureRavie's surviving code, then swap LICENSE, update SPDX headers and notices, and push to test."
 
-**User's decision on ND-1 (verbatim):** "Contributor rewrite only — Do the Caraxi/AzureRavie clean-room now and stop; decide about Luna later. Licence stays AGPL for now."
+**User's decision on ND-1 (verbatim, superseded):** "Contributor rewrite only — Do the Caraxi/AzureRavie clean-room now and stop; decide about Luna later. Licence stays AGPL for now."
+
+**User's scope change (verbatim, in force):** "Do the Luna work as well. Keep going until you've pushed that and all the other needed changes."
 
 **Feature arguments (verbatim):**
 > Clean-room rewrite of the remaining third-party-authored code so Proteus can move from AGPL-3.0 to the Proteus Licence (docs/LICENSE-DRAFT.md), then publish the licence (swap LICENSE, update SPDX headers, NOTICE/THIRD_PARTY_NOTICES, README licence mentions; push to test). Code to replace, found by `git blame -w -M -C` on test: Caraxi (git@caraxian.com) — Proteus/Interop/IpcProvider.cs 137 lines (public IPC: overlay tables assigned to mod options; names/signatures must stay identical), Proteus/Interop/PenumbraBridge.cs 9, Proteus/Plugin.cs 6 (IPC registration; `/proteus refresh silent`), Proteus/Services/SidecarDiscoveryService.cs 6 (multi-select group default + per-option tables), Proteus/Gui/StatusWindow.cs 4 (clickable mod name opening Penumbra; priority DragInt fix), proteus.slnx 9 (regenerate), samples/ExampleMultiGroupOverlayMod/ (remake or delete); AzureRavie — Proteus/Interop/GlamourerBridge.cs 12 lines (cooldowns on equip attempt, Glamourer lock-conflict logging). Follow the same two-stage clean-room method as docs/pbd-clean-room.md / docs/pbd-clean-room-log.md (spec agent reads the old code; a fresh implementer never does; record every participant's reads). The orchestrating session has not read any of this code and must stay clean. Precedent: the PbdFile.cs rewrite (build 1466).
 
 **Derived requirements:**
-- R-1: The public IPC stays identical: names, argument and return types, behaviour, and the thread it answers on.
-- R-2: The small fixes keep their behaviour. Spec §11 drops nothing.
-- R-3: A dirty agent cleans the mixed files before the implementer sees them. The removal must be provable. Solona's own lines are restored, or their gaps rewritten.
-- R-4: No licence change.
-- R-5: Commits are authored as Solona, with no Co-Authored-By and no real name. Every sub-agent runs on `opus`. Push to `test` only; `main`, tags and deploys are hard stops.
+- R-1: The public IPC stays identical.
+- R-2: The small fixes keep their behaviour.
+- R-3: Mixed files are cleaned by a dirty agent first, provably.
+- R-4 (rev 11): The Luna, Penumbra.Api and Glamourer.Api problem is resolved before the licence is published.
+- R-5: Commits are authored as Solona, with no Co-Authored-By and no real name. Sub-agents run on `opus`. Push to `test` only; `main`, tags and deploys are hard stops.
 - R-6: Targeted `--filter` runs only, plus the quick suite once before the push.
 - R-7: AGENTS.md Rules 3, 4 and 5 apply.
+- R-8 (rev 11): Proteus's behaviour towards Penumbra and Glamourer is unchanged, including threads and behaviour when they are unavailable.
 
 ## Contract
 No routes, schema or persisted fields change.
 - **Public IPC:** spec §2–3, pinned by `IpcProviderSpecTests`.
-- **Seams:** spec §9.2–§9.5. B's new seams and files are logged with their names and signatures.
-- **The `Proteus/Interop/IpcProvider.cs` header:**
-  - line 1 is exactly `// SPDX-License-Identifier: AGPL-3.0-or-later`;
+- **Phase A seams:** spec §9.2–§9.5. B's new seams are logged.
+- **`IpcProvider.cs` header:**
+  - line 1 is the SPDX identifier that `LICENSE` implies (`AGPL-3.0-or-later` until Phase C, then `LicenseRef-Proteus`);
   - line 2 is `// Copyright (c) Solona`;
-  - `docs/contrib-clean-room-spec.md` is named within the first 5 lines;
+  - the spec is named within the first 5 lines;
   - there is no "ported from".
-- **Unchanged:** `LICENSE`, `docs/LICENSE-DRAFT.md`, the three guard tests, and every trivial-class line outside the mixed set.
+- **Phase B (namespace `Proteus.Interop.Ipc`):**
+  - `public enum IpcKind { Func, Action, Event }`;
+  - `public sealed record IpcContractEntry(string Owner, string Label, IpcKind Kind, Type[] Arguments, Type? Returns)`;
+  - `public static class IpcContract { public static IReadOnlyList<IpcContractEntry> Entries { get; } }`.
+- **Owned types** live in namespaces `Penumbra.Api.Enums` and `Glamourer.Api.Enums`, plus any data types the contract lists, in `Proteus/Interop/Ipc/PenumbraApiTypes.cs` and `GlamourerApiTypes.cs` (Apache attribution).
+- **Harness gates:** `GlamourerApplyDesign` and `GlamourerApplyState` in `Proteus/TestHarness/`.
+- **Licence:**
+  - `LICENSE` line 1 is `# Proteus Licence`;
+  - line 3 is `*Version 1.0 — in force from YYYY-MM-DD*`;
+  - SPDX lines read `// SPDX-License-Identifier: LicenseRef-Proteus`.
 
 ## Approach
 Every step ends with a commit made under D10.
 
-0. **Hand-off.** Done (`71d450fb`). Commit rev 10 as `docs/contrib-clean-room-plan.md`.
-1. **A, stage 1.** Done (`1a2cd3ef`). The tripwire fired there, which led to this re-plan.
+**Phase A** (as in rev 10; current state in the Delta):
 
-   1b. **Spec amendment and tripwire re-check.** A (by SendMessage) amends the spec:
-   - **§1:**
-     - shows the trivial class as excluded and not removed, with per-file category counts;
-     - lists the `ColorTableEditor*.cs` lines;
-     - lists the 3 game-fact lines by `file:line` (the record at `<R>`), each with its one-word shape and the per-file counts;
-     - restates the totals.
-   - **§9.5 and §10:** files outside the mixed set don't change.
-   - **§10:** the EDGE-5 hit is noted as kept.
-   - **Confirmation:** by count only, every class line matches the regex or the game-fact rule.
+0. Done. Commit rev 11 as `docs/contrib-clean-room-plan.md`.
+1. Done (`1a2cd3ef`). 1b is done.
+2. Done.
+3. `<R0>` = `7ce8851b` is committed and `restored-check.ps1` passed. Still to do:
+   - blame in both modes (the baseline, D11);
+   - the guard, logged only;
+   - A appends its removal self-report and deletes its folder;
+   - the orchestrator commits the log and deletes the manifest unread.
+4. Regenerate the slnx (D23), delete `bin/` and `obj/`, and record "not passing".
+5. B: the holes, `IpcProvider.cs` (line 1 AGPL), §6.3 and §6.4, and the named files and seams.
+6. Proof: the step-2 filter without the exclusions, and blame under the D11 rule. No markers may remain.
+7. D: the first measurement, B's fixes, then a re-measure. Record `T_A` = the commit after step 7.
 
-   **Failure path.** A line that matches neither rule is non-trivial:
-   - A adds its file to the mixed set in §1;
-   - the orchestrator adds the file to D8, D9, D10, self-check 1 and the guard paths, and records it in the log;
-   - the tripwire is re-checked, and the run re-plans if it fires.
+**Phase B (rev 11):**
+- **B1. Agent C writes `docs/ipc-contract.md` (D25).** The orchestrator checks D10, the absence of fences and the self-report, then commits.
+- **B2. The orchestrator writes the Phase B tests (D26):**
+  - `IpcContractTests`;
+  - `ShippedAssembliesTests`;
+  - `BridgeAvailabilityTests`;
+  - the `HarnessBindingsWiringTests` name lines;
+  - the `Proteus.Tests.csproj` API references with `ReferenceOutputAssembly="false"`.
 
-   A updates its self-report. The orchestrator checks D10 (the spec and the log only), re-runs the D3 tripwire, logs it, and commits.
-2. **Tests and the old-code gate.**
-   - The orchestrator writes `IpcProviderSpecTests`, `ContribSpecTests` and the `ContribCleanRoomRecordTests` skeleton.
-   - The gate (D5):
+  They are expected red. Commit.
+- **B3. Agent B2** (fresh, clean, briefed with the contract, R-1, R-8, D6, D9, D12, D24 and the Contract):
+  - writes the owned types, the `Proteus.Interop.Ipc` call gates and `IpcContract`;
+  - rewrites the bridges' subscriber use and the harness gates;
+  - removes the three ProjectReferences;
+  - lets the build update `packages.lock.json`;
+  - names every new file.
 
-     ```
-     dotnet test W/Proteus.Tests/Proteus.Tests.csproj -c Release --logger "trx;LogFileName=<scratchpad>\step2.trx" --filter "(<WIDE-A>)&CleanRoom!=NewSeam&CleanRoom!=NewBehaviour&FullyQualifiedName!~ContribCleanRoomRecordTests" > <scratchpad>\step2.out 2>&1
-     ```
+  The orchestrator extracts B2's record and commits.
+- **B4. Proof.**
+  - WIDE-B and WIDE-A, judged by D18.
+  - `blame-authors.ps1` in both modes (D11), with changes logged.
+  - `Test-Path` returns False for `Luna.dll`, `Penumbra.Api.dll` and `Glamourer.Api.dll` in `Proteus/bin/Release/win-x64/`.
+  - `zip-entries.ps1` on `latest.zip` lists none of them.
+  - `git -C W diff test...HEAD --name-only` lists no licence or notice file (AC-7). Log it.
+  - Commit.
+- **B5. The in-game smoke check (D27).** Bump to `N0` and commit "Build N0 for smoke". Then build, warn other sessions, copy, and run the QA-lite agent. Fixes go to B2, which also re-runs B4. An unfixable failure leads to Fallback A. Record `T_B`.
 
-   - A build failure goes to `build-summary.ps1`, with CS1061 and CS1729 sent to A. Otherwise `trx-summary.ps1` reads the results, and failures go to A.
-   - Log, then commit.
-3. **A, stage 2: removal** (by SendMessage).
-   - A removes the amended §1 set. Trivial-class lines outside the mixed set are untouched. A writes the manifest and drafts its self-report.
-   - The orchestrator checks D10, runs `git add -u`, and commits `<R0>` without viewing it. Then:
-     - `restored-check.ps1`;
-     - `blame-authors.ps1` in both modes. This sets the baseline (at or below §1 per file and category, or logged with its file) and applies the D11 pass rule;
-     - the guard and the classifier, logged only.
+**Phase C (rev 11):**
+- **C1. XivLiveMesh usage check (ND-2).** Name-only searches:
+  - `gh search code "XivLiveMesh" --owner solona-m --json repository,path` (if gh is authenticated);
+  - a files-with-matches Grep for `XivLiveMesh` over `E:/repos/*/**/*.csproj`, excluding `E:/repos/Proteus` and `E:/repos/DragAndDropTexturing`.
 
-     A check failure sends A back for a fix-up.
-   - When everything passes, A appends its self-report and deletes its folder. The orchestrator commits the log and deletes the manifest unread.
-4. **slnx, then "not passing".**
-   - Regenerate the slnx (D23), then commit.
-   - Delete `bin/` and `obj/`, then confirm with `Test-Path`.
-   - Run the step-2 filter and record "not passing". Log, then commit.
-5. **B.** A fresh clean agent, briefed with the spec, R-1, R-2, D6, D9, D12 and the Contract.
-   - B removes the markers, repairs syntax, rebuilds §6.3 and §6.4, and names every new file and seam.
-   - The orchestrator extracts B's record, logs B's SHA, seams and files, and commits.
-6. **Proof.**
-   - Run the step-2 filter without the exclusions; D18 applies.
-   - Run blame in both modes with the D11 pass rule. Trivial-count changes since `<R>` are logged by file and category, each with an allowed reason, and B's new files are named.
-   - Check that no markers remain.
-   - Log, then commit.
-7. **D** (D7).
-   - Log the first measurement before any rewrite.
-   - Send hits to B.
-   - Repeat step 6's checks, then re-measure.
-   - Log, then commit.
-8. **Merge `test`, then the gate.**
-   1. **Merge.**
-      - `git pull`, and record `T8`.
-      - Record `P8`, run the guard and the classifier, then merge (D17).
-      - Run `restored-check.ps1 <merge>`.
-      - Run the D18 proof and blame in both modes ("merged with test"; D11 pass rule; changes logged with reasons).
-      - Re-run D if needed. A failing tip goes to B.
-      - Log, then commit.
-   2. **Code-critic** on the merged tip (D8, D12, §12). Fixes and re-reviews until it passes. Log `<critic-pass-commit>`.
-   3. **Security reviewer** (D19). A code fix needs a critic re-review, and the pass commit moves.
-   4. **D re-run** if B's commits changed after step 7.
-   5. **QA build.**
-      - Bump to N = `max(branch, T8) + 1`. Commit "Build N for QA" (`Plugin.cs` only), and log its SHA.
-      - Build Release, warn other sessions, copy to the dev-load folder, and check the timestamp.
-   6. **Adversarial QA.**
-      1. `/health` shows build N, and `/log` shows no IPC registration errors.
-      2. The cooldown and the lock logging are UNVERIFIED by design: the equip route reaches neither. The unit tests are the evidence.
-      3. `GET /sidecar` against a real multi-select overlay mod, checked against §5. UNVERIFIED if no such mod is installed.
-      4. Also UNVERIFIED by design: the Mods-tab click and priority drag, `/proteus refresh silent`, another plugin's IPC calls, and the §6.3 grid lookup in game.
-   7. **QA fixes** follow D20, or become `known-issue` tasks. A code fix needs a critic re-review, a D re-run and a re-copy.
+  Log the repositories and paths found (names only) and the resulting branch of D28.
+- **C2. Publication edits (D28, D29).**
+  - Read the licences from the nuspec files in the local NuGet cache (allowed).
+  - Edit the licence, notice, SPDX, csproj, AGENTS.md and test files.
+  - Run the Records filter and WIDE-B.
+  - Commit.
+- **C3. Proof:**
+  - the Records filter;
+  - `LicencePublicationTests`;
+  - blame (D11);
+  - `git -C W diff <T_B> HEAD --name-only` lists exactly the D10 Phase C set.
+
+  Log and commit.
+
+**The gate:**
+
+8. **Merge `test`, then the gate** (as in rev 10, now covering A, B and C).
+   1. Merge `T8` (D17).
+   2. Run WIDE-A, WIDE-B and the Records filter, then blame in both modes, then D if needed.
+   3. The code-critic reviews: §12, contract §4, and the licence and notices against D28 and D29. Log `<critic-pass-commit>`.
+   4. The security reviewer reviews.
+   5. Re-run D if B's lines changed.
+   6. **QA build.** Bump to N, the next free number above `max(branch, T8)`.
+   7. **Adversarial QA** (rev 11 scope):
+      1. `/health` and `/log` show no IPC errors.
+      2. Equip, hold and put-back.
+      3. Mod-settings hold and put-back, with a redraw.
+      4. Design apply, and binding restore.
+      5. A Studio save that reloads a mod.
+      6. `GET /sidecar` on a multi-select overlay mod.
+      7. The `latest.zip` entry names include `LICENSE.txt` and none of the three DLLs.
+      8. UNVERIFIED by design: the cooldown and lock logging, the Mods-tab click and drag, `/proteus refresh silent`, another plugin calling the IPC, the §6.3 grid lookup, and Penumbra or Glamourer being unloaded in game.
+   8. Fixes go per D20, with a re-review.
 9. **Re-merge if needed, then the final commit.**
-   1. **Check for a moved `test`.** `git pull`, and record `T9`. If `T9` ≠ `T8`:
-      - record `P9`, merge (D17), and run `restored-check.ps1`;
-      - run the proof, and blame with the D11 rule (changes logged);
-      - the critic re-reviews `git -C W diff <P9> HEAD`, or takes the lighter check for a bump-only merge with no conflict;
-      - a non-bump re-merge also gets the security re-check;
-      - if the tip fails, follow D17.
-   2. **Licence files.** Run `git -C W diff test...HEAD --name-only` and log it with "licence files untouched".
-   3. **Self-checks.** Run both and log them.
-   4. **Final bump** (D15). If the last T's number is N or higher, re-run QA item 1.
-   5. **Final commit:** the log sections and the bump.
-   6. **Short re-review** (D15).
-   7. **Final blame:** `blame-authors.ps1 "-w -M -C"` on the final tip, with the D11 rule, for the merge message.
-   8. **Copy** the final build.
-10. **Merge into `test`** (D16).
-    1. `git pull`. If `test` has moved since the last T, go back to step 9.
-    2. The guard must read 0.
-    3. `git merge --no-ff solona-m/licence-clean-room`. The message is the PR description, and contains:
-       - "clean-room in two stages";
-       - the spec and log paths;
-       - "licence unchanged";
-       - "trivial coincidental lines left in place, logged";
+   1. Re-merge per D17 if `test` moved, with the critic check.
+   2. Run `git -C W diff test...HEAD --name-only`. Log it, and compare it with the D10 sets: Phase A/B files, plus exactly the Phase C files.
+   3. Run both self-checks.
+   4. Final bump and the `LICENSE` date line (D15, D31).
+   5. Final commit.
+   6. Short re-review (seven commands).
+   7. Final-tip blame.
+   8. Copy the final build.
+10. **Merge into `test` and push** (as in rev 10).
+    1. `git pull`.
+    2. The guard.
+    3. `git merge --no-ff solona-m/licence-clean-room`. The message is the PR description, and covers:
+       - the clean room in two stages;
+       - IPC without Luna, Penumbra.Api and Glamourer.Api;
+       - the Proteus Licence published, in force from <date>;
        - the blame figures;
        - the re-review's reads;
        - Review & traceability;
        - no Co-Authored-By.
-    4. Warn other sessions, then run the Records filter.
-    5. Re-check blame in both modes on `test`, with the D11 rule (`nontrivial` = 0; game-fact lines per file within §1, at most 3 in total), for the final report. Trivial-count changes go in the final report with their reasons; they are not failures. If the rule fails:
-       - because of a new contributor commit outside the mixed set: stop and re-plan;
-       - otherwise: go back to step 9 with A3.
-
-       Never push while it fails.
-    6. Run the quick suite.
-    7. Check that only `codeql.yml` triggers.
+    4. The Records filter.
+    5. The blame re-check (D11).
+    6. The quick suite.
+    7. The workflow check: only `codeql.yml` may trigger.
     8. `git push origin test`.
+
+    If the date in `LICENSE` isn't the push day, go back to step 9 (D31).
 11. **Final report:**
-    - decisions;
-    - gaps in the proof, including the weaker AC-1;
-    - D's first and last numbers;
-    - the trivial-class totals and their changes;
+    - decisions, including the scope change and ND-2 to ND-6;
+    - gaps in the proof (the weaker AC-1, baselines);
+    - D's numbers;
+    - the trivial-class changes;
+    - the C1 result;
     - the step-10 re-check;
     - UNVERIFIED items;
-    - `known-issue` tasks;
-    - owner follow-ups: Luna and Penumbra.Api, XivLiveMesh's licence, the licence wording, a README line, the workflows' origins, the NuGet notices, the lawyer's review, `main` and the release.
+    - `known-issue` tasks: the workflows' origins, and any QA deferrals;
+    - owner follow-ups: the lawyer's review of the record, the trivial class, Penumbra.Api's missing licence, the Dalamud host question and XivLiveMesh; merging `test` into `main`; the release tag.
 
 ## Files
-- EDIT `docs/contrib-clean-room-plan.md` (rev 10).
-- EDIT `docs/contrib-clean-room-spec.md`: A's step-1b amendment.
-- NEW/EDIT `docs/contrib-clean-room-log.md`. Its opening lines say there is no licence change, that the method extends `docs/pbd-clean-room.md` to mixed files, and that the tripwire fired at step 1 and was re-planned (rev 8). It holds:
-  - the Method: `norm`, the BuildNumber pattern, the trivial regex, the game-fact file list with per-file counts and the rule, the sanctioned class, and the allowed change reasons;
-  - every participant's section;
-  - all SHAs;
-  - the blame figures by category;
-  - the baseline and its comparison with §1;
-  - every trivial-count change, with its reason;
-  - the restore checks;
-  - the guard classes;
-  - the rounds;
-  - D's measurements;
-  - runs, skips and hashes;
-  - NewSeam counts;
-  - B's seams and files;
-  - the §12 tables;
-  - the re-merge check;
-  - the licence-files list;
-  - both self-checks;
-  - the tripwire record;
-  - the L-4 disclosures.
-- DELETE then NEW `Proteus/Interop/IpcProvider.cs`.
-- EDIT the mixed-set files:
-  - `PenumbraBridge.cs`
-  - `GlamourerBridge.cs`
-  - `Plugin.cs` (also the bumps)
-  - `SidecarDiscoveryService.cs`
-  - `StatusWindow.cs`
-  - `ModsTab.cs`
-  - `CompositorService.Carriers.cs`
-  - `CompositorService.cs`
-  - any file added by the 1b failure path
+- EDIT `docs/contrib-clean-room-plan.md` (rev 11).
+- EDIT `docs/contrib-clean-room-spec.md` (done at 1b).
+- NEW `docs/ipc-contract.md`: Agent C's contract.
+- NEW/EDIT `docs/contrib-clean-room-log.md`. Its opening lines: Phases A and B made no licence change; Phase C publishes the Proteus Licence; the method extends `docs/pbd-clean-room.md` to mixed files; the tripwire fired at step 1 (rev-8 re-plan); the user's scope change (rev 11). It contains:
+  - every Phase A record (rev 10);
+  - C's and B2's sections;
+  - B4's DLL and zip checks;
+  - the B5 smoke report;
+  - the C1 usage result;
+  - the nuspec licence sources;
+  - the AC-7 file list.
+- DELETE then NEW `Proteus/Interop/IpcProvider.cs` (B; line 1 swapped in Phase C).
+- EDIT the mixed-set files (A's removal, then B; the bridges again by B2; `Plugin.cs` bumps).
 - DELETE then NEW `proteus.slnx`.
 - DELETE `samples/ExampleMultiGroupOverlayMod/**`.
-- EDIT `Proteus/Localization/*`, only if new UI text is added.
-- NEW any `Proteus/**` file B names.
-- NEW `Proteus.Tests/IpcProviderSpecTests.cs`, `Proteus.Tests/ContribSpecTests.cs` and `Proteus.Tests/ContribCleanRoomRecordTests.cs`.
+- NEW `Proteus/Interop/Ipc/*.cs` (B2): `IpcContract`, the call gates, `PenumbraApiTypes.cs`, `GlamourerApiTypes.cs` (Apache header).
+- NEW `Proteus/TestHarness/GlamourerApplyDesign.cs` and `GlamourerApplyState.cs` (B2).
+- EDIT `Proteus/TestHarness/GameHarnessAdapter.cs` (B2): the gates.
+- EDIT `Proteus/Proteus.csproj`:
+  - B2 removes the three references and the Luna comment;
+  - Phase C adds the `LICENSE` content item, drops `PackageLicenseExpression` and updates the comments.
+- EDIT `Proteus/packages.lock.json` (regenerated by the build).
+- EDIT `Proteus/Localization/*` (B, only if new text).
+- NEW any file B or B2 names.
+- NEW `Proteus.Tests/IpcProviderSpecTests.cs`, `ContribSpecTests.cs`, `ContribCleanRoomRecordTests.cs`, `IpcContractTests.cs`, `ShippedAssembliesTests.cs`, `BridgeAvailabilityTests.cs` and `LicencePublicationTests.cs`.
+- EDIT:
+  - `Proteus.Tests/Proteus.Tests.csproj`: API references with `ReferenceOutputAssembly="false"`;
+  - `HarnessBindingsWiringTests.cs`: lines 40, 43 and 44;
+  - `ReadmeTermsTests.cs`: the licence test replaced;
+  - `PbdCleanRoomRecordTests.cs`: the header test follows `LICENSE`;
+  - `SupplyChainTests.cs`: the Luna doc and message only.
+- EDIT `LICENSE`: the Proteus Licence, in force.
+- DELETE `docs/LICENSE-DRAFT.md`.
+- EDIT `XivLiveMesh/LICENSE`, `XivLiveMesh/NOTICE.md`, `XivLiveMesh/XivLiveMesh.csproj` and `XivLiveMesh/*.cs` (SPDX lines only), per C1.
+- EDIT `THIRD_PARTY_NOTICES.txt` (D29).
+- EDIT `AGENTS.md`: the submodules line.
 - MERGE commits in `W`.
-- Unchanged: the guards, `StutterFixesWiringTests`, `For Creators.md`, and every trivial-class file outside the mixed set.
-- Not committed: the scripts, the `.trx` and `.out` files, the manifests, the checkpoint files, and the A, D and handover folders.
+- **Unchanged:**
+  - `StutterFixesWiringTests`;
+  - For Creators.md, README and its translations, TERMS.md;
+  - the historical `docs/pbd-*` records;
+  - every trivial-class file outside the mixed set (apart from Phase C's SPDX lines in XivLiveMesh);
+  - the submodules.
+- **Not committed:** scripts, `.trx` and `.out` files, manifests, checkpoint files, and the A, C, D and handover folders.
 
 ## Out of Scope
-- Any licence change, Phase B and Phase C (owner follow-ups).
-- The NuGet notices, the workflows' origins, XivLiveMesh's licence, the licence wording and a README line (owner follow-ups).
 - `main`, tags, releases and deploys (hard stops).
-- Asking for consent.
+- The lawyer's review (an owner follow-up).
+- Asking anyone for consent.
 - New harness routes.
-- Editing the `docs/pbd-*` records.
-- Re-checking where other files came from.
+- README licence lines (ND-5).
+- Auditing the workflows' origins (a `known-issue` task).
+- Re-checking where other files came from beyond D29's list.
+- Removing the submodules.
+- Distributing `Proteus.Refit`.
 - Remaking the sample.
-- Removing or rewriting trivial coincidental lines outside the mixed set.
+- Editing the historical records.
+- Removing trivial coincidental lines outside the mixed set.
+- The Dalamud host-licence question (lawyer).
 
 ## Edge Cases
-- EDGE-contrib-clean-room-1: A contributor line that was edited later. The closure covers it.
-- EDGE-contrib-clean-room-2: A contribution that replaced Solona's lines. They are restored and verified, or a hole is left.
-- EDGE-contrib-clean-room-3: Lines moved unchanged. Whole-tree blame in both modes finds them.
-- EDGE-contrib-clean-room-4: Coincidental attribution. A trivial line outside the mixed set goes into the trivial class. A non-trivial coincidental line is classified by A3 or D, and only expressive lines go to B.
-- EDGE-contrib-clean-room-5: An existing test asserts removed text. If the text is a §9 interface name, the test is kept (this is the one hit). Otherwise the assertion is replaced before `<R>`.
-- EDGE-contrib-clean-room-6: `test` advances. The guard and the classifier run (logged only at step 3); the step-8 merge or the step-9 re-merge handles it. If it moves after step 9, go back to step 9.
-- EDGE-contrib-clean-room-7: IPC calls with an unknown name, a different case, before ready or after dispose. Handled per §3.
-- EDGE-contrib-clean-room-8: IPC calls from another thread. Handled per §3.
-- EDGE-contrib-clean-room-9: Refresh variants. Handled per §4.
-- EDGE-contrib-clean-room-10: Multi-select defaults, and options without tables. Handled per §5.
-- EDGE-contrib-clean-room-11: A Glamourer lock, and the cooldown. Handled per §8.
-- EDGE-contrib-clean-room-12: Penumbra is missing when a mod name is clicked. Handled per §7.
-- EDGE-contrib-clean-room-13: A clean agent breaks a rule. Its work is void and redone, and the breach is logged.
-- EDGE-contrib-clean-room-14: The bot commits. Recorded.
-- EDGE-contrib-clean-room-15: The harness stays untouched.
-- EDGE-contrib-clean-room-16: The slnx is gone after `<R0>`. No tests run before step 4.
-- EDGE-contrib-clean-room-17: A step-2 test newly fails or skips. That is a failure.
-- EDGE-contrib-clean-room-18: Solona's lines caught by the hunk rule (§6.3, §6.4). B rebuilds them, and NewSeam tests cover them.
-- EDGE-contrib-clean-room-19: Broken syntax after removal. Expected.
-- EDGE-contrib-clean-room-20: A disallowed added line. A fix-up is made; the orchestrator sees counts only.
-- EDGE-contrib-clean-room-21: An unexpected path in `git status`. The commit stops.
-- EDGE-contrib-clean-room-22: The tripwire fires. Re-plan. This has happened once, at step 1.
-- EDGE-contrib-clean-room-23: Old-code output could reach the orchestrator. D5 prevents it.
-- EDGE-contrib-clean-room-24: Log or UI text in removed lines. It is described, reworded and localised.
-- EDGE-contrib-clean-room-25: The NewSeam share exceeds a third. Reported.
-- EDGE-contrib-clean-room-26: The step-10 re-check fails the D11 rule (a non-trivial line, or a game-fact line outside its file limit).
-  - From a new contributor commit outside the mixed set: re-plan.
-  - Otherwise: go back to step 9 with A3.
-  - Never push while it fails.
-  - Trivial-count changes on their own, including copy-detected import blocks in `-w -M -C`, are reported with reasons. They are not failures.
-- EDGE-contrib-clean-room-27: Behaviour no harness route can reach. UNVERIFIED, with the reason.
-- EDGE-contrib-clean-room-28: For Creators naming the deleted sample. It doesn't, and a test pins that.
-- EDGE-contrib-clean-room-29: Merge commits in history. Lines inherit their status; resolution lines get the hunk rule.
-- EDGE-contrib-clean-room-30: Content moved with edits, including in `87ae2e3d`. It counts as carried over.
-- EDGE-contrib-clean-room-31: Gated failures, and CS1061 or CS1729 on the old code. They go to A.
-- EDGE-contrib-clean-room-32: A self-check or leak-check breach. Reported.
-- EDGE-contrib-clean-room-33: Volatile message parts. `norm` handles them; otherwise A gives a kind-only answer.
-- EDGE-contrib-clean-room-34: `test` brings only bumps. The orchestrator merges with the resolver.
-- EDGE-contrib-clean-room-35: Tests new from `test`. They must pass, or skip with a reason.
-- EDGE-contrib-clean-room-36: The QA build number is taken on `test`. The final bump goes above both, and QA item 1 is re-run.
-- EDGE-contrib-clean-room-37: A merged tip fails. B fixes it, the critic re-reviews, D re-runs, QA item 1 is re-run if needed, and the run resumes.
-- EDGE-contrib-clean-room-38: A commit lands after the critic's pass. A no-code commit goes to the short re-review; a code commit goes back to the critic.
-- EDGE-contrib-clean-room-39: Trivial coincidental lines.
-  - **What stays:** class lines outside the mixed set, namely:
-    - the `ColorTableEditor*.cs` `-w -M -C` imports;
-    - the `-C -C`-only import, namespace and blank lines;
-    - the game-fact lines (only in the files §1 lists, each file within its §1 count, at most 3 in total; their positions within those files may move).
-  - **Changes are logged, never capped,** each with an allowed reason. A `-w -M -C` trivial line outside `ColorTableEditor*.cs` is logged as "copy-detected import block from a test commit".
-  - **Lines in mixed-set files** are removed.
-  - **A line that fails both rules** is handled by when it shows up:
-    - at step 1b, its file joins the mixed set;
-    - at a later checkpoint, it fails, and goes to A3 (EDGE-4, D17).
+- **EDGE-1 to EDGE-39:** as in rev 10, with these rev-11 additions:
+  - EDGE-6's after-merge proof includes WIDE-B and the Records filter once those phases exist;
+  - EDGE-26's re-check applies after Phase C too;
+  - EDGE-37's failing tip goes to B or B2 by phase.
+- EDGE-contrib-clean-room-40: Enum values crossing plugin load contexts. Proteus-owned types in the same namespaces: Dalamud converts across contexts as it did for Proteus's copy of Penumbra.Api. The contract test pins names, values, underlying types and `[Flags]`. B5 and step 8's QA confirm in game.
+- EDGE-contrib-clean-room-41: A submodule bump renames or re-versions a label. `IpcContractTests` fails at test time, not in game.
+- EDGE-contrib-clean-room-42: Penumbra or Glamourer is absent, not ready, or throws. The bridges behave as contract §4 says (`BridgeAvailabilityTests`). Unloading them in game is UNVERIFIED.
+- EDGE-contrib-clean-room-43: Events fire on the caller's thread and in bursts. The wrappers subscribe directly, with no marshalling change (`BridgeAvailabilityTests`, QA).
+- EDGE-contrib-clean-room-44: ADR 0002. The harness gates exist only in `TestHarness/`, which is compiled out of CI (`IpcContractTests`, `HarnessBindingsWiringTests`, `HarnessBuildFlagTests`).
+- EDGE-contrib-clean-room-45: Luna reaches the output by some other route. B4 checks the plugin output and the zip, never the test output.
+- EDGE-contrib-clean-room-46: The B5 smoke check fails and can't be fixed. Fallback A.
+- EDGE-contrib-clean-room-47: A shipped package's licence can't be read. Fallback B.
+- EDGE-contrib-clean-room-48: The C1 usage check finds another plugin using XivLiveMesh. It stays AGPL, is noticed under §7, keeps its SPDX lines, and is flagged for the lawyer. The no-AGPL-claim test excludes `XivLiveMesh/`.
+- EDGE-contrib-clean-room-49: The push day differs from Phase C's date. Step 9 corrects `LICENSE` line 3, and the short re-review covers it. If the push slips past midnight, step 9 is redone (D31).
+- EDGE-contrib-clean-room-50: Historical records and third-party listings still say AGPL: `docs/pbd-*`, `docs/contrib-clean-room-*`, `THIRD_PARTY_NOTICES.txt`, the `XivLiveMesh/NOTICE.md` research-references line, and `LICENSE`'s preamble about earlier versions. The no-AGPL-claim test excludes them by explicit path, and the `LICENSE` check looks for the AGPL's uppercase title only.
+- EDGE-contrib-clean-room-51: A root `LICENSE-*` file would show on GitHub as a second licence. None may exist.
+- EDGE-contrib-clean-room-52: Game-derived assets ship in the plugin (`Resources/*.png` slices). They are carved out in the notices, not covered by the Proteus Licence.
 
 ## Test Strategy
-All new tests carry `[Trait("Plan","<ID>")]`. NewSeam tests also carry `[Trait("Seam","§9.<row>")]`. Record tests only read files.
+All new tests carry `[Trait("Plan","<ID>")]`. Record tests only read files.
 
-- [AC-contrib-clean-room-1] [EDGE-contrib-clean-room-7] [EDGE-contrib-clean-room-8] [EDGE-contrib-clean-room-25] `IpcProviderSpecTests`:
-  - `Registers_exactly_the_documented_labels_and_signatures` (R7, gated);
-  - `Dispose_unregisters_every_label` (R8, gated);
-  - `ApiVersion_is_1_0_on_any_thread` (R1 and R10, gated);
-  - `Each_label_behaves_as_the_spec_says` (R2–R6, R11 and R12; NewSeam where §9.1 says so; R5 and R6's guard and master-switch paths are gated).
-- [AC-contrib-clean-room-2] [EDGE-contrib-clean-room-9] [EDGE-contrib-clean-room-10] [EDGE-contrib-clean-room-11] [EDGE-contrib-clean-room-12] [EDGE-contrib-clean-room-18] [EDGE-contrib-clean-room-24] `ContribSpecTests`:
-  - `Refresh_arguments_follow_the_spec`
-  - `Multi_select_group_with_no_selection_contributes_nothing`
-  - `Per_option_tables_follow_the_spec`
-  - `Priority_edit_follows_the_spec`
-  - `Opening_a_mod_in_Penumbra_follows_the_spec`
-  - `Glamourer_lock_conflict_is_logged_once_with_the_item`
-  - `Glamourer_cooldown_starts_at_the_attempt`
-  - `Content_index_lookup_follows_the_spec`
-  - `Body_shape_signature_follows_the_spec`
-
-  Also the existing §10 tests, `LocalizationTests`, and QA items 1 and 3.
-- [AC-contrib-clean-room-3] [EDGE-contrib-clean-room-1] [EDGE-contrib-clean-room-2] [EDGE-contrib-clean-room-3] [EDGE-contrib-clean-room-14] [EDGE-contrib-clean-room-20] [EDGE-contrib-clean-room-29] [EDGE-contrib-clean-room-30] [EDGE-contrib-clean-room-34] [EDGE-contrib-clean-room-39]
-  - `ContribCleanRoomRecordTests.Log_reports_no_contributor_lines` checks that the log contains:
-    - the trivial regex, and the game-fact rule with its file list (the `file:line` record at `<R>`, a shape for each line, per-file counts, a total of at most 3);
-    - the `<R>` baseline compared with §1 per file and category, with every difference listed against its file;
-    - "nontrivial: 0" in both modes at `<R>`, step 6, the step-8 merged tip and any step-9 re-merge, and in `-w -M -C` after later fixes and at the final tip;
-    - game-fact counts only in §1's files, each within its §1 count;
-    - every "changed:" entry with a reason from the allowed list (including "copy-detected import block from a test commit" for any `-w -M -C` trivial line outside `ColorTableEditor*.cs`);
-    - the closure rounds;
-    - the restore checks;
-    - the guard classes;
-    - the dependabot entry.
-  - `ContribCleanRoomRecordTests.Sample_gone_and_slnx_present`.
-- [AC-contrib-clean-room-4] [EDGE-contrib-clean-room-4] `ContribCleanRoomRecordTests.Similarity_check_is_recorded_honestly`.
-- [AC-contrib-clean-room-5] [EDGE-contrib-clean-room-13] [EDGE-contrib-clean-room-21] [EDGE-contrib-clean-room-22] [EDGE-contrib-clean-room-23] [EDGE-contrib-clean-room-32] `ContribCleanRoomRecordTests`:
-  - `Spec_has_every_required_section_and_no_code`: the 12 headings, no fences, the trivial class shown as excluded, and the game-fact lines listed with their shapes and per-file counts.
-  - `Log_lists_every_participant_and_the_clean_side_kept_clear`. It checks:
-    - the sections, each with `Opened:`: Planner, every Plan-critic (1–6, 8, 9, and any 7 or later pass), Planner (rev 2)–(rev 10), Planning orchestrator, Agent A (self-report), Orchestrator, Agent B, Agent D (self-report), Code-critic, Security review, Adversarial QA, and any Agent A2 or A3 section;
-    - the allowlists;
-    - the zero counts;
-    - identifier-grep hits at 0;
-    - the start commits;
-    - the §12 tables;
-    - both self-check lines, with their exact exception lists, the sanctioned class, the in-window Grep facts, and "no exception (f) needed";
-    - the L-4 disclosure paragraph;
-    - the opening lines.
-  - `Log_records_the_tripwire_replan`:
-    - condition 1 under both readings, and condition 2 at 21 before and 0 after;
-    - the `87ae2e3d` scope accepted;
-    - "re-planned (rev 8)";
-    - the step-1b result.
-  - `IpcProvider_header_is_pinned`.
-  - `No_hole_markers_remain`.
-- [AC-contrib-clean-room-6] [EDGE-contrib-clean-room-16] [EDGE-contrib-clean-room-17] [EDGE-contrib-clean-room-19] [EDGE-contrib-clean-room-31] [EDGE-contrib-clean-room-33] [EDGE-contrib-clean-room-35] [EDGE-contrib-clean-room-37]
-  - The runs at step 2, step 4, step 6 and every merged tip.
-  - `ContribCleanRoomRecordTests.Log_compares_baselines_by_hash`.
-  - The orchestrator's `--numstat` check.
-- [AC-contrib-clean-room-7] The guard tests. `ContribCleanRoomRecordTests.Log_states_licence_files_untouched`.
-- [AC-contrib-clean-room-8] [EDGE-contrib-clean-room-6] [EDGE-contrib-clean-room-26] [EDGE-contrib-clean-room-36] [EDGE-contrib-clean-room-38] The step-10 sequence, in the final report. `ContribCleanRoomRecordTests.Log_records_merges_and_the_final_bump`.
-- [EDGE-contrib-clean-room-5] `StutterFixesWiringTests.CarrierWritesBracketTheInvokeWithAThreadStaticCounter`, unchanged: it passes at step 2, fails after `<R>`, and passes from step 6 on.
-- [EDGE-contrib-clean-room-15] `HarnessBindingsWiringTests`.
-- [EDGE-contrib-clean-room-27] QA's UNVERIFIED list, with reasons.
-- [EDGE-contrib-clean-room-28] `ContribCleanRoomRecordTests.For_Creators_names_only_existing_samples`.
+- **AC-1 to AC-6, and EDGE-1 to EDGE-39:** as in rev 10, with these rev-11 additions:
+  - `Log_lists_every_participant_and_the_clean_side_kept_clear` also requires the sections "Agent C (self-report)" and "Agent B2", Planner (rev 2) to (rev 11), and C's folder in the forbidden list;
+  - `Spec_has_every_required_section_and_no_code` gains a sibling, `Contract_has_every_required_section_and_no_code`: the 6 headings, no fences, and the §1 and §3 table headers (with Underlying and Flags);
+  - `IpcProvider_header_is_pinned` follows `LICENSE`;
+  - `Log_reports_no_contributor_lines` adds the Phase B tip checkpoint.
+- **[AC-contrib-clean-room-7]:**
+  - the three guard tests stay unchanged and green through B4;
+  - `ContribCleanRoomRecordTests.Log_states_no_licence_change_before_phase_C`: the log has the B4 file list, and it names no licence or notice file.
+- **[AC-contrib-clean-room-8] [EDGE-26] [EDGE-36] [EDGE-38] [EDGE-49]:**
+  - the step-10 sequence;
+  - `Log_records_merges_and_the_final_bump`, which now also checks the seven re-reviewer commands and the `LICENSE` date record.
+- **[AC-contrib-clean-room-9] [EDGE-45]:**
+  - `ShippedAssembliesTests.Plugin_references_no_Luna_or_API_assembly`;
+  - the B4 `Test-Path` and zip-entry checks, logged;
+  - QA item 7.
+- **[AC-contrib-clean-room-10] [EDGE-40] [EDGE-41] [EDGE-42] [EDGE-43] [EDGE-44]:**
+  - `IpcContractTests`: `Every_call_gate_matches_the_API`, `Every_owned_type_matches_the_API` (names, values, underlying type, `[Flags]`), `Shipped_code_uses_only_IpcContract_gates`, `Harness_gates_live_only_in_TestHarness`;
+  - `BridgeAvailabilityTests`: `Bridges_follow_contract_section_4_when_unavailable`, `Event_wrappers_fire_on_the_callers_thread`;
+  - `HarnessBindingsWiringTests` (updated) and `HarnessBuildFlagTests`;
+  - the B5 smoke report and step 8's QA items 1–5, logged.
+- **[AC-contrib-clean-room-11] [EDGE-49] [EDGE-51]:**
+  - `ReadmeTermsTests.Licence_is_the_Proteus_Licence_in_force`;
+  - `LicencePublicationTests.Package_carries_the_licence`: the `..\LICENSE` content item;
+  - QA item 7: `LICENSE.txt` is in the zip.
+- **[AC-contrib-clean-room-12] [EDGE-48] [EDGE-50]:**
+  - `LicencePublicationTests.Spdx_headers_follow_the_licence` (excepting `GlamourerApiTypes.cs`, and `XivLiveMesh/` if C1 kept it AGPL);
+  - `LicencePublicationTests.XivLiveMesh_licence_follows_the_usage_check`: either byte-identical to `LICENSE`, or AGPL with a notice entry, according to the C1 record in the log;
+  - `LicencePublicationTests.Projects_drop_PackageLicenseExpression`;
+  - `LicencePublicationTests.No_file_claims_AGPL_for_Proteus_code` (with the explicit exclusion list);
+  - `PbdCleanRoomRecordTests.Header_names_the_spec_not_a_port` (updated).
+- **[AC-contrib-clean-room-13] [EDGE-47] [EDGE-52]:**
+  - `LicencePublicationTests.Every_shipped_package_has_a_notice`: every non-build-only package in `Proteus/packages.lock.json` has a block naming its id and licence;
+  - `LicencePublicationTests.Existing_notices_are_kept`;
+  - `LicencePublicationTests.Glamourer_types_are_noticed`;
+  - `LicencePublicationTests.Game_assets_are_carved_out`: both `Resources` slices named;
+  - `LicencePublicationTests.Submodules_and_workflows_are_listed`.
+- **[EDGE-46]:** if Fallback A or B happens, the log records the blocker and the branch cut. The final report names it.
 
 ## Environment & Preconditions
 - `PROTEUS_GAME`, `PROTEUS_MODS` and `PROTEUS_MODPACKS` are set.
-- QA needs the game running, the harness on, and a multi-select overlay mod installed.
-- The submodules are initialised.
-- The build is broken from `<R0>` until step 5.
-- The dev-load folder is written only in steps 8–10. Warn other sessions first.
+- For QA and B5: the game is running and the harness is on, with a multi-select overlay mod and a Glamourer design available.
+- The submodules are initialised. The test build needs them.
+- The build is broken from `<R0>` until step 5. Phase B tests are red from B2 until B3.
+- The dev-load folder is written at B5, step 8, step 9 and step 10's test runs. Warn other sessions first.
+- The NuGet cache holds the shipped packages (`%USERPROFILE%\.nuget\packages`).
+- `gh` authentication is optional for C1. Without it, only the local search runs, and that is logged.
 - `-C -C` blame is slow. Run it in the background.
 
-### Planner (rev 1) reads, for the log
-Clean side. No show, `log -p`, diff or content blame of a forbidden path, and no URLs.
-
-**Loaded automatically:** the global CLAUDE.md, the start folder's CLAUDE.md and AGENTS.md, the memory index, and the plan-draft skill.
-
-**Files opened with Read** (all under `E:/orca/workspaces/Proteus/licence-clean-room/`):
-- `docs/pbd-clean-room-plan.md` (lines 1–523, then 523–842)
-- `docs/pbd-clean-room.md`
-- `docs/LICENSE-DRAFT.md`
-- `Proteus.Tests/PbdCleanRoomRecordTests.cs`
-- `THIRD_PARTY_NOTICES.txt`
-- `XivLiveMesh/NOTICE.md`
-- `Proteus.Tests/ReadmeTermsTests.cs`
-- `docs/pbd-clean-room-log.md` (lines 1–140 and 205–454)
-- `Proteus/Proteus.csproj`
-- `AI-DECLARATION.md` (lines 60–99)
-- `TERMS.md` (lines 38–62)
-- `.gitmodules`
-- `Penumbra.Api/README.md`
-- `Luna/README.md`
-- `XivLiveMesh/XivLiveMesh.csproj`
-- `Proteus/packages.lock.json` (lines 48–137)
-- `Proteus.Tests/SupplyChainTests.cs` (lines 320–349 and 470–499)
-- `README.md` (lines 40–64)
-- `docs/agent-rules/plan-critic.md`
-
-**Shell commands, verbatim:**
-1. `wc -l E:/orca/workspaces/Proteus/licence-clean-room/docs/pbd-clean-room-log.md E:/orca/workspaces/Proteus/licence-clean-room/Proteus.Tests/PbdCleanRoomRecordTests.cs E:/orca/workspaces/Proteus/licence-clean-room/THIRD_PARTY_NOTICES.txt E:/orca/workspaces/Proteus/licence-clean-room/XivLiveMesh/NOTICE.md E:/orca/workspaces/Proteus/licence-clean-room/XivLiveMesh/LICENSE E:/orca/workspaces/Proteus/licence-clean-room/LICENSE E:/orca/workspaces/Proteus/licence-clean-room/Proteus.Tests/ReadmeTermsTests.cs`
-2. `grep -n "^## \|^### " E:/orca/workspaces/Proteus/licence-clean-room/docs/pbd-clean-room-log.md`
-3. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -i -E "AGPL|Affero|LICENSE-DRAFT|Proteus Licence|LicenseRef|PackageLicense|SPDX" -- . ":!Glamourer" ":!Penumbra.Api" ":!Luna" ":!Proteus/Interop/IpcProvider.cs" ":!Proteus/Interop/PenumbraBridge.cs" ":!Proteus/Interop/GlamourerBridge.cs" ":!Proteus/Plugin.cs" ":!Proteus/Services/SidecarDiscoveryService.cs" ":!Proteus/Gui/StatusWindow.cs" ":!proteus.slnx" ":!samples/ExampleMultiGroupOverlayMod" ":!LICENSE" ":!XivLiveMesh/LICENSE" ":!docs/pbd-clean-room-plan.md" ":!docs/pbd-clean-room-log.md"`
-4. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -i -E "licen[cs]e|licen[cs]ed" -- "*.md" "*.txt" "*.yml" "*.yaml" "*.json" "*.js" "*.ts" "*.toml" ":!Glamourer" ":!Penumbra.Api" ":!Luna" ":!samples/ExampleMultiGroupOverlayMod" ":!docs/pbd-clean-room-plan.md" ":!docs/pbd-clean-room-log.md" ":!docs/LICENSE-DRAFT.md" ":!THIRD_PARTY_NOTICES.txt" ":!worker/node_modules" ":!**/package-lock.json"`
-5. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -c -E "using (Penumbra\.Api|Glamourer\.Api)|Penumbra\.Api\.|Glamourer\.Api\." -- "Proteus/*.cs" "Proteus.Tests/*.cs" "Proteus.Refit/*.cs" "XivLiveMesh/*.cs" ":!Proteus/Interop/IpcProvider.cs" ":!Proteus/Interop/PenumbraBridge.cs" ":!Proteus/Interop/GlamourerBridge.cs" ":!Proteus/Plugin.cs" ":!Proteus/Services/SidecarDiscoveryService.cs" ":!Proteus/Gui/StatusWindow.cs"`
-6. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -c -E "using (Penumbra\.Api|Glamourer\.Api|Luna)|Penumbra\.Api\.|Glamourer\.Api\.|Luna\." -- Proteus/Interop/IpcProvider.cs Proteus/Interop/PenumbraBridge.cs Proteus/Interop/GlamourerBridge.cs Proteus/Plugin.cs Proteus/Services/SidecarDiscoveryService.cs Proteus/Gui/StatusWindow.cs`
-7. `git -C E:/orca/workspaces/Proteus/licence-clean-room/Penumbra.Api ls-files -- "README*" "LICENSE*" "LICENCE*" "COPYING*" "*.md"`
-8. `git -C E:/orca/workspaces/Proteus/licence-clean-room/Glamourer ls-files -- "README*" "LICENSE*" "LICENCE*" "COPYING*" "Glamourer.Api/README*" "Glamourer.Api/LICENSE*"`
-9. `git -C E:/orca/workspaces/Proteus/licence-clean-room/Luna ls-files -- "README*" "LICENSE*" "LICENCE*" "COPYING*" "*/LICENSE*" "*/README*"`
-10. `head -n 12 E:/orca/workspaces/Proteus/licence-clean-room/Glamourer/LICENSE E:/orca/workspaces/Proteus/licence-clean-room/Luna/LICENSE`
-11. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -c -E "IpcSubscribers|EventSubscriber|FuncSubscriber|ActionSubscriber|GetIpcSubscriber|GetIpcProvider" -- "Proteus/*.cs" "Proteus.Tests/*.cs" "XivLiveMesh/*.cs" "Proteus.Refit/*.cs"`
-12. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -h -o -E "using (Penumbra\.Api[A-Za-z.]*|Glamourer\.Api[A-Za-z.]*|Luna[A-Za-z.]*);" -- "Proteus/*.cs" "Proteus.Tests/*.cs" ":!Proteus/Interop/IpcProvider.cs" ":!Proteus/Interop/PenumbraBridge.cs" ":!Proteus/Interop/GlamourerBridge.cs" ":!Proteus/Plugin.cs" ":!Proteus/Services/SidecarDiscoveryService.cs" ":!Proteus/Gui/StatusWindow.cs"`
-13. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -E "IpcSubscribers|EventSubscriber|FuncSubscriber|ActionSubscriber|GetIpcSubscriber|GetIpcProvider|using (Penumbra|Glamourer|Luna)" -- Proteus/TestHarness/GameHarnessAdapter.cs Proteus.Tests/HarnessBindingsWiringTests.cs Proteus/Interop/GlamourerSignals.cs`
-14. `git -C E:/orca/workspaces/Proteus/licence-clean-room ls-files -- "*packages.lock.json" "Directory.Build.props" "Directory.Packages.props" ".github/*" "worker/wrangler*" "netlify.toml" "vercel.json" "Proteus/Plugin.json" "Proteus.Tests/SupplyChainTests.cs" "samples/*"`
-15. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -A6 -E "^on:" -- .github/workflows`
-16. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -i -E "licen|LICENSE|THIRD_PARTY|NOTICE|zip|Luna" -- .github/workflows Directory.Build.props Proteus/Plugin.json worker/wrangler.toml`
-17. `git -C E:/orca/workspaces/Proteus/licence-clean-room shortlog -sne test -- XivLiveMesh Proteus.Refit Proteus.Tests worker .github docs README.md "For Creators.md" TERMS.md AI-DECLARATION.md Proteus/native THIRD_PARTY_NOTICES.txt`
-18. `git -C E:/orca/workspaces/Proteus/licence-clean-room log test --format="%h %an %ad %s" --date=short --numstat --author=dependabot --author=github-actions`
-19. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -c -i -E "IpcProvider|Proteus\.(Get|Set|Assign|List)|\"silent\"|refresh silent|SidecarDiscovery|StatusWindow|OpenModInPenumbra|OpenMainWindow|ExampleMultiGroupOverlayMod|multi.?select|GlamourerLock|cooldown" -- Proteus.Tests "Proteus/*.cs" ":!Proteus/Interop/IpcProvider.cs" ":!Proteus/Interop/PenumbraBridge.cs" ":!Proteus/Interop/GlamourerBridge.cs" ":!Proteus/Plugin.cs" ":!Proteus/Services/SidecarDiscoveryService.cs" ":!Proteus/Gui/StatusWindow.cs"`
-20. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -E "IpcProvider|\"Proteus\.[A-Z][A-Za-z]+\"|refresh silent|\"silent\"" -- Proteus.Tests "Proteus/*.cs" README.md "For Creators.md" docs ":!Proteus/Interop/IpcProvider.cs" ":!Proteus/Interop/PenumbraBridge.cs" ":!Proteus/Interop/GlamourerBridge.cs" ":!Proteus/Plugin.cs" ":!Proteus/Services/SidecarDiscoveryService.cs" ":!Proteus/Gui/StatusWindow.cs" ":!docs/pbd-*"`
-21. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -i -E "\bIPC\b" -- README.md "For Creators.md" docs/adr docs/product-context AGENTS.md`
-22. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -E "\"refresh\"|\"full\"|OnCommand|CommandInfo|ParseRefresh" -- "Proteus/*.cs" Proteus.Tests ":!Proteus/Interop/IpcProvider.cs" ":!Proteus/Interop/PenumbraBridge.cs" ":!Proteus/Interop/GlamourerBridge.cs" ":!Proteus/Plugin.cs" ":!Proteus/Services/SidecarDiscoveryService.cs" ":!Proteus/Gui/StatusWindow.cs"`
-23. `wc -l E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Interop/IpcProvider.cs E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Interop/PenumbraBridge.cs E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Interop/GlamourerBridge.cs E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Plugin.cs E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Services/SidecarDiscoveryService.cs E:/orca/workspaces/Proteus/licence-clean-room/Proteus/Gui/StatusWindow.cs E:/orca/workspaces/Proteus/licence-clean-room/proteus.slnx`
-24. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -E "IsTypedOnly|/command|\"/proteus" -- Proteus/TestHarness Proteus.Tests/TestHarness docs/agent-rules/adversarial-qa.md`
-25. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -E "ProjectReference|PackageReference|License|Reference Include" -- Proteus.Refit/Proteus.Refit.csproj Proteus.Tests/Proteus.Tests.csproj Directory.Build.props`
-26. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -i -E "Luna|Penumbra\.Api|Glamourer\.Api|ProjectReference" -- Proteus.Tests/SupplyChainTests.cs Proteus.Tests/HarnessReleaseGuardTests.cs`
-27. `ls E:/orca/workspaces/Proteus/licence-clean-room/docs/adr E:/orca/workspaces/Proteus/licence-clean-room/docs/product-context E:/orca/workspaces/Proteus/licence-clean-room/docs/agent-rules`
-28. `grep -n -E "^#|route|Route" E:/orca/workspaces/Proteus/licence-clean-room/docs/agent-rules/adversarial-qa.md`
-29. `grep -n -i -E "ApplyDesign|ApplyState|Interop/|IpcSubscriber" E:/orca/workspaces/Proteus/licence-clean-room/docs/adr/0002-qa-harness-compile-out-and-threat-model.md E:/orca/workspaces/Proteus/licence-clean-room/Proteus.Tests/HarnessBindingsWiringTests.cs`
-30. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -i -E "lock|Restore" -- Directory.Build.props Proteus/Proteus.csproj .github/workflows/test.yml .github/workflows/release.yml`
-31. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -c -E "(AC|EDGE)-licence-clean-room-" -- . ":!Glamourer" ":!Penumbra.Api" ":!Luna"`
-32. `cmp E:/orca/workspaces/Proteus/licence-clean-room/AGENTS.md "E:/orca/workspaces/Proteus/E-orca-workspaces-Proteus-meddle-docs-pbd-clean-room-plan.md/AGENTS.md"`
-33. `git -C E:/orca/workspaces/Proteus/licence-clean-room log --oneline test..HEAD`
-34. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -o -E "BuildNumber = [0-9]+" test -- Proteus/Plugin.cs`
-
-**Disclosed:**
-- Command 34 printed only `test:Proteus/Plugin.cs:33:BuildNumber = 1466`.
-- Command 14 listed the sample's file names.
-- Commands 6 and 11 counted inside the mixed files.
-- Commands 7–10 touched the submodules' licence and readme files.
-- **L-4, the newly mixed files** (`ModsTab.cs`, `CompositorService.Carriers.cs`, `CompositorService.cs`):
-  - **Command 12** printed whole import-directive lines (`using Penumbra.Api.Enums;` and `using Glamourer.Api.Enums;`) with `-h`, so without file names. Those include any such lines in `CompositorService.Carriers.cs` and `CompositorService.cs`, which command 5 shows reference the API namespaces.
-    - Spec §1 gives the set's import lines in those files as kind R (`Dalamud.Interface.Utility.Raii`), so the printed lines are Solona's.
-    - They are trivial import content. This is a planner-read disclosure.
-  - **Commands 5, 11 and 19** were count mode: names and counts only. Commands 5 and 19 named `CompositorService.Carriers.cs` and `CompositorService.cs`.
-  - **Content-mode commands 3, 20 and 22** printed no line from the three newly mixed files:
-    - command 3 printed only `.cs` lines from `Proteus.Tests/PbdCleanRoomRecordTests.cs`, `Proteus.Tests/ReadmeTermsTests.cs` and the `XivLiveMesh/*.cs` SPDX lines;
-    - command 20 printed only `Proteus.Tests/CompositorMathTests.cs:11`, `Proteus.Tests/CrossSexRefitTests.cs:398`, `Proteus.Tests/HarnessBuildFlagTests.cs:25`, `Proteus.Tests/HarnessReleaseGuardTests.cs:102`, `Proteus.Tests/LocalizationTests.cs` lines 1201, 1253, 1266 and 1267, `Proteus/AssemblyAttributes.cs` lines 3 and 4, `Proteus/Services/CompositorService.ShellRecovery.cs:249`, and the README/translation refresh lines;
-    - command 22 printed only `Proteus.Tests/TestHarness/HarnessHostTests.cs:154`, `Proteus/Services/BodyRetarget.Crotch.cs:210`, `Proteus/Services/CompositorService.Trigger.cs:21`, `Proteus/Services/HairPort/HairPortScan.cs:93`, `Proteus/Services/HairPort/HairPortWatcher.cs:421` and `Proteus/TestHarness/HarnessRouter.Matcaps.cs:28`.
-
-### Planner (rev 2)–(rev 10) reads, for the log
-- **Rev 2.** No Read calls. Commands, verbatim:
-  1. `grep -n -i -E "log|/state|/mods|sidecar|overlay" E:/orca/workspaces/Proteus/licence-clean-room/docs/agent-rules/adversarial-qa.md`
-  2. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -l "proteus.slnx" -- Proteus.Tests`
-- **Rev 3.** No Read calls. Command, verbatim:
-  1. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -E "SetGearItem" -- Proteus/TestHarness/GameHarnessAdapter.cs`
-- **Revs 4–7.** No tool calls.
-- **Rev 8.** Opened `E:/orca/workspaces/Proteus/licence-clean-room/docs/contrib-clean-room-spec.md`, lines 1–140 and 255–558 (lines 141–254 not read). Commands, verbatim:
-  1. `wc -l E:/orca/workspaces/Proteus/licence-clean-room/docs/contrib-clean-room-spec.md`
-  2. `grep -n -E "^## |^### " E:/orca/workspaces/Proteus/licence-clean-room/docs/contrib-clean-room-spec.md`
-- **Revs 9 and 10.** No tool calls at all: no Read, no shell or git commands, no searches, no URLs.
-- **All revisions** had the same automatic loads.
-
-### Plan-critic reads, for the log
-**Plan-critic 1 (on rev 1).** No forbidden reads and no sub-agents.
-
-Files opened:
-- the rev-1 plan output file
-- `docs/agent-rules/plan-critic.md`
-- `Proteus/Proteus.csproj`
-- `docs/LICENSE-DRAFT.md`
-- `THIRD_PARTY_NOTICES.txt`
-- `XivLiveMesh/NOTICE.md`
-- `AI-DECLARATION.md`
-- `Proteus/packages.lock.json`
-- `Proteus.Tests/Proteus.Tests.csproj` (lines 1–80)
-- `XivLiveMesh/XivLiveMesh.csproj`
-- `Proteus.Tests/HarnessBindingsWiringTests.cs` (lines 25–64)
-- `docs/product-context/README.md`
-- `docs/pbd-clean-room.md`
-
-Commands, verbatim:
-1. `ls E:/orca/workspaces/Proteus/licence-clean-room/docs/adr E:/orca/workspaces/Proteus/licence-clean-room/docs/product-context E:/orca/workspaces/Proteus/licence-clean-room/docs`
-2. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -c -E "using Luna|Luna\." -- "Proteus/*.cs" "Proteus.Tests/*.cs" "XivLiveMesh/*.cs" "Proteus.Refit/*.cs" ":!Proteus/Interop/IpcProvider.cs" ":!Proteus/Interop/PenumbraBridge.cs" ":!Proteus/Interop/GlamourerBridge.cs" ":!Proteus/Plugin.cs" ":!Proteus/Services/SidecarDiscoveryService.cs" ":!Proteus/Gui/StatusWindow.cs"`
-3. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -l -i -E "ported from|adapted from|based on .*(penumbra|meddle|textools|xande|brio|ktisis|glamourer|anamnesis|lumina|godbert|skintattoo)|derived from .*(penumbra|meddle|textools|xande|brio|ktisis|glamourer)|copied from|taken from|courtesy of|credit:" -- "Proteus/*.cs" "XivLiveMesh/*.cs" "Proteus.Refit/*.cs" "Proteus/native/*" ":!Proteus/Interop/IpcProvider.cs" ":!Proteus/Interop/PenumbraBridge.cs" ":!Proteus/Interop/GlamourerBridge.cs" ":!Proteus/Plugin.cs" ":!Proteus/Services/SidecarDiscoveryService.cs" ":!Proteus/Gui/StatusWindow.cs"`
-4. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -c -i -E "Meddle|TexTools|xivModdingFramework|Xande|Brio|Ktisis|SkinTattoo|DragAndDrop|Anamnesis|Godbert|LooseTextureCompiler|Penumbra's (source|code|implementation)|ported|port of" -- "Proteus/*.cs" "XivLiveMesh/*.cs" "Proteus.Refit/*.cs" "Proteus/native/*" ":!Proteus/Interop/IpcProvider.cs" ":!Proteus/Interop/PenumbraBridge.cs" ":!Proteus/Interop/GlamourerBridge.cs" ":!Proteus/Plugin.cs" ":!Proteus/Services/SidecarDiscoveryService.cs" ":!Proteus/Gui/StatusWindow.cs"`
-5. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -c -i -E "Meddle|TexTools|xivModdingFramework|Xande|Brio\b|Ktisis|SkinTattoo|Anamnesis|LooseTextureCompiler|Penumbra's (source|code|implementation)" -- "Proteus/*.cs" "XivLiveMesh/*.cs" "Proteus.Refit/*.cs" ":!Proteus/Interop/IpcProvider.cs" ":!Proteus/Interop/PenumbraBridge.cs" ":!Proteus/Interop/GlamourerBridge.cs" ":!Proteus/Plugin.cs" ":!Proteus/Services/SidecarDiscoveryService.cs" ":!Proteus/Gui/StatusWindow.cs"`
-6. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -i -E "luna|penumbra\.api|glamourer\.api" -- Proteus/packages.lock.json`
-7. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -l -E "LICENSE-DRAFT|Proteus Licence" -- . ":!Glamourer" ":!Penumbra.Api" ":!Luna"`
-8. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -i -E "Luna|zip|Exclude|latest" -- Proteus.Tests/SupplyChainTests.cs .github/workflows/release.yml .github/workflows/testing-release.yml`
-9. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -E "ProjectReference|PackageReference|Compile Include|Link=" -- Proteus.Refit/Proteus.Refit.csproj Proteus.Tests/Proteus.Tests.csproj XivLiveMesh/XivLiveMesh.csproj`
-10. `git -C E:/orca/workspaces/Proteus/licence-clean-room ls-files -- "*packages.lock.json" "proteus.slnx" "*.sln" "Directory.Build.props" "Directory.Build.targets" "global.json" "nuget.config" "NuGet.config"`
-11. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -l -E "Mono\.Cecil|System\.Reflection\.Metadata|MetadataLoadContext" -- "*.cs" "*.csproj" "*.props" ":!Glamourer" ":!Penumbra.Api" ":!Luna"`
-12. `grep -n -i -E "ApplyDesign|ApplyState|Interop/|IpcSubscriber|Glamourer" E:/orca/workspaces/Proteus/licence-clean-room/docs/adr/0002-qa-harness-compile-out-and-threat-model.md`
-13. `grep -n "^## \|^### " E:/orca/workspaces/Proteus/licence-clean-room/docs/pbd-clean-room-log.md`
-14. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -i -E "slnx|\.sln\b" -- .github/workflows Proteus.Tests "*.md" ":!docs/pbd-clean-room-plan.md" ":!docs/pbd-clean-room-log.md"`
-
-L-4 disclosure: commands 3, 4 and 5 touched `CompositorService.Carriers.cs` and `CompositorService.cs` by file name and count only. Command 3 listed names; commands 4 and 5 printed counts. No content was printed.
-
-**Plan-critic 2 (on rev 2).** Opened only the rev-2 plan output file. Commands, verbatim:
-1. `grep -n -i -E "/sidecar|/log|actions/equip|cooldown|lock" E:/orca/workspaces/Proteus/licence-clean-room/docs/agent-rules/adversarial-qa.md`
-2. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -E "Equip|glamourer\.|GlamourerBridge|Cooldown" -- Proteus/TestHarness/GameHarnessAdapter.cs`
-3. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -c -E "Process|\"git\"|git " -- Proteus.Tests/PbdCleanRoomRecordTests.cs Proteus.Tests/ReadmeTermsTests.cs`
-4. `git -C E:/orca/workspaces/Proteus/licence-clean-room grep -n -E "Process|\"git\"|git " -- Proteus.Tests/PbdCleanRoomRecordTests.cs`
-
-**Plan-critics 3–6, 8 and 9.** Each opened only the plan output file of the revision it reviewed:
-
-| Critic | Revision | Lines read |
-|---|---|---|
-| 3 | rev 3 | 1–470, 470–770 |
-| 4 | rev 4 | 1–480, 480–649, 649–728 |
-| 5 | rev 5 | 1–420, 420–719, 720–919, then to the end |
-| 6 | rev 6 | 1–120, 120–449, 450–779, 780–979 |
-| 8 | rev 8 | 1–135, 134–368, 369–528, 529–698 |
-| 9 | rev 9 | 1–42, 215–374, 459–483, 548–672 |
-
-Commands, verbatim (Plan-critics 3, 4 and 5 ran none):
-- **Plan-critic 6:** `grep -n -E "^## |^[0-9]+\. \*\*|^   [0-9]+\. |^8\.|^9\.|^10\." "C:/Users/solon/.claude/projects/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/toolu_01WHd8VAiL2zvRrzNpc9U1fr.txt"`
-- **Plan-critic 8:** `grep -n -E "^## |^[0-9]+\. \*\*|^   [0-9]+[a-z]?\. \*\*" "C:/Users/solon/.claude/projects/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/toolu_01NyKy9HngjsMs9KVXr2vbeh.txt"`
-- **Plan-critic 9:** `grep -n -E "^## |^[0-9]+\. \*\*|^   [0-9]+[a-z]?\. \*\*" "C:/Users/solon/.claude/projects/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/toolu_014i7hYS36gwktxroFMLmjga.txt"`
-
-None of them read anything forbidden, opened URLs or used sub-agents.
-
-### Planning orchestrator reads, for the log
-Copied verbatim from the orchestrator's reports.
-
-**Self-check 1's disclosed exception:** the meddle `Plugin.cs` Read of lines 31–34 (offset 31, limit 4, for the BuildNumber bump). The blame count printed 0.
-
-**Before the self-check-2 window** (disclosed, not counted):
-- `git -C E:/orca/workspaces/Proteus/meddle shortlog -sne test`
-- `git -C E:/orca/workspaces/Proteus/meddle log test --author=Caraxi --format="%h %ad %s" --date=short --numstat`
-- `git -C E:/orca/workspaces/Proteus/meddle log test --author=AzureRavie --format="%h %ad %s" --date=short --numstat`
-- the blame-count pipelines `git -C E:/orca/workspaces/Proteus/meddle blame -w -M -C --line-porcelain test -- <file> | grep -c "^author Caraxi"` (over the six Caraxi files), and `... | grep -c "^author AzureRavie"` (over `GlamourerBridge.cs` and `CompositorService.cs`)
-- `git -C E:/orca/workspaces/Proteus/meddle ls-tree -r --name-only test -- samples proteus.slnx`
-- `git -C E:/orca/workspaces/Proteus/meddle show test:LICENSE --format= -s`
-- the meddle Grep runs: `Caraxi` (files_with_matches, no hits) and `Caraxi|AzureRavie` (content: one Glamourer changelog line, no code)
-
-**Inside the window:**
-- (a) `git -C E:/orca/workspaces/Proteus/meddle worktree add -b solona-m/licence-clean-room E:/orca/workspaces/Proteus/licence-clean-room test` (the window start)
-- `git -C E:/orca/workspaces/Proteus/licence-clean-room submodule update --init --recursive`
-- `wc -l docs/pbd-clean-room.md docs/pbd-clean-room-plan.md docs/LICENSE-DRAFT.md docs/pbd-clean-room-log.md THIRD_PARTY_NOTICES.txt XivLiveMesh/NOTICE.md`
-- `git -C E:/orca/workspaces/Proteus/licence-clean-room ls-files --stage Glamourer Luna Penumbra.Api .gitmodules` (sanctioned)
-- (d) `head -n 3 Luna/LICENSE Glamourer/Glamourer.Api/LICENSE Penumbra.Api/LICENSE Luna/ImSharp/LICENSE`
-- `ls Penumbra.Api Glamourer/Glamourer.Api Glamourer` (sanctioned)
-- (e) `head -n 3 Glamourer/LICENSE`
-- (b) `git -C E:/orca/workspaces/Proteus/licence-clean-room blame -w -M -C --line-porcelain -L 31,34 test -- Proteus/Plugin.cs | grep -c "^author-mail <git@caraxian.com>"` (printed 0)
-- (c) the transcript-jsonl greps. They printed tool-call inputs only, with no mixed-file content.
-- the Grep runs:
-  - (i) `ProjectReference|PackageReference`, content mode, over the three csproj files. Allowed lines only.
-  - (ii) `using Luna|Luna\.`, count mode, over `W/Proteus` `*.cs`. It named only `GlamourerBridge.cs:1` and `PenumbraBridge.cs:1`.
-  - (iii) `SPDX-License-Identifier`, count mode.
-  - (iv) `AGPL|Affero|LICENSE-DRAFT|Proteus Licence`, files_with_matches. It found 18 of Proteus's own files.
-- one Glob, of the session transcript
-
-No exception (f) is needed. L-4: these count and files-with-matches greps touched the newly mixed files by name or count only, if at all. They are sanctioned.
-
-**After rev 7:** step 0's blame-authors runs, the commits `71d450fb` and `1a2cd3ef`, and reading the committed spec, all logged by the orchestrator. Self-check 1 is re-evaluated against the eleven-entry mixed set.
-
-**Files read:** `docs/pbd-clean-room.md`, `docs/LICENSE-DRAFT.md`, `THIRD_PARTY_NOTICES.txt`, the rev-1 to rev-9 plan outputs, the plan-critic reports, and the committed spec.
+**Reads for the log** (Planner revisions 1–10, Plan-critics 1–6, 8 and 9, and the Planning orchestrator) are exactly as listed in rev 10's Environment & Preconditions. Those lists are carried into the log unchanged, verbatim, with the L-4 disclosures. Additions:
+- **Planner (rev 11):** no tool calls at all (no Read, no shell or git commands, no searches, no URLs), and the same automatic loads.
+- Any plan-critic pass on rev 11 adds its own section.
 
 ## NEEDS_DECISION
-None. The user decided ND-1. The orchestrator decided ND-3, the self-check option, and the rev-8 to rev-10 amendments. The earlier ND-2, ND-4, ND-5 and ND-6 are owner follow-ups.
+None. The user decided ND-1, now superseded by the scope change. The orchestrator decided ND-2 to ND-6, ND-3, the self-check option, and the rev-8 to rev-11 amendments (N-6). My judgment calls in this revision:
+- owned types stay in the APIs' namespaces (D24);
+- C may read the named Luna base classes for facts only (D25);
+- the slnx keeps the API entries (D30);
+- B5 runs before Phase C (D27);
+- B2's lines get no similarity check (D7).
 
 ## Risks
-- **Leaks to the clean side.** Possible routes:
-  - pre-`<R>` diffs and merge diffs;
-  - the security review's `origin/HEAD` diff;
-  - old-code output;
-  - assertions holding removed text;
-  - conflict content;
-  - identifiers at Solona's call sites (interface names, logged);
-  - marker locations (disclosed);
-  - the handover folder;
-  - relative paths.
-
-  Mitigations: D5, D6, D8–D12, D16, D17, D19, EDGE-5, EDGE-13 and EDGE-32.
-- **The trivial class.** It rests on the judgment that import, namespace, blank and brace lines, and the narrowly defined game-fact lines, carry no expression.
-  - The regex, the game-fact file list and every count change are logged for the lawyer's review.
-  - No claim of "zero lines in any mode" is made.
-  - Changes are logged rather than capped, so ordinary import moves and copy detection on `test` don't cause false failures. The non-trivial rule and the per-file game-fact limit stay hard.
-- **The `87ae2e3d` scope.** B rebuilds 32 lines of Solona's own code from a description. NewSeam tests cover them. In game, they are UNVERIFIED.
-- **AC-1 on the old code** rests mostly on NewSeam tests. This is reported.
-- **The cooldown and the lock logging** can't be reached through the harness. Unit tests are the only evidence.
-- **The Interop Sensitive Area.**
-  - Changes are confined to the removed regions.
-  - §12 is confirmed twice.
-  - The 21 Sensitive-Area files that hold trivial-class lines are untouched.
-- **Merging `test` mid-branch.** Covered by:
-  - the step-8 merge before review;
-  - the step-9 re-merge check;
-  - the short re-review of every post-pass commit;
-  - the guard, the classifier, the resolver and A3;
-  - EDGE-37.
-- **Process departures.** B writes the production code, and a clean sub-agent does the security review. Both are noted in Review & traceability.
-- **Plugin reloads.** Warn other sessions first.
+- **The scope is large: 13 ACs, three phases.** It isn't split, because the user asked for everything in one run. Each phase has its own proof and fallback.
+- **Leaks to the clean side.** The rev-10 routes, plus two from Phase B: C's API and Luna reads reaching B2 (C writes facts only; B2 never reads sources), and the Cecil read of the API DLLs (mechanical, logged).
+- **The Interop rewrite (Sensitive Area).** A wrong label or type fails only at runtime. The mitigations:
+  - the Cecil contract test against the submodules;
+  - the bridge-availability tests;
+  - the B5 smoke check;
+  - the step-8 QA;
+  - ADR 0002 guards.
+- **Owned types in the APIs' namespaces.** A future change that re-adds a reference to Penumbra.Api or Glamourer.Api would collide with them. `ShippedAssembliesTests` blocks that reference.
+- **The licence's legal footing.** These are left to the owner's lawyer:
+  - the trivial-class judgment;
+  - Penumbra.Api's missing licence (interface facts only);
+  - the Glamourer types (Apache, noticed);
+  - the Dalamud host question;
+  - XivLiveMesh's dual status if C1 finds another user;
+  - the game-asset carve-out;
+  - the workflows' origins.
+- **The `87ae2e3d` scope.** B rebuilds 32 lines of Solona's own code from a description. In game it is UNVERIFIED.
+- **AC-1 on the old code rests mostly on NewSeam tests.** This is reported.
+- **Merging `test` mid-branch.** The rev-10 mitigations hold, plus the contract test whenever a merge touches Interop or the submodule pointers.
+- **Process departures.** B and B2 write the production code; a clean sub-agent runs the security review. Both are noted in Review & traceability.
+- **Plugin reloads** at B5 and step 8–10. Other sessions are warned first.
 - **Left to the owner:**
-  - the UNVERIFIED items;
-  - Luna and Penumbra.Api;
-  - the NuGet notices;
-  - the lawyer's review, including the trivial-class judgment and the L-4 disclosures;
-  - `main` and the release.
+  - the UNVERIFIED in-game items;
+  - the lawyer's review;
+  - merging `test` into `main`;
+  - the release tag.
 
 Relevant paths:
 - E:\orca\workspaces\Proteus\licence-clean-room\docs\contrib-clean-room-spec.md
 - E:\orca\workspaces\Proteus\licence-clean-room\docs\contrib-clean-room-plan.md
-- E:\orca\workspaces\Proteus\licence-clean-room\Proteus.Tests\PbdCleanRoomRecordTests.cs
+- E:\orca\workspaces\Proteus\licence-clean-room\docs\LICENSE-DRAFT.md
+- E:\orca\workspaces\Proteus\licence-clean-room\THIRD_PARTY_NOTICES.txt
+- E:\orca\workspaces\Proteus\licence-clean-room\XivLiveMesh\NOTICE.md
+- E:\orca\workspaces\Proteus\licence-clean-room\XivLiveMesh\XivLiveMesh.csproj
+- E:\orca\workspaces\Proteus\licence-clean-room\Proteus\Proteus.csproj
+- E:\orca\workspaces\Proteus\licence-clean-room\Proteus\packages.lock.json
 - E:\orca\workspaces\Proteus\licence-clean-room\Proteus.Tests\ReadmeTermsTests.cs
+- E:\orca\workspaces\Proteus\licence-clean-room\Proteus.Tests\PbdCleanRoomRecordTests.cs
+- E:\orca\workspaces\Proteus\licence-clean-room\Proteus.Tests\SupplyChainTests.cs
 - E:\orca\workspaces\Proteus\licence-clean-room\Proteus.Tests\HarnessBindingsWiringTests.cs
 - E:\orca\workspaces\Proteus\licence-clean-room\Proteus\TestHarness\GameHarnessAdapter.cs
-- E:\orca\workspaces\Proteus\licence-clean-room\docs\agent-rules\adversarial-qa.md
+- E:\orca\workspaces\Proteus\licence-clean-room\docs\adr\0002-qa-harness-compile-out-and-threat-model.md
