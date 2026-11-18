@@ -94,7 +94,6 @@ public class EnaretosRealModTests : IDisposable
     [Trait("Plan", "AC-row-matcap-glass-1")]
     [Trait("Plan", "AC-row-matcap-glass-2")]
     [Trait("Plan", "AC-row-matcap-glass-4")]
-    [Trait("Plan", "EDGE-row-matcap-glass-13")]
     public void Real_bracelet_glass_row_round_trip()
     {
         const string glassMat = "/mt_c0201a0153_wrs_b.mtrl";
@@ -138,6 +137,47 @@ public class EnaretosRealModTests : IDisposable
             Assert.DoesNotContain(ModelMaterialWriter.TriangleUvs(drawn, [part]), t => MatcapRowCut.Touches(t, bakes));
 
         Assert.True(MatcapWriter.Undo(mod, ModelRel).Ok);
+        var after = Hashes(mod);
+        Assert.Equal(baseline.Keys.Order(), after.Keys.Where(k => !k.Contains("-superseded")).Order());
+        foreach (var (k, v) in baseline) Assert.True(v == after[k], $"{k} differs after Undo");
+        Untouched(original);
+    }
+
+    [LocalDataFact(LocalData.EnaretosMod, LocalData.GameData)]
+    [Trait("Plan", "EDGE-row-matcap-glass-13")]
+    public void Glass_row_applies_beside_an_existing_row_matcap_and_undo_restores_both()
+    {
+        const string glassMat = "/mt_c0201a0153_wrs_b.mtrl";
+        var (original, mod) = CopyMod();
+        NoMatcaps(mod);
+        var baseline = Hashes(mod);
+        var game = new Lumina.GameData(LocalData.Path(LocalData.GameData));
+        byte[]? Read(string p) { try { return game.GetFile(p)?.Data; } catch { return null; } }
+        var image = MatcapChoice.OfImage(Image(Path.Combine(temp, "img"), loader));
+
+        // First a row matcap on _a (the owner's own case), then the glass row on _b beside it.
+        var envA = Env(Read) with { RowOnly = UsedRow(mod, Env(Read)) };
+        var model = File.ReadAllBytes(MatcapWriter.Full(mod, ModelRel));
+        var pa = MatcapStudio.Prepare(mod, ModelRel, ModelPath, model, Pool(model), image, envA);
+        Assert.True(pa.Ok, pa.Code + ": " + pa.Message);
+        Assert.True(MatcapWriter.Apply(mod, pa.Request!).Ok);
+        var aCut = MatcapRecord.Read(mod).Materials.Single().Row!.Cut;
+
+        var envB = Env(Read) with { RowOnly = 8, RowSub = SubRowPick.B };
+        model = File.ReadAllBytes(MatcapWriter.Full(mod, ModelRel));
+        var poolB = MatcapPlan.RowPool(ModelPartReader.Read(model)!.Parts, MatcapPlan.Kind.Gear, [], glassMat);
+        var pb = MatcapStudio.Prepare(mod, ModelRel, ModelPath, model, poolB, image, envB);
+        Assert.True(pb.Ok, pb.Code + ": " + pb.Message);
+        Assert.True(pb.RowGlass);
+        Assert.True(MatcapWriter.Apply(mod, pb.Request!).Ok);
+
+        var record = MatcapRecord.Read(mod);
+        Assert.Equal(2, record.Materials.Count(m => m.Row != null));
+        var drawn = ModelPartReader.Read(File.ReadAllBytes(MatcapWriter.Full(mod, ModelRel)))!.Parts;
+        Assert.Contains(drawn, x => x.Material == aCut);                                     // _a's cut still drawn
+        Assert.Contains(PenumbraModMeta.ReadContainerRedirects(mod), r => r.GamePath.EndsWith(aCut.TrimStart('/'), StringComparison.OrdinalIgnoreCase));
+
+        Assert.True(MatcapWriter.Undo(mod, ModelRel).Ok);                                      // both undone together
         var after = Hashes(mod);
         Assert.Equal(baseline.Keys.Order(), after.Keys.Where(k => !k.Contains("-superseded")).Order());
         foreach (var (k, v) in baseline) Assert.True(v == after[k], $"{k} differs after Undo");

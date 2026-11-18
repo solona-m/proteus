@@ -41,14 +41,18 @@ internal static class GlassKit
 
     /// <summary>A character.shpk N/M/ID template shaped like a0170 <c>_ear_a</c>.</summary>
     public static byte[] Template(string shader = "character.shpk", bool threshold = true, bool diffuse = false,
-                                  uint additional = 0x534, int additionalSize = 4, uint flags = 0x1)
+                                  uint additional = 0x534, int additionalSize = 4, uint flags = 0x1, float? movement = 0f)
     {
         var consts = new List<(uint, float[])>
         {
             (0xB7FA33E2, [1f]), (0xAD94E254, [0f]), (0x39551220, [0f]), (0x5351646E, [0f]), (0x6421DD30, [0f]),
-            (0xB5545FBB, [1f]), (MeshVolumeService.VertexMovementScaleId, [0f]), (MeshVolumeService.VertexMovementMaxLengthId, [0f]),
-            (0xD62BF368, [2f]), (0xD07A6A65, [0f]), (0xB61D7498, [0f]), (0xD925FF32, [0.5f]),
+            (0xB5545FBB, [1f]), (0xD62BF368, [2f]), (0xD07A6A65, [0f]), (0xB61D7498, [0f]), (0xD925FF32, [0.5f]),
         };
+        if (movement is { } mv)   // null: a template that declares no movement constants at all
+        {
+            consts.Add((MeshVolumeService.VertexMovementScaleId, [mv]));
+            consts.Add((MeshVolumeService.VertexMovementMaxLengthId, [mv]));
+        }
         if (threshold) consts.Insert(0, (MatcapMaterial.ConstAlphaThreshold, [0.5f]));
         var textures = new List<string> { "chara/t/n.tex", "chara/t/m.tex", "chara/t/id.tex" };
         var samplers = new List<(uint, int)> { (MatcapMaterial.SamplerNormal, 0), (MatcapMaterial.SamplerMask, 1), (ShaderUpgradePlan.SamplerIndex, 2) };

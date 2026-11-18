@@ -54,7 +54,6 @@ public class HarnessChangesHttpTests : IDisposable
 
     // QA (row-matcap-glass): a dyed check needs stains; put-back restores the original's.
     [Fact]
-    [Trait("Plan", "AC-row-matcap-glass-1")]
     public async Task Equip_with_dyes_wears_them_and_put_back_restores_the_original()
     {
         Game.Gear["Wrists"] = new Worn(222, 5, 6);

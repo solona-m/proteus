@@ -116,6 +116,21 @@ public class MatcapGlassCutTests
 
     [Theory]
     [Trait("Plan", "EDGE-row-matcap-glass-10")]
+    [InlineData(1f)]      // a template whose movement constants sway: the copy's are 0
+    [InlineData(null)]    // a template without them: they are added at 0
+    public void Movement_constants_are_neutralised_whatever_the_template_carries(float? movement)
+    {
+        var glass = GlassKit.Glass();
+        var template = GlassKit.Template(movement: movement);
+        var (c, why) = MatcapGlassCut.Convert(glass, template);
+        Assert.Equal(MatcapGlassCut.Failure.None, why);
+        Assert.Equal(0f, TextureLoader.ConstantValue(c!, MeshVolumeService.VertexMovementScaleId));
+        Assert.Equal(0f, TextureLoader.ConstantValue(c!, MeshVolumeService.VertexMovementMaxLengthId));
+        Assert.True(MatcapGlassCut.IsSound(glass, c!, template));
+    }
+
+    [Theory]
+    [Trait("Plan", "EDGE-row-matcap-glass-10")]
     [InlineData(0x11u, 0x1u)]
     [InlineData(0x10u, 0x0u)]
     public void Wind_neutral_and_parameters(uint sourceFlags, uint expectedFlags)
