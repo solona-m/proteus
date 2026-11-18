@@ -96,16 +96,16 @@ public class LicencePublicationTests
     [Trait("Plan", "EDGE-contrib-clean-room-50")]
     public void No_file_claims_AGPL_for_Proteus_code()   // [AC-contrib-clean-room-12] [EDGE-contrib-clean-room-50]
     {
-        var skipDirs = new[] { "/.git/", "/.claude/", "/bin/", "/obj/", "/node_modules/", "/Glamourer/", "/Luna/", "/Penumbra.Api/" };
+        var skipDirs = new[] { "/.git/", "/.claude/worktrees/", "/bin/", "/obj/", "/node_modules/", "/Glamourer/", "/Luna/", "/Penumbra.Api/" };
         var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".cs", ".csproj", ".md", ".txt", ".json", ".yml", ".props", ".js", ".ts", ".toml" };
         var offenders = new List<string>();
         foreach (var file in Directory.EnumerateFiles(Root.Value!, "*", SearchOption.AllDirectories))
         {
+            var rel = Path.GetRelativePath(Root.Value!, file).Replace('\\', '/');
+            if (skipDirs.Any(d => ("/" + rel).Contains(d, StringComparison.Ordinal))) continue;
             // Only this repository's own files: never another checkout nested inside it (a worktree or submodule
             // has its own .git), such as the agents' worktrees under .claude/worktrees in the owner's checkout.
             if (InNestedCheckout(file)) continue;
-            var rel = Path.GetRelativePath(Root.Value!, file).Replace('\\', '/');
-            if (skipDirs.Any(d => ("/" + rel).Contains(d, StringComparison.Ordinal))) continue;
             if (!exts.Contains(Path.GetExtension(file)) && Path.GetFileName(file) != "LICENSE") continue;
             if (MayMentionAgpl.Contains(rel)) continue;
             var text = File.ReadAllText(file);
