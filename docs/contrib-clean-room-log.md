@@ -877,7 +877,112 @@ forbidden locations in listing/search results: 0
 - **The licence date.** The date changed to 2026-11-18, so `LICENSE` line 3 now says "in force from 2026-11-18". `XivLiveMesh/LICENSE` was re-copied.
 - **Code-critic, round 2** (`021053f8`): every round-1 FAIL item passed, except ND-6. The two security-review sections, appended after the redaction, still held `<claude-projects>`-style local paths. Fix:
   - those 5 paths are redacted;
-  - a new `ContribCleanRoomRecordTests.Record_docs_carry_no_local_user_paths` keeps the four record docs free of `X:\Users\` paths.
+  - a new `ContribCleanRoomRecordTests.Record_docs_carry_no_local_user_paths` keeps the four record docs free of local user-profile paths.
 - **Its NEEDS_DECISION** (P9 and P6 argument order still unpinned): option (a), the cheap one, was taken. `Gates_pass_the_contracts_argument_order_and_defaults` now also pins P9's (inherit, enabled, priority, options) tuple and P6's (ignoreInheritance, ignoreTemporary) order.
 - **Its open question** (EDGE-18 on two tests): rev 10's EDGE-18 is the closure removing Solona's own lines, which matches `Body_shape_signature_follows_the_spec`. The tag on `Harness_gates_match_the_API` is removed; it keeps AC-10.
 - **Tests at this fix:** `IpcGatesTests`, `IpcContractTests` and `ContribCleanRoomRecordTests` (minus the participant test) gave 27 passed, 0 failed.
+
+
+## Adversarial QA
+
+Blocked: the in-game test harness was not running at step 8. `%APPDATA%\XIVLauncher\pluginConfigs\Proteus\test-harness.json` did not exist, and the game was not running. No agent was started, so no reads are recorded for this step. Following the run's QA rule ("a QA Blocker: note it, finish without that part of QA"), the step-8 QA items are UNVERIFIED in game:
+- plugin load and `/log`;
+- equip and put-back through Glamourer;
+- the Penumbra mod-settings hold with a redraw;
+- design apply and binding restore;
+- `/sidecar` on a multi-select overlay mod;
+- the shipped-zip cross-check.
+
+The shipped-zip cross-check was done instead by the orchestrator at C2. All 21 entries of the rebuilt `latest.zip` are in `package-inventory.tsv`, `LICENSE.txt` is present, and none of the three DLLs is.
+
+## Orchestrator (step 9: final)
+
+- **Critic pass and re-merge.** `<critic-pass-commit>` is `1abd8e8a` (round 5; the record-test exemption was narrowed in rounds 4 and 5 after `b1cd19ba`). `test` was unchanged since `T8` (`1e2c5cc6`, equal to origin/test after a fresh fetch), so there is no step-9 re-merge.
+- **Agent D.** B's commits haven't changed since step 7, so D was not re-run. B2's and the orchestrator's later commits are not D's input.
+- **Licence files.** `git diff test...HEAD --name-only` lists only the D10 sets of Phases A, B and C. The licence and notice files changed only in Phase C (and the step-8 fixes): `LICENSE`, `XivLiveMesh/LICENSE`, `XivLiveMesh/NOTICE.md`, `THIRD_PARTY_NOTICES.txt` and `docs/LICENSE-DRAFT.md` (removed).
+- **self-check 1 (whole session): 0 beyond disclosed exceptions.**
+  - Every Read of a mixed-set file in this session, found by scanning the session transcript: `E:\orca\workspaces\Proteus\meddle\Proteus\Plugin.cs` lines 31–34 (offset 31, limit 4). That is the disclosed BuildNumber read from the PbdFile run, before `<R>`, and blame gives those lines 0 to the contributors.
+  - After `<R>` the orchestrator Read no mixed-set file. It edited `Plugin.cs` only by the BuildNumber `sed`.
+- **self-check 2 (from 2026-11-17T23:38:46.968Z): 0 beyond named exceptions.**
+  - **Named exceptions (a)–(e):** as in the plan.
+  - **One more disclosed content read, of an allowed file:** `cat …/Glamourer/LICENSE`, copying Glamourer's Apache-2.0 text into `THIRD_PARTY_NOTICES.txt` at C2. D9 allows LICENSE files.
+  - **In-window content access, none:** no Read, content-mode Grep or content-reading command touched a submodule source, `bin`/`obj`, another checkout, `scratchpad-agent*`, `scratchpad-handover` or the memory topic files.
+  - **The orchestrator never read a dirty agent's transcript.** The extraction script ran on clean agents' transcripts only: B (both runs), B2, the QA-lite agent, the web-fetch agent, the code-critic and both security reviews.
+  - **In the sanctioned class:**
+    - name-only searches over `E:\repos` and `E:\repos\DragAndDropTexturing` (C1);
+    - `Test-Path` and the zip listing of `Proteus/bin/Release/win-x64`;
+    - one `Remove-Item` of the handover manifest, which was refused;
+    - `git -C E:/repos/Proteus pull`, which the worktree guard refused, so `test` was read through this worktree's shared refs.
+- **orchestrator Cecil/ildasm/decompiler runs outside the test: 0.** The session transcript has no `ildasm`, `ilspy`, `monodis` or `dnspy` command. Mono.Cecil ran only inside `IpcContractTests`.
+- **Deletions refused and left for the owner:** the folders `<session-scratch>\..\scratchpad-agentA\`, `scratchpad-agentD\` and `scratchpad-handover\`. These are dirty or handover locations, so no clean agent opens them. The build folders `bin/` and `obj/` in the worktree are also left.
+- **The final bump:** 1475, which is max(branch 1474, test 1473) + 1.
+- **Phases delivered:** A, B and C, as the line in the steps 5–7 section says.
+
+## Code-critic
+
+Start commit: `4fafbc7c`. Extracted from its transcript by agent ID (extract_contrib.py, role b).
+
+Five rounds on the D8 clean diffs and the fix diffs: round 1 FAIL at 4fafbc7c (tests and records only; every spec section 12 row and contract section 4 row confirmed in the code); round 2 FAIL at 021053f8 (ND-6 incomplete); round 3 PASS at b1cd19ba; round 4 FAIL at d2f415ec (the blocked-step exemption in the record test too broad); round 5 PASS at 1abd8e8a, the critic-pass commit. A path-narrowed post-removal diff (diff b1cd19ba HEAD -- Proteus.Tests) is accepted as the allowlisted post-removal diff form.
+
+Opened:
+- Read docs/contrib-clean-room-plan.md
+- Read docs/agent-rules/code-critic.md
+- Read docs/contrib-clean-room-spec.md
+- Read docs/ipc-contract.md
+- Read docs/contrib-clean-room-log.md
+- Read Proteus/Interop/Ipc/IpcGates.cs
+- Read Proteus/Interop/Ipc/PenumbraGates.cs
+- Read Proteus/Interop/Ipc/GlamourerGates.cs
+- Read Proteus/Interop/PenumbraBridge.cs
+- Read Proteus/Interop/GlamourerBridge.cs
+- Read Proteus/TestHarness/GlamourerApplyDesign.cs
+- Read Proteus/TestHarness/GlamourerApplyState.cs
+- Read Proteus/Interop/Ipc/IpcContract.cs
+- Read Proteus/Interop/Ipc/GlamourerApiTypes.cs
+- Read Proteus/Interop/Ipc/PenumbraApiTypes.cs
+- Read Proteus/Proteus.csproj
+- Read Proteus/TestHarness/GameHarnessAdapter.cs
+- Read <claude-projects>/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/bu0k9x1p6.txt
+- Read LICENSE
+- Read THIRD_PARTY_NOTICES.txt
+- Read Proteus.Tests/Fixtures/package-inventory.tsv
+- Read Proteus.Tests/LicencePublicationTests.cs
+- Read Proteus.Tests/Fixtures/proteus-licence-1.0-draft.md
+- Read Proteus.Tests/ReadmeTermsTests.cs
+- Read XivLiveMesh/NOTICE.md
+- Read XivLiveMesh/XivLiveMesh.csproj
+- Read Proteus.Tests/IpcContractTests.cs
+- Read Proteus.Tests/BridgeAvailabilityTests.cs
+- Read Proteus.Tests/ContribSpecTests.cs
+- Read Proteus.Tests/IpcGatesTests.cs
+- Read Proteus.Tests/ShippedAssembliesTests.cs
+- Read Proteus.Tests/HarnessBindingsWiringTests.cs
+- Read Proteus/Plugin.cs
+- Read Proteus/Interop/IpcProvider.cs
+- Read Proteus/Services/CompositorService.Carriers.cs
+- Read Proteus.Tests/ContribCleanRoomRecordTests.cs
+- Read Proteus.Tests/IpcProviderSpecTests.cs
+- Read Proteus/packages.lock.json
+- Read Proteus.Tests/Proteus.Tests.csproj
+- Read AI-DECLARATION.md
+- Read docs/adr/0002-test-harness.md
+- Read Proteus.Tests/SupplyChainTests.cs
+- Read <claude-projects>/E--orca-workspaces-Proteus-licence-clean-room/5936bcc1-21b0-4a70-8eb3-e82d4006af47/tool-results/b1z6wbsge.txt
+Shell commands:
+- git -C E:/orca/workspaces/Proteus/licence-clean-room log --format=%h%x20%an%x20%s test..HEAD
+- git -C E:/orca/workspaces/Proteus/licence-clean-room diff 7ce8851b HEAD
+- dotnet test E:/orca/workspaces/Proteus/licence-clean-room/Proteus.Tests/Proteus.Tests.csproj -c Release --filter "(Plan=AC-contrib-clean-room-7|Plan=AC-contrib-clean-room-8)&Speed!=Slow"
+- dotnet test E:/orca/workspaces/Proteus/licence-clean-room/Proteus.Tests/Proteus.Tests.csproj -c Release --filter "Plan=EDGE-contrib-clean-room-50&Speed!=Slow"
+- git -C E:/orca/workspaces/Proteus/licence-clean-room diff --stat 4fafbc7c HEAD
+- git -C E:/orca/workspaces/Proteus/licence-clean-room diff 4fafbc7c HEAD
+- git -C E:/orca/workspaces/Proteus/licence-clean-room diff 021053f8 HEAD
+- git -C E:/orca/workspaces/Proteus/licence-clean-room diff b1cd19ba HEAD -- Proteus.Tests
+- git -C E:/orca/workspaces/Proteus/licence-clean-room diff b1cd19ba HEAD -- Proteus.Tests
+- git -C E:/orca/workspaces/Proteus/licence-clean-room log --format=%h%x20%an%x20%s test..HEAD
+Sub-agents: none
+Grep without line numbers: 0
+Shell commands outside the allowlist: 0
+forbidden locations in listing/search results: 0
+- **Blame on the merged tip `4fafbc7c`** ("merged with test"):
+  - `-w -M -C`: contributor non-trivial 0, no change.
+  - `-w -M -C -C`: contributor non-trivial 0. Caraxi trivial: blank 6, using 206, namespace 3, game fact 3. No change since the Phase C tip.
