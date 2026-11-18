@@ -46,6 +46,7 @@ public class EarlessHairLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-earless-miqote-hair-17")]
     [Trait("Plan", "EDGE-earless-miqote-hair-22")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Real_miqote_hairs_come_out_earless_in_every_shape()
     {
         int eared = 0, trimmed = 0, withShapes = 0;
@@ -101,6 +102,7 @@ public class EarlessHairLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.Mods)]
     [Trait("Plan", "EDGE-earless-miqote-hair-38")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Ear_skin_boundary_edges_report()
     {
         int reported = 0;

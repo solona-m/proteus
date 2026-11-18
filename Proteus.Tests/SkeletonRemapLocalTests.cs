@@ -31,6 +31,7 @@ public class SkeletonRemapLocalTests(ITestOutputHelper o)
                    CrossSexRefitLocalTests.Rue, CrossSexRefitLocalTests.Starlit, LocalData.GameData)]
     [Trait("Plan", "AC-cross-sex-tops-yas-4")]
     [Trait("Plan", "EDGE-cross-sex-tops-yas-5")]
+    [Trait("Suite", "Diagnostic")]
     public void Yas_parents_counterparts_and_stand_ins_are_measured() // [AC-cross-sex-tops-yas-4] [EDGE-cross-sex-tops-yas-5]
     {
         var yas = Read(CrossSexRefitLocalTests.YasSkeleton);

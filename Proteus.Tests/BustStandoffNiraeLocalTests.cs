@@ -19,6 +19,7 @@ public class BustStandoffNiraeLocalTests(ITestOutputHelper o)
 
     [LocalDataFact(Nirae)]
     [Trait("Plan", "AC-issue-sweep-b-1")]
+    [Trait("Suite", "Diagnostic")]
     public void Real_chest_keeps_one_chest()
     {
         string modsRoot = LocalData.Path(LocalData.Mods), dir = LocalData.Path(Nirae);

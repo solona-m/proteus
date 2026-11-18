@@ -61,6 +61,7 @@ public class CrossSexEndsLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Stormblessed, CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-mens-ends-crotch-1")]
     [Trait("Plan", "AC-mens-ends-crotch-2")]
+    [Trait("Suite", "Diagnostic")]
     public void Stormblessed_ends_through_the_job() // [AC-mens-ends-crotch-1] [AC-mens-ends-crotch-2]
     {
         foreach (string slot in new[] { "_sho", "_glv" })
@@ -104,6 +105,7 @@ public class CrossSexEndsLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, CrossSexRefitLocalTests.Tbse, CrossSexRefitLocalTests.TbseX, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-mens-ends-crotch-2")]
     [Trait("Plan", "EDGE-mens-ends-crotch-21")]
+    [Trait("Suite", "Diagnostic")]
     public void Made_for_coverage_on_tbse() // [AC-mens-ends-crotch-2] [EDGE-mens-ends-crotch-21]
     {
         var madeFor = OtherRaceRefit.MadeForBelow(VanillaBodyCatalog.Key, null, null, 201, 101, Game)!;
@@ -149,6 +151,7 @@ public class CrossSexEndsLocalTests(ITestOutputHelper o)
                    CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse, CrossSexRefitLocalTests.TbseX,
                    LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-issue-sweep-b-3")]
+    [Trait("Suite", "Diagnostic")]
     public void Stormblessed_glove_source()
     {
         string from = LocalData.Path(SizeSetCrossSexLocalTests.Stormblessed);

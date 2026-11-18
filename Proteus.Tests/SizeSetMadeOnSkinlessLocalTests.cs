@@ -219,6 +219,7 @@ public class SizeSetMadeOnSkinlessLocalTests(ITestOutputHelper output, DanceRun 
     [Trait("Plan", "AC-kan-6-skinless-made-on-6")]
     [Trait("Plan", "EDGE-kan-6-skinless-made-on-8")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Tutting_without_made_on_still_asks_for_it() // [AC-kan-6-skinless-made-on-6] [EDGE-kan-6-skinless-made-on-8]
     {
         string copy = MigratedDance();
@@ -239,6 +240,7 @@ public class SizeSetMadeOnSkinlessLocalTests(ITestOutputHelper output, DanceRun 
     [Trait("Plan", "AC-kan-6-skinless-made-on-5")]
     [Trait("Plan", "EDGE-kan-6-skinless-made-on-3")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Tutting_pants_with_unnamed_sizes_are_left_out_and_said_so() // [AC-kan-6-skinless-made-on-5] [EDGE-kan-6-skinless-made-on-3]
     {
         string copy = Data.UnpackedPack(Data.DancePack);
@@ -279,6 +281,7 @@ public class SizeSetMadeOnSkinlessLocalTests(ITestOutputHelper output, DanceRun 
     [Trait("Plan", "AC-kan-6-skinless-made-on-8")]
     [Trait("Plan", "EDGE-kan-6-skinless-made-on-15")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void A_skinless_chest_and_the_legs_following_it_are_placed_by_name() // [AC-kan-6-skinless-made-on-8] [EDGE-kan-6-skinless-made-on-15]
     {
         string copy = Data.UnpackedPack(Data.DancePack);
@@ -353,6 +356,7 @@ public class SizeSetMadeOnSkinlessLocalTests(ITestOutputHelper output, DanceRun 
     [LocalDataFact(Data.DancePack, Data.Bibo, Data.Rue, LocalData.GameData, LocalData.UvMaps)]
     [Trait("Plan", "AC-kan-6-skinless-made-on-7")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Cli_made_on_sizes_Tutting_pants_and_reports_it() // [AC-kan-6-skinless-made-on-7]
     {
         string copy = Data.UnpackedPack(Data.DancePack);

@@ -439,6 +439,63 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
 
     public IReadOnlyList<string> TakeRefitsWhileOverridden() => autoRefit.HarnessTakeRefitsWhileOverridden();
 
+    public bool CanRunAutoRefitNow()
+        => autoRefit.EffectivelyEnabled && !AutoRefit().Busy
+           && PlayerCollection() is { } coll
+           && config.AutoRefitByCollection.TryGetValue(coll.ToString("D"), out var pref) && pref.HasAnyBody();
+
+    public bool IsWornFrom(string modRoot)
+    {
+        string? modsRoot = penumbra.GetModDirectory();
+        var models = penumbra.GetActivePlayerModelPaths();
+        if (modsRoot == null || models == null) return false;
+        string want = System.IO.Path.GetFullPath(modRoot).TrimEnd(System.IO.Path.DirectorySeparatorChar);
+        foreach (var (_, gamePath) in DrawnModelPaths.EquippedPartModelsFromModels(models)
+                                                    .Concat(DrawnModelPaths.EquippedAccessoryGarmentModelsFromModels(models)))
+            if (penumbra.ResolvePlayer(gamePath) is { } resolved && System.IO.Path.IsPathRooted(resolved)
+                && HatCompatService.InMods(resolved, modsRoot, out string root, out _)
+                && string.Equals(System.IO.Path.GetFullPath(root).TrimEnd(System.IO.Path.DirectorySeparatorChar), want, StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
+    }
+
+    public IReadOnlyList<(string Slot, string GamePath, string Outcome)>? RunAutoRefitNowFor(string modRoot)
+        => autoRefit.RunNowFor(modRoot);
+
+    public string? AutoRefitPreferenceJson(Guid collection)
+    {
+        try
+        {
+            return config.AutoRefitByCollection.TryGetValue(collection.ToString("D"), out var pref)
+                ? Newtonsoft.Json.JsonConvert.SerializeObject(pref, ConfigJson.Settings)
+                : "";
+        }
+        catch (Exception e)
+        {
+            log.Warning(e, "[Proteus] test harness: the auto refit preference could not be read");
+            return null;
+        }
+    }
+
+    public bool RestoreAutoRefitPreference(Guid collection, string json)
+    {
+        try
+        {
+            string key = collection.ToString("D");
+            if (json.Length == 0) config.AutoRefitByCollection.Remove(key);
+            else if (Newtonsoft.Json.JsonConvert.DeserializeObject<AutoRefitPreference>(json, ConfigJson.Settings) is { } pref)
+                config.AutoRefitByCollection[key] = pref;
+            else return false;
+            config.Save();
+            return true;
+        }
+        catch (Exception e)
+        {
+            log.Warning(e, "[Proteus] test harness: the auto refit preference could not be put back");
+            return false;
+        }
+    }
+
     public (bool Config, bool? Override, bool Effective) AutoRefitPubes()
         => (config.AutoRefitPubes, autoRefit.HarnessPubesOverride, autoRefit.CarryPubesNow);
 

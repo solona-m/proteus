@@ -360,6 +360,8 @@ public class CustomizationMaterialPathLocalTests(ITestOutputHelper output)
     }
 
     [LocalDataFact(LocalData.GameData)]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void Vanilla_tail_materials_resolve_by_rule()
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));

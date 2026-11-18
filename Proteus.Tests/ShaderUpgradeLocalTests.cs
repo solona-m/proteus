@@ -15,6 +15,7 @@ public class ShaderUpgradeLibraryLocalTests
 {
     [LocalDataFact(LocalData.Mods)]
     [Trait("Plan", "EDGE-dt-shader-upgrade-33")]
+    [Trait("Suite", "Diagnostic")]
     public void Every_legacy_library_material_is_planned_soundly_or_left_with_a_reason()
     {
         // Planning only: nothing is ever written into the real library.
@@ -84,6 +85,8 @@ public class ShaderUpgradeGameLocalTests
 
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "EDGE-dt-shader-upgrade-36")]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void Diffuse_upgrade_matches_the_games_own_conversions()
     {
         var game = new Lumina.GameData(LocalData.Path(LocalData.GameData));

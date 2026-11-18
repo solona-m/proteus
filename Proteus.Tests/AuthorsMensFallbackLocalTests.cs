@@ -94,6 +94,7 @@ public sealed class AuthorsMensFallbackLocalTests(ITestOutputHelper o) : IDispos
     [Trait("Plan", "EDGE-42-43-tbsex-legs-cross-9")]
     [Trait("Plan", "EDGE-42-43-tbsex-legs-cross-10")]
     [Trait("Plan", "EDGE-42-43-tbsex-legs-cross-13")]
+    [Trait("Suite", "Diagnostic")]
     public void Stormblessed_unreadable_mens_glove_is_crossed() // [AC-42-43-tbsex-legs-cross-1] [AC-42-43-tbsex-legs-cross-2] [AC-42-43-tbsex-legs-cross-3] [EDGE-42-43-tbsex-legs-cross-9] [EDGE-42-43-tbsex-legs-cross-10] [EDGE-42-43-tbsex-legs-cross-13]
     {
         string root = Copy(Stormblessed);
@@ -184,6 +185,7 @@ public sealed class AuthorsMensFallbackLocalTests(ITestOutputHelper o) : IDispos
     [LocalDataFact(LocalData.GameData, LocalData.Mods)]
     [Trait("Plan", "AC-42-43-tbsex-legs-cross-1")]
     [Trait("Plan", "EDGE-42-43-tbsex-legs-cross-29")]
+    [Trait("Suite", "Diagnostic")]
     public void Fallback_candidates_census() // [AC-42-43-tbsex-legs-cross-1] [EDGE-42-43-tbsex-legs-cross-29]
     {
         int mods = 0, seen = 0;

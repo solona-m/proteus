@@ -168,6 +168,7 @@ public partial class VanillaGearRefitLocalTests
     [Trait("Plan", "EDGE-relax-sink-guard-7")]
     [Trait("Plan", "EDGE-relax-sink-guard-8")]
     [Trait("Plan", "EDGE-relax-sink-guard-11")]
+    [Trait("Suite", "Diagnostic")]
     public void The_game_gilet_on_TBSE_shows_no_skin_through_the_chest(bool piercings)
     {
         var g = GiletOnTbse();
@@ -374,6 +375,7 @@ public partial class VanillaGearRefitLocalTests
     [Trait("Plan", "EDGE-relax-sink-guard-22")]
     [Trait("Plan", "EDGE-relax-sink-guard-23")]
     [Trait("Plan", "EDGE-relax-sink-guard-24")]
+    [Trait("Suite", "Diagnostic")]
     public void A_relax_guard_makes_no_game_gear_worse(string garmentName, string modNeed, string? rel, string race, string row)
     {
         string slot = row == "_dwn+chest" ? "_dwn" : row;

@@ -149,6 +149,7 @@ public class ChestBeneathLocalTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-outfit-fit-17")]
     [Trait("Plan", "EDGE-outfit-fit-25")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Geometrics_skirt_onto_Rue_keeps_the_belly_inside_its_waist()
     {
         var bodies = new[] { Body(FixPubes), Body(Bibo), Body(Rue) }.ToList();

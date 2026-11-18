@@ -370,6 +370,8 @@ public class MirrorMoveLocalTests(ITestOutputHelper output)
     [LocalDataTheory(Rue)]
     [InlineData(0)]
     [Trait("Plan", "AC-mirror-skin-move-9")]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void Rue_body_skin_mirrors(int _) => RealSkinMirrorsSymmetrically(ModChestWithSkin(Rue), "Rue+");
 
     /// <summary>
@@ -381,6 +383,7 @@ public class MirrorMoveLocalTests(ITestOutputHelper output)
     [InlineData(ThisOldThingRueL)]
     [Trait("Plan", "AC-mirror-skin-move-9")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Garment_skin_patch_mirrors(string need)
         => RealSkinMirrorsSymmetrically(ModelPartReader.Read(File.ReadAllBytes(LocalData.Path(need)))!, "This Old Thing rue l",
                                         centreSlivers: 1);
@@ -393,6 +396,7 @@ public class MirrorMoveLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-mirror-move-tools-4")]
     [Trait("Plan", "AC-mirror-move-tools-10")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void A_game_top_mirrors_symmetrically(string name) => RealGarmentMirrorsSymmetrically(GameTop(name), name);
 
     [LocalDataTheory(Neolithe)]

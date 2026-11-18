@@ -43,6 +43,7 @@ public class HavokSkeletonLocalTests(ITestOutputHelper output)
     [InlineData(301)]
     [InlineData(1501)]
     [Trait("Plan", "AC-refit-other-race-1")]
+    [Trait("Suite", "Diagnostic")]
     public void The_game_s_race_skeletons_read_as_a_human_tree(int race)
     {
         var skeleton = HavokSkeleton.Read(GameFile(GameSkeleton(race)));
@@ -57,6 +58,7 @@ public class HavokSkeletonLocalTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, IvcsHighlander)]
     [Trait("Plan", "AC-refit-other-race-1")]
     [Trait("Plan", "EDGE-refit-other-race-18")]
+    [Trait("Suite", "Diagnostic")]
     public void A_custom_skeleton_is_read_from_its_animation_container_with_its_own_bones()
     {
         var ivcs = HavokSkeleton.Read(File.ReadAllBytes(LocalData.Path(IvcsHighlander)));
@@ -77,6 +79,7 @@ public class HavokSkeletonLocalTests(ITestOutputHelper output)
     /// <summary>Every skeleton in the mod folder reads, or is turned down — never an exception.</summary>
     [LocalDataFact(LocalData.Mods)]
     [Trait("Plan", "EDGE-refit-other-race-18")]
+    [Trait("Suite", "Diagnostic")]
     public void Every_skeleton_mods_ship_reads_without_throwing()
     {
         var files = Directory.EnumerateFiles(LocalData.Path(LocalData.Mods), "*.sklb", SearchOption.AllDirectories)
@@ -104,6 +107,7 @@ public class HavokSkeletonLocalTests(ITestOutputHelper output)
     /// <summary>Cut short at any point, or with a byte flipped, a file reads as null — the game process never dies of it.</summary>
     [LocalDataFact(LocalData.GameData, IvcsHighlander)]
     [Trait("Plan", "EDGE-refit-other-race-18")]
+    [Trait("Suite", "Diagnostic")]
     public void A_damaged_skeleton_reads_as_nothing_rather_than_throwing()
     {
         foreach (var bytes in new[] { File.ReadAllBytes(LocalData.Path(IvcsHighlander)), GameFile(GameSkeleton(101)) })

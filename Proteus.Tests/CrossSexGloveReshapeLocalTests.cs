@@ -59,6 +59,7 @@ public sealed class HalonesMensSizeSet : IDisposable
 /// Chosen showed a line across the bare forearm where they did).
 /// </summary>
 [Trait("Speed", "Slow")]
+[Trait("Suite", "Diagnostic")] // HalonesMensSizeSet's setup measured ~33 s idle: the whole class moves (SuiteBudgetTests.MovedFixtures)
 public class CrossSexGloveReshapeLocalTests(HalonesMensSizeSet run, ITestOutputHelper o) : IClassFixture<HalonesMensSizeSet>
 {
     private const string GamePath = "chara/equipment/e0613/model/c0201e0613_glv.mdl";

@@ -180,6 +180,7 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
     [LocalDataFact(Geometric, Bibo)]
     [Trait("Plan", "AC-skirt-hips-4")]
     [Trait("Plan", "AC-open-patch-authored-9")]
+    [Trait("Suite", "Diagnostic")]
     public void Geometric_Small_to_Large_within_Bibo_is_no_further_from_the_authors_Large()
         => NoWorse("Geometric skirt Small -> Large",
                    Refit(Geometric, "leg size/small/chara/equipment/e6010/model/c0201e6010_dwn.mdl",
@@ -188,6 +189,7 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
     [LocalDataFact(OldThing, Rue)]
     [Trait("Plan", "AC-skirt-hips-4")]
     [Trait("Plan", "AC-open-patch-authored-9")]
+    [Trait("Suite", "Diagnostic")]
     public void This_Old_Thing_between_its_own_sizes_keeps_the_authors_fit()
         => NoWorse("This Old Thing Rue M -> Rue L",
                    Refit(OldThing, "size/rue m/chara/equipment/e6255/model/c0201e6255_top.mdl",
@@ -202,6 +204,7 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-skirt-hips-4")]
     [Trait("Plan", "AC-snap-push-5")]
     [Trait("Plan", "AC-open-patch-authored-9")]
+    [Trait("Suite", "Diagnostic")]
     public void Sirius_onto_other_bodies_is_no_worse(string size)
         => NoWorse($"Sirius L -> {size}",
                    Refit(Sirius, "size/Sirius/L/chara/equipment/e0154/model/c0201e0154_top.mdl",
@@ -215,6 +218,7 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
     [LocalDataFact(OldThing, Rue, Neolithe)]
     [Trait("Plan", "AC-snap-push-5")]
     [Trait("Plan", "AC-open-patch-authored-9")]
+    [Trait("Suite", "Diagnostic")]
     public void This_Old_Thing_Rue_L_onto_Neolithe_L_keeps_the_authors_fit()
         => NoWorse("This Old Thing Rue L -> Neolithe L",
                    Refit(OldThing, "size/rue l/chara/equipment/e6255/model/c0201e6255_top.mdl",
@@ -224,6 +228,7 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-skirt-hips-4")]
     [Trait("Plan", "AC-snap-push-5")]
     [Trait("Plan", "AC-open-patch-authored-9")]
+    [Trait("Suite", "Diagnostic")]
     public void This_Old_Thing_L_onto_Rue_L_is_no_worse()
         => NoWorse("This Old Thing Neolithe L -> Rue L",
                    Refit(OldThing, "size/neolithe l/chara/equipment/e6255/model/c0201e6255_top.mdl",

@@ -78,8 +78,9 @@ documented by that workflow's own tooling (e.g. its installed plugin).
 
 - `dotnet build Proteus/Proteus.csproj -c Release` — build
 - `dotnet build Proteus.Refit/Proteus.Refit.csproj -c Release` — build the headless refit CLI (the tests build it too, for its `--size-set` tests; still run it whenever `Proteus.Refit/` changes)
-- `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release` — run all tests (the full suite: before a release tag only)
+- `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release --filter "Suite!=Diagnostic" -- RunConfiguration.TreatNoTestsAsError=true` — the full suite: before a release tag only, under 10 min wall (unfiltered, as CI runs it, it also takes the diagnostics)
 - `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release --filter "Speed!=Slow"` — the quick suite: before every push (also `npm test --prefix worker` when `worker/` changes)
+- `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release --filter "Suite=Diagnostic" -- RunConfiguration.TreatNoTestsAsError=true` — the diagnostic tests: on demand only, never before a release (one class: add `&FullyQualifiedName~<Class>` inside the filter)
 - run: bump `Plugin.BuildNumber`, build, copy `Proteus/bin/Release/win-x64/` to `E:\repos\Proteus\Proteus\bin\release\win-x64` — the game dev-loads it (no app URL; verification is in game)
 - stop: none — unload the plugin in game via `/xlplugins`
 - optional, contributors using Claude Code: after a passing review and QA of a non-trivial change, silences the PR recommendation: `sh .claude/hooks/pr-ready.sh "<ran|skipped|blocked>: <reason>"`
@@ -117,8 +118,19 @@ class when all of it is slow; a class fixture's setup counts against its
 class) — unless it is one of the Sensitive Areas writers' own tests or a
 build-enforced rule test (`LocalizationTests`, `SupplyChainTests`), which stay
 in the quick suite. Golden baselines (`GoldenTests`, `GoldenCrossBodyLocalTests`,
-`SkinTuckGoldenTests`) run with the release. The worker has its own `npm test`
-in `worker/`.
+`SkinTuckGoldenTests`) run with the release. The full suite's budget is
+10 minutes wall, build included. Diagnostic tests carry
+`[Trait("Suite", "Diagnostic")]` and keep Slow (`SuiteBudgetTests` checks). A
+full run over budget before a release: report the overrun to the owner and, in a
+reviewed follow-up (never mid-release), move the tests whose slowest row took
+15 s or more in that run (`--logger trx`) — but not a cheap test whose time is
+shared setup moved onto it; a class fixture's setup counts against every test of
+its class, and 7.5 s or more measured idle moves the whole class (tags on the
+class) unless it holds exempt tests. Exempt (listed in `SuiteBudgetTests`): the
+Sensitive Areas writers' own tests and tests that exercise a write/build/save/undo
+of those writers directly (not as setup), write-behaviour tests in a fixture
+class, the build-enforced rule tests, the golden baselines, and a failing test
+until it is fixed. The worker has its own `npm test` in `worker/`.
 
 ## Sensitive Areas — the security surface
 
@@ -136,7 +148,7 @@ expanding here.
 - `Proteus/Interop/` — unsafe struct offsets and IPC threading (Penumbra events fire on the caller's thread)
 - `Proteus/Configuration.cs` migrations — a mistake loses user settings
 - `LogAnonymizer.cs` / `LogExportService.cs` — character names must not leak into exported logs
-- `Proteus/TestHarness/`, the `ProteusTestHarness` switch in `Directory.Build.props` and the release workflows' harness guard — a local control port that writes into mods and, for the session, the character's gear and mod settings, Glamourer design applies, live design-binding state and the mods' own settings a harness-triggered restore changes (put back from memory; Before values in `backups/<session>/binding.json`); must stay compiled out of every CI build (ADR 0002)
+- `Proteus/TestHarness/`, the `ProteusTestHarness` switch in `Directory.Build.props` and the release workflows' harness guard — a local control port that writes into mods and, for the session, the character's gear and mod settings, Glamourer design applies, live design-binding state and the mods' own settings a harness-triggered restore changes (put back from memory; Before values in `backups/<session>/binding.json`), and the auto refit preference the worn-refit trigger changes (put back only while still as its job left it; Before in `backups/<session>/autorefit-preference.json`); must stay compiled out of every CI build (ADR 0002)
 - `.claude/settings.json` and `.claude/hooks/` — loaded by every agent session in the repo, the owner's too; a broken hook adds latency or errors to every matched call (its command ends in `|| true`, so it never blocks), and a contributor PR changing them takes effect as soon as its branch is checked out, so review it before it is checked out
 - `worker/`, `.github/workflows/` and `.github/dependabot.yml` — live release distribution; actions stay SHA-pinned (`SupplyChainTests`)
 

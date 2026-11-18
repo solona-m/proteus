@@ -153,6 +153,7 @@ public class SkinMoveLocalTests(ITestOutputHelper output)
     [LocalDataFact(ThisOldThing)]
     [Trait("Plan", "AC-studio-move-skin-8")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void RueMToRueLTransferKeepsTheWaist()
     {
         var source = ReadFile(RueM);
@@ -203,6 +204,7 @@ public class SkinMoveLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-studio-move-skin-11")]
     [Trait("Plan", "EDGE-studio-move-skin-28")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void SculptedGarmentStillRanksItsBodyFirst()
     {
         var model = ReadFile(RueL);

@@ -14,6 +14,7 @@ public class ImcEntrySourceLocalTests
     [LocalDataFact(LocalData.GameData)]
     [Trait("Speed", "Slow")]
     [Trait("Plan", "EDGE-imc-all-variants-13")]
+    [Trait("Suite", "Diagnostic")]
     public void Real_equipment_and_accessory_imc_offsets()
     {
         var game = new GameData(LocalData.Path(LocalData.GameData));

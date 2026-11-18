@@ -127,6 +127,7 @@ public class RayNiraeAtrRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-body-atr-switches-1")]
     [Trait("Plan", "AC-body-atr-switches-2")]
     [Trait("Plan", "EDGE-body-atr-switches-20")]
+    [Trait("Suite", "Diagnostic")]
     public void Ray_onto_NIRAE_small_perky_keeps_the_open_skin()
     {
         var fixedRun = Refit(atr: true, out var draw);

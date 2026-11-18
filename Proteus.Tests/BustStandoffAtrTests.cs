@@ -70,6 +70,8 @@ public class BustStandoffAtrTests
 
     [Fact]
     [Trait("Plan", "AC-issue-sweep-b-2")]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void No_switches_is_byte_identical()
     {
         var body = Chests(true);
