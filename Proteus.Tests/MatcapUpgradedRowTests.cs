@@ -468,6 +468,76 @@ public class MatcapUpgradedRowTests
         Assert.Equal(ShaderUpgradeWriter.Undone.Refused, f.RevertUpgrade());
     }
 
+    [Fact]
+    [Trait("Plan", "EDGE-upgrade-vs-matcap-4")]
+    public void Unrelated_undo_reads_no_matcap_model()
+    {
+        using var f = new UpgradedRowFixture();
+        const string other = "chara/accessory/a0153/material/v0001/mt_c0201a0153_wrs_b.mtrl";
+        ShaderUpgradeTestKit.Put(f.ModRoot, "mat/wrs_b.mtrl", ShaderUpgradeTestKit.FormA());
+        var meta = JsonNode.Parse(File.ReadAllText(Path.Combine(f.ModRoot, "meta.json")))!.AsObject();
+        meta["DefaultData"]!["Files"]![other] = "mat\\wrs_b.mtrl";
+        File.WriteAllText(Path.Combine(f.ModRoot, "meta.json"), meta.ToJsonString());
+        Assert.True(f.Kit.Upgrade(f.ModRoot, [ShaderUpgradeTestKit.Worn(other, f.ModRoot, "mat/wrs_b.mtrl")]).ChangedAny);
+        f.Apply();
+        var classified = new List<string>();
+        MatcapRowCut.AfterClassify = classified.Add;
+        Assert.Equal(ShaderUpgradeWriter.Undone.Restored, f.RevertUpgrade("mat/wrs_b.mtrl"));
+        Assert.Empty(classified);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-upgrade-vs-matcap-4")]
+    public void Two_row_matcaps_on_one_file_the_one_needing_most_speaks()
+    {
+        var a = new MatcapRowCut.RowEntryDeps(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "mat/x.mtrl" }, [], ["a.mdl"]);
+        var b = new MatcapRowCut.RowEntryDeps(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "mat/x.mtrl" }, [], ["b.mdl"]);
+        var c = new MatcapRowCut.RowEntryDeps(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "mat/other.mtrl" }, [], ["c.mdl"]);
+        var asked = new List<string>();
+        var deps = new MatcapRowCut.RowDependencies(false, [a, b, c], e =>
+        {
+            asked.Add(e.Models[0]);
+            return new MatcapRowCut.RowHold(e == b ? MatcapRowCut.RowHoldKind.LaterFeature : MatcapRowCut.RowHoldKind.Active, e.Models[0], "the brush");
+        });
+        var hold = deps.HoldOf("mat\\x.mtrl", null, null)!;
+        Assert.Equal(MatcapRowCut.RowHoldKind.LaterFeature, hold.Kind);
+        Assert.Equal("b.mdl", hold.Model);
+        Assert.Equal(["a.mdl", "b.mdl"], asked);   // only the matching ones are classified
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-upgrade-vs-matcap-13")]
+    public void Author_record_with_null_lists_neither_throws_nor_blocks_a_walk()
+    {
+        using var f = new UpgradedRowFixture();
+        var path = MatcapRecord.PathOf(f.ModRoot);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, """
+            {"Version":2,"Token":"abc123","Models":[],"Materials":[
+             {"Name":"/mt_x_mcapabc1231.mtrl","File":"Proteus Matcaps/x.mtrl","Meshes":null,
+              "Row":{"Row":15,"Cut":null,"CutMeshes":null,"Files":null}},
+             {"Name":"/mt_y_mcapabc1232.mtrl","File":"Proteus Matcaps/y.mtrl","Meshes":[],
+              "Row":{"Row":15,"Cut":"/mt_c0201a0153_wrs_a_mcutabc1232.mtrl","Files":[{"File":"Proteus Matcaps/c.mtrl","Redirects":null,
+               "Source":{"File":"mat/wrs_a.mtrl","GamePath":"x"},"Normal":{"Game":true,"GamePath":"y"}}]}}]}
+            """);
+        var deps = MatcapRowCut.Dependencies(f.ModRoot, classify: true);
+        Assert.NotNull(deps.HoldOf(f.MatRel, null, null));
+        Assert.Equal(ShaderUpgradeWriter.Undone.Refused, f.RevertUpgrade());
+        ShaderUpgradeTestKit.Put(f.ModRoot, f.MatRel, ShaderUpgradeTestKit.FormB());
+        Assert.Contains((f.MatRel, LeftReason.RowMatcap), f.Upgrade(f.MatRel).Left);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-upgrade-vs-matcap-2")]
+    [Trait("Plan", "EDGE-upgrade-vs-matcap-21")]
+    public void Kept_entry_still_holds_both_identical_option_files()
+    {
+        using var f = new UpgradedRowFixture(layout: UpgradedRowFixture.Layout.TwoOptions);
+        f.Apply();
+        f.KeptForPorts();   // the model records are gone: the item comes from the cut's own game paths
+        foreach (var rel in f.MatRels) Assert.Equal(ShaderUpgradeWriter.Undone.Refused, f.RevertUpgrade(rel));
+    }
+
     [Theory]
     [Trait("Plan", "EDGE-upgrade-vs-matcap-5")]
     [InlineData("corrupt")]
@@ -836,6 +906,8 @@ public class MatcapUpgradedRowTests
             {
                 Assert.Contains("characterlegacy.shpk", M(k));
                 Assert.Contains("character.shpk", M(k));   // not a substring of characterlegacy.shpk
+                // A placeholder right after the shader name means a sentence was cut out between them.
+                Assert.DoesNotMatch(@"character\.shpk\s*\{\d\}", M(k));
             }
         }
     }

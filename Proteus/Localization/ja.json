@@ -6728,7 +6728,7 @@
     "description": ""
   },
   "Matcap.Refused.RowLegacyWear.Fmt": {
-    "message": "{0} はまだ古いシェーダー（characterlegacy.shpk）のままで、行マットキャップには character.shpk が必要です。一度装備して装備シェーダーで character.shpk {1} の件数にカーソルを合わせると理由が分かります。",
+    "message": "{0} はまだ古いシェーダー（characterlegacy.shpk）のままで、行マットキャップには character.shpk が必要です。一度装備して装備シェーダーで character.shpk に移してから、行マットキャップを追加してください。古いシェーダーのままの場合は、{1} の件数にカーソルを合わせると理由が分かります。",
     "description": ""
   },
   "Matcap.Refused.RowLegacyDeclined.Fmt": {
@@ -6736,7 +6736,7 @@
     "description": ""
   },
   "Matcap.Refused.RowLegacyOff.Fmt": {
-    "message": "{0} はまだ古いシェーダー（characterlegacy.shpk）のままで、行マットキャップには character.shpk {2} の「{1}」をオンにして一度装備してから、行マットキャップを追加してください。",
+    "message": "{0} はまだ古いシェーダー（characterlegacy.shpk）のままで、行マットキャップには character.shpk が必要です。{2} の「{1}」をオンにして一度装備してから、行マットキャップを追加してください。",
     "description": ""
   },
   "Matcap.Refused.RowBake.Fmt": {
