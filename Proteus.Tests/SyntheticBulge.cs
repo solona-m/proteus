@@ -18,7 +18,10 @@ internal static class SyntheticBulge
     /// <summary>The body; <paramref name="hole"/> null uses the bulge's own, anything else a hole the bulge does not fit.</summary>
     /// <param name="height">How far the dome stands off the hole (6 cm: a penis).</param>
     /// <param name="rings">Rings of the dome between rim and apex: 5 gives 169 vertices and 308 triangles, room for the bulge.</param>
-    internal static byte[] Body(IReadOnlyList<Vector3>? hole = null, float height = 0.06f, int rings = 5, string? domeBone = null)
+    /// <param name="outerRings">Rings of main skin beyond the first two (each a little further out): a big body, so the bulge's
+    /// own vertices are a small share of it (as on a real body, where a same-mesh landing reads as identity).</param>
+    internal static byte[] Body(IReadOnlyList<Vector3>? hole = null, float height = 0.06f, int rings = 5, string? domeBone = null,
+                                int outerRings = 0)
     {
         hole ??= TbseBulge.Shared!.Hole;
         int h = hole.Count;
@@ -39,16 +42,21 @@ internal static class SyntheticBulge
         var w = new List<(string, float)[]?>();
         // The main skin: the hole, and two rings outward from it, 6 and 12 cm out.
         var bodyW = new (string, float)[] { ("j_kosi", 0.6f), ("j_asi_a_l", 0.2f), ("j_asi_a_r", 0.2f) };
-        foreach (float k in new[] { 0f, 1.5f, 3f })
+        var ringsOut = new List<float> { 0f, 1.5f, 3f };
+        for (int r = 1; r <= outerRings; r++) ringsOut.Add(3f + r * 0.05f);
+        // The extra outer rings hang on the hips alone, so the crotch is found where it was.
+        var hipsW = new (string, float)[] { ("j_kosi", 1f) };
+        for (int r = 0; r < ringsOut.Count; r++)
             foreach (var p in hole)
             {
+                float k = ringsOut[r];
                 var d = p - centre;
                 pos.Add(centre + d * (1f + k) - normal * (k * 0.01f));
                 nrm.Add(normal);
-                w.Add(bodyW);
+                w.Add(r < 3 ? bodyW : hipsW);
             }
         var skinTris = new List<int>();
-        for (int r = 0; r < 2; r++)
+        for (int r = 0; r < ringsOut.Count - 1; r++)
             for (int i = 0; i < h; i++)
             {
                 int a = r * h + i, b = r * h + (i + 1) % h, a2 = a + h, b2 = b + h;

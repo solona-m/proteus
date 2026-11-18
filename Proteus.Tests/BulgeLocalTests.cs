@@ -146,7 +146,7 @@ public partial class BulgeLocalTests(ITestOutputHelper output)
     /// mod) and onto TBSE-X Flaccid M A (across body mods), as Studio's Body size builds the pair and plans it — fewer
     /// folds than today, no penis skin left, the bulge's log line said.
     /// </summary>
-    [LocalDataFact(CrossSexRefitLocalTests.TwillTbse, LocalData.TbseUvMaps)]
+    [LocalDataFact(CrossSexRefitLocalTests.TwillTbse, LocalData.TbseUvMaps, TbseOpt + "sfw" + E0, TbseOpt + "gen a" + E0, TbseXOpt + "flaccid m a" + E0)]
     [Trait("Plan", "AC-featureless-bulge-4")]
     [Trait("Plan", "EDGE-featureless-bulge-9")]
     public void Twill_sfw_to_gen_a_and_tbsex_flaccid()

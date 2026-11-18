@@ -114,7 +114,6 @@ internal static class BulgeSwap
         { reason = "self-check: a bulge position or normal is not finite"; return null; }
 
         // The tangent convention: read off the piece's own vertices — the stored dP/dv's sign against the computed one.
-        Span<float> tmp = stackalloc float[4];
         float sign = 1f, wRef = 1f, hRef = 1f;
         if (be is { } bel)
         {

@@ -822,6 +822,8 @@ internal static partial class BodyRetarget
                     // refit's), so the guard costs no wall time.
                     var tuned = Tuned;
                     today = System.Threading.Tasks.Task.Run(() => WithTuning(tuned, () => Again(garment, garmentBytes, pairs, quiet: true)));
+                    // Observed, so a fault in a plan nobody waits for is not left unobserved.
+                    today.ContinueWith(t => _ = t.Exception, System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted);
                     featureless = Again(fitGarment, fitBytes, fitted);
                     // The garment's own genital skin was collapsed, yet the rebuild kept a skin mesh of the garment's: its
                     // collapsed triangles would show as a hole. Today's refit instead.
@@ -839,17 +841,27 @@ internal static partial class BodyRetarget
             }
             if (featureless != null)
             {
-                // The guard compares the whole garment's folds: the bulge changes the crotch alone (cloth beyond it ends
-                // within 1 mm of today's), so a fold it adds is a fold the whole garment adds.
+                // The guard compares the whole garment's folds: the bulge changes the landing at the crotch alone (away
+                // from it the correspondence is today's), so a fold it adds there counts in the whole garment's.
                 // BulgeForceGuard (tests only) counts the featureless refit as folding without end, to drive the guard.
                 int folded = Tuned.BulgeForceGuard ? int.MaxValue : featureless.Report.Folded;
                 if (folded <= BulgeResidual) return featureless;
-                var plain = today?.GetAwaiter().GetResult() ?? Again(garment, garmentBytes, pairs);
+                var plain = TodayOr();
                 if (folded <= plain.Report.Folded) return featureless;
                 log?.Invoke($"bulge: _dwn penis kept: guard — featureless {featureless.Report.Folded} folds, NoBulge {plain.Report.Folded}");
                 return plain;
             }
-            return Again(garment, garmentBytes, pairs);
+            return TodayOr();
+
+            // Today's refit: the one already planned beside the featureless one where there is one and it finished, else
+            // planned now.
+            Planned TodayOr()
+            {
+                Planned? planned = null;
+                try { planned = today?.GetAwaiter().GetResult(); }
+                catch (Exception) { planned = null; }
+                return planned ?? Again(garment, garmentBytes, pairs);
+            }
         }
 
         // The pairs that go in for their shape only as asked — not one ReadySmallclothes turns so below, which keeps the

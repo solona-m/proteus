@@ -127,4 +127,100 @@ public class BulgeTransplantTests
         Assert.False(GenitalParts.Read(after, ModelSkinReader.Read(swapped.Model, null, null)!)?.Penis ?? false,
                      "the featureless body still reads as having a penis");
     }
+
+    /// <summary>The swap's inputs to its self-check, read back from a swap of the synthetic body that passed it.</summary>
+    private static (byte[] Model, ModelParts Before, ModelPart Piece, Vector3[] Positions, int[] SlotOf, int[] BodyAt) Swapped()
+    {
+        var bulge = TbseBulge.Shared!;
+        var body = SyntheticBulge.Body();
+        var swapped = BulgeSwap.Featureless(body, bulge, out var why);
+        Assert.True(swapped != null, why);
+        var before = ModelPartReader.Read(body)!;
+        var piece = before.Parts.Single(p => p.Island < 0 && p.Label == "1.2");
+        var bodyAt = BulgeSwap.MatchHole(before, piece, bulge.Hole)!;
+        var after = ModelPartReader.Read(swapped!.Model)!;
+        var positions = swapped.SlotOf.Select(v => At(after, v)).ToArray();
+        Assert.Null(BulgeSwap.SelfCheck(swapped.Model, before, piece, bulge, positions, swapped.SlotOf, bodyAt));
+        return (swapped.Model, before, piece, positions, swapped.SlotOf, bodyAt);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-featureless-bulge-13")]
+    public void Self_check_refuses_a_face_turned_over()
+    {
+        var (model, before, piece, positions, slotOf, bodyAt) = Swapped();
+        var t = TbseBulge.Shared!.Data.triangles;
+        var flipped = (Vector3[])positions.Clone();
+        // Push one corner through the face's plane, past the opposite edge: the face now points the other way.
+        var a = flipped[t[0]]; var b = flipped[t[1]]; var c = flipped[t[2]];
+        var n = Vector3.Normalize(Vector3.Cross(b - a, c - a));
+        flipped[t[0]] = (b + c) - a;
+        Assert.Contains("turned over", BulgeSwap.SelfCheck(model, before, piece, TbseBulge.Shared, flipped, slotOf, bodyAt) ?? "");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-featureless-bulge-13")]
+    public void Self_check_refuses_a_face_collapsed()
+    {
+        var (model, before, piece, positions, slotOf, bodyAt) = Swapped();
+        var t = TbseBulge.Shared!.Data.triangles;
+        var collapsed = (Vector3[])positions.Clone();
+        collapsed[t[1]] = collapsed[t[0]];
+        collapsed[t[2]] = collapsed[t[0]];
+        Assert.Contains("collapsed", BulgeSwap.SelfCheck(model, before, piece, TbseBulge.Shared, collapsed, slotOf, bodyAt) ?? "");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-featureless-bulge-13")]
+    public void Self_check_refuses_an_edge_off_the_hole()
+    {
+        var (model, before, piece, positions, slotOf, bodyAt) = Swapped();
+        // The hole taken one point round: its points are no longer where the bulge's open edge is... the set is the same,
+        // so take a body vertex off the hole instead — the main skin's next ring.
+        var shifted = (int[])bodyAt.Clone();
+        var main = before.Parts.Single(p => p.Island < 0 && p.Label == "1.1").Triangles.Distinct()
+                         .Where(v => !bodyAt.Contains(v)).ToList();
+        shifted[0] = main.MinBy(v => Vector3.Distance(At(before, v), At(before, bodyAt[0])));
+        Assert.Contains("open edge is not the body's hole", BulgeSwap.SelfCheck(model, before, piece, TbseBulge.Shared!, positions, slotOf, shifted) ?? "");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-featureless-bulge-13")]
+    [Trait("Plan", "EDGE-featureless-bulge-29")]
+    public void Self_check_refuses_a_rim_off_the_bodys_weights()
+    {
+        var (model, before, piece, positions, slotOf, bodyAt) = Swapped();
+        var bulge = TbseBulge.Shared!;
+        int i = Enumerable.Range(0, bulge.Positions.Length).First(k => bulge.Data.rim[k] >= 0);
+        // Rewrite that rim vertex's first weight byte and its partner: no longer the body's at the seam.
+        var bad = (byte[])model.Clone();
+        var src = SecondSkinWriter.Parse(bad);
+        int mo = src.MeshStart + piece.Mesh * 36;
+        var we = src.Decls[piece.Mesh].First(e => e.Usage == SecondSkinWriter.UseBlendWeight);
+        uint vbo = BitConverter.ToUInt32(bad, mo + 20 + we.Stream * 4);
+        int stride = bad[mo + 32 + we.Stream];
+        int at = (int)(src.Vb + vbo) + slotOf[i] * stride + we.Offset;
+        byte first = bad[at];
+        bad[at] = (byte)Math.Max(0, first - 60);
+        bad[at + 1] = (byte)Math.Min(255, bad[at + 1] + 60);
+        Assert.Contains("weights are not the body's", BulgeSwap.SelfCheck(bad, before, piece, bulge, positions, slotOf, bodyAt) ?? "");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-featureless-bulge-11")]
+    public void A_same_mesh_source_never_lands_by_identity()
+    {
+        // Two sizes of one body as two files: BuildPair lands them by identity. The featureless pair must not — an identity
+        // landing would put the old genitals onto bulge slots in whatever order they were written. The rewritten piece
+        // changes the mesh's structure, so identity declines it and the landing is by uv (the factory also refuses an
+        // identity landing outright, should one ever come back).
+        var body = SyntheticBulge.Body(outerRings: 60);
+        var source = SyntheticBulge.Body(height: 0.065f, outerRings: 60);
+        Assert.Null(BodyRetarget.BuildPair("_dwn", source, body, "_dwn", true, null, null, null, out var pair));
+        Assert.NotNull(pair.Featureless);
+        Assert.IsType<IdentityCorrespondence>(pair.Correspondence);
+        var (made, why) = pair.Featureless!();
+        Assert.True(made != null, why);
+        Assert.IsNotType<IdentityCorrespondence>(made!.Value.Correspondence);
+    }
 }
