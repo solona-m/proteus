@@ -105,8 +105,11 @@ internal static class MeshVolumeService
         {
             lock (WriteLock)
             {
-                Backup(modRoot, rel);
-                PenumbraModMeta.AtomicWrite(Path.Combine(modRoot, Native(rel)), written.Model);
+                // Both resolved before anything is copied: a rel outside the mod throws here, with nothing on disk.
+                var target = ModPath.Resolve(modRoot, rel);
+                var backup = ModPath.Backup(modRoot, BackupSubdir, rel);
+                Backup(target, backup);
+                PenumbraModMeta.AtomicWrite(target, written.Model);
 
                 var record = ReadRecord(modRoot) ?? new MeshVolumeRecord();
                 if (!record.Files.Contains(rel, StringComparer.OrdinalIgnoreCase)) record.Files.Add(rel);
@@ -508,17 +511,22 @@ internal static class MeshVolumeService
         foreach (var name in materialNames.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var file = "/" + name.TrimStart('/');
-            var rels = redirects
+            var matching = redirects
                 .Where(r => r.GamePath.EndsWith(file, StringComparison.OrdinalIgnoreCase)
                          && r.File.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase))
                 .Select(r => Rel(r.File))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
-            if (rels.Count == 0) { notInMod++; continue; }
+            if (matching.Count == 0) { notInMod++; continue; }
+            // Classified BEFORE the loop's first write: a redirect is the author's to write, and one outside the mod is
+            // skipped (ModPath) — never a throw part-way, which would leave edits written but not recorded.
+            var rels = new List<(string Rel, string Path, string Backup)>();
+            foreach (var r in matching)
+                if (ModPath.TryResolve(modRoot, r, out var full) && ModPath.TryBackup(modRoot, BackupSubdir, r, out var bak))
+                    rels.Add((r, full, bak));
 
-            foreach (var rel in rels)
+            foreach (var (rel, path, backupPath) in rels)
             {
-                var path = Path.Combine(modRoot, Native(rel));
                 if (!File.Exists(path)) continue;
                 var before = File.ReadAllBytes(path);
                 var start = before;
@@ -542,7 +550,7 @@ internal static class MeshVolumeService
                 if (after.AsSpan().SequenceEqual(before)) continue;
                 if (upgradedHere) upgraded++;
 
-                Backup(modRoot, rel);
+                Backup(path, backupPath);
                 PenumbraModMeta.AtomicWrite(path, after);
                 record ??= ReadRecord(modRoot) ?? new MeshVolumeRecord();
                 if (!record.Files.Contains(rel, StringComparer.OrdinalIgnoreCase)) record.Files.Add(rel);
@@ -620,8 +628,9 @@ internal static class MeshVolumeService
                 if (!rel.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase)
                     || !record.Files.Contains(rel, StringComparer.OrdinalIgnoreCase))
                     continue;
-                var backup = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, BackupSubdir, Native(rel));
-                var path = Path.Combine(modRoot, Native(rel));
+                // Outside the mod is nothing of ours to repair (ModPath).
+                if (!ModPath.TryBackup(modRoot, BackupSubdir, rel, out var backup) || !ModPath.TryResolve(modRoot, rel, out var path))
+                    continue;
                 try
                 {
                     if (!File.Exists(backup) || !File.Exists(path)) continue;
@@ -675,7 +684,8 @@ internal static class MeshVolumeService
                 }
             }
             if (record.Files.Count == 0) Delete(() => { if (Directory.Exists(backupDir)) Directory.Delete(backupDir, true); });
-            else foreach (var rel in repaired) Delete(() => File.Delete(Path.Combine(backupDir, Native(rel))));
+            else foreach (var rel in repaired)
+                    if (ModPath.TryBackup(modRoot, BackupSubdir, rel, out var backup)) Delete(() => File.Delete(backup));
             return repaired;
         }
     }
@@ -716,13 +726,20 @@ internal static class MeshVolumeService
 
         int restored = 0;
         var reason = "";
-        foreach (var rel in record.Files.Distinct(StringComparer.OrdinalIgnoreCase).ToList())
+        var rels = record.Files.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        // Every target and backup classified before the first write: one outside the mod is skipped, never touched.
+        var at = new Dictionary<string, (string File, string Backup)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rel in rels)
+            if (ModPath.TryResolve(modRoot, rel, out var file) && ModPath.TryBackup(modRoot, BackupSubdir, rel, out var bak))
+                at[rel] = (file, bak);
+        foreach (var rel in rels)
         {
-            var backup = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, BackupSubdir, Native(rel));
+            if (!at.TryGetValue(rel, out var where)) { reason = rel; continue; }
+            var backup = where.Backup;
             if (!File.Exists(backup)) { reason = rel; continue; }
             try
             {
-                PenumbraModMeta.AtomicWrite(Path.Combine(modRoot, Native(rel)), File.ReadAllBytes(backup));
+                PenumbraModMeta.AtomicWrite(where.File, File.ReadAllBytes(backup));
                 record.Files.RemoveAll(f => f.Equals(rel, StringComparison.OrdinalIgnoreCase));
                 record.Versions.Remove(rel);
                 record.Worst.Remove(rel);
@@ -754,12 +771,13 @@ internal static class MeshVolumeService
     }
 
     /// <summary>Copy the author's file aside, ONCE — a second pass must not overwrite the pristine copy.</summary>
-    private static void Backup(string modRoot, string rel)
+    /// <param name="file">The file, resolved inside the mod (<see cref="ModPath"/>).</param>
+    /// <param name="backup">Its backup, resolved inside <see cref="BackupSubdir"/>.</param>
+    private static void Backup(string file, string backup)
     {
-        var backup = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, BackupSubdir, Native(rel));
         if (File.Exists(backup)) return;
         Directory.CreateDirectory(Path.GetDirectoryName(backup)!);
-        File.Copy(Path.Combine(modRoot, Native(rel)), backup);
+        File.Copy(file, backup);
     }
 
     internal static MeshVolumeRecord? ReadRecord(string modRoot)
@@ -772,12 +790,21 @@ internal static class MeshVolumeService
             if (record == null) return null;
 
             // Canonicalised on the way in, the one choke point — a record written with native separators
-            // still names the same file, and every comparison here is a plain string compare.
-            record.Files = record.Files.Select(Rel).ToList();
-            record.Versions = record.Versions.ToDictionary(kv => Rel(kv.Key), kv => kv.Value,
-                                                           StringComparer.OrdinalIgnoreCase);
-            record.Worst = record.Worst.ToDictionary(kv => Rel(kv.Key), kv => kv.Value,
-                                                     StringComparer.OrdinalIgnoreCase);
+            // still names the same file, and every comparison here is a plain string compare. The record ships inside
+            // the mod, so its author controls it: a path outside the mod is dropped (ModPath), counted once.
+            int dropped = 0;
+            bool Inside(string rel)
+            {
+                if (ModPath.TryResolve(modRoot, rel, out _)) return true;
+                dropped++;
+                return false;
+            }
+            record.Files = record.Files.Select(Rel).Where(Inside).ToList();
+            record.Versions = record.Versions.Where(kv => Inside(Rel(kv.Key)))
+                                             .ToDictionary(kv => Rel(kv.Key), kv => kv.Value, StringComparer.OrdinalIgnoreCase);
+            record.Worst = record.Worst.Where(kv => Inside(Rel(kv.Key)))
+                                       .ToDictionary(kv => Rel(kv.Key), kv => kv.Value, StringComparer.OrdinalIgnoreCase);
+            ModPath.NoteDropped("brush", modRoot, dropped);
             return record;
         }
         catch { return null; }
@@ -796,6 +823,4 @@ internal static class MeshVolumeService
 
     /// <summary>The one spelling of a mod-relative path this class compares, records and looks up by.</summary>
     internal static string Rel(string rel) => rel.Replace('\\', '/').TrimStart('/');
-
-    private static string Native(string rel) => rel.Replace('/', Path.DirectorySeparatorChar);
 }

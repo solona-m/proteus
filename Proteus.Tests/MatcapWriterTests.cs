@@ -96,7 +96,7 @@ internal sealed class MatcapFixture : IDisposable
             .ToDictionary(f => Path.GetRelativePath(ModRoot, f), f => HairPortPlan.Sha8(File.ReadAllBytes(f)));
 }
 
-public class MatcapWriterTests
+public partial class MatcapWriterTests
 {
     private static Dictionary<string, string> Defaults(string modRoot) =>
         PenumbraModMeta.TryReadDefaultData(modRoot)?.Files ?? new Dictionary<string, string>();

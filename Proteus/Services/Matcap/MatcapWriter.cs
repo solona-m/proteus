@@ -109,6 +109,13 @@ internal static class MatcapWriter
                 return Outcome.Refuse(CodeUnreadable, ProteusLoc.Localize("Matcap.Refused.RecordUnreadable",
                     "Proteus's record of this mod's matcaps (Proteus/matcaps.json) could not be read, so nothing was changed."));
 
+            // Every place this call will write, checked before anything is: a model, a material or a file name from a mod's
+            // own data that would land outside the mod (ModPath) refuses the whole apply with nothing written.
+            var effectiveToken = string.IsNullOrEmpty(record.Token) ? req.Token : record.Token;
+            if (Outside(modRoot, req, effectiveToken) is { } outside)
+                return Outcome.Refuse(CodeFailed, string.Format(ProteusLoc.Localize("Matcap.Refused.Failed.Fmt",
+                    "The matcap could not be written ({0}). Nothing was changed."), new UnsafeModPathException(outside).Message));
+
             foreach (var m in req.Models)
             {
                 var full = Full(modRoot, m.Rel);
@@ -300,6 +307,11 @@ internal static class MatcapWriter
                 return Outcome.Refuse(CodeCrossKind, ProteusLoc.Localize("Parts.Matcap.ChangeKindTip",
                     "A matcap from your images can only change to another image, and a library's to another library option. Undo it to switch kinds."));
 
+            // The record is read contained, so this only guards a future caller: our files are inside the mod or untouched.
+            foreach (var rel in new[] { entry.File, entry.Source.Tex?.File })
+                if (rel != null && !ModPath.TryResolve(modRoot, rel, out _))
+                    return Outcome.Refuse(CodeFailed, new UnsafeModPathException(rel).Message);
+
             var files = new List<string>();
             if (source.IsLibrary)
             {
@@ -352,7 +364,7 @@ internal static class MatcapWriter
         if (record.Unreadable) return true;
         var names = NamesIn(modRoot, rel);
         // A file that is there but can't be read counts too (never overwritten by mistake); a missing one does not.
-        if (names == null) return File.Exists(Full(modRoot, rel)) && record.MaterialsOf(rel).Any();
+        if (names == null) return ModPath.TryResolve(modRoot, rel, out var full) && File.Exists(full) && record.MaterialsOf(rel).Any();
         return record.MaterialsOf(rel).Any(m => names.Contains(m.Name));
     }
 
@@ -438,8 +450,12 @@ internal static class MatcapWriter
             var alreadyUndone = new List<string>();
             foreach (var g in group)
             {
-                var full = Full(modRoot, g);
-                var backup = BackupPath(modRoot, BackupSubdir, g);
+                // A model outside the mod is no work of ours: nothing to restore, retire or forget there.
+                if (!ModPath.TryResolve(modRoot, g, out var full) || !ModPath.TryBackup(modRoot, BackupSubdir, g, out var backup))
+                {
+                    alreadyUndone.Add(g);
+                    continue;
+                }
                 bool undoneBefore = record.Model(g) == null && !File.Exists(backup);
                 if (!File.Exists(full)) { (undoneBefore ? alreadyUndone : forget).Add(g); continue; }   // (e) gone: forget it
                 var names = NamesIn(modRoot, g);
@@ -515,7 +531,7 @@ internal static class MatcapWriter
                 {
                     if (shared == null) continue;
                     removeKeys[shared.GamePath] = shared.File;
-                    if (Edited(modRoot, shared.File, shared.Sha8)) kept.Add(shared.File); else TryDelete(Full(modRoot, shared.File));
+                    if (Edited(modRoot, shared.File, shared.Sha8)) kept.Add(shared.File); else TryDeleteIn(modRoot, shared.File);
                 }
                 record.Shared = new MatcapRecord.SharedFiles();
             }
@@ -523,7 +539,7 @@ internal static class MatcapWriter
             if (removeKeys.Count > 0)
                 PenumbraModMeta.EditContainers(modRoot, [new PenumbraModMeta.ContainerEdit(
                     new PenumbraModMeta.ContainerRef(""), new Dictionary<string, string>(), removeKeys)]);
-            foreach (var g in dropped) TryDelete(Full(modRoot, g));
+            foreach (var g in dropped) TryDeleteIn(modRoot, g);
             MatcapRecord.Write(modRoot, record);
 
             var msg = forgetOnly
@@ -576,11 +592,11 @@ internal static class MatcapWriter
             return false;
         }
         foreach (var p in mat.GamePaths) removeKeys[p] = mat.File;
-        if (Edited(modRoot, mat.File, mat.Sha8) && mat.Sha8.Length > 0) kept.Add(mat.File); else TryDelete(Full(modRoot, mat.File));
+        if (Edited(modRoot, mat.File, mat.Sha8) && mat.Sha8.Length > 0) kept.Add(mat.File); else TryDeleteIn(modRoot, mat.File);
         if (mat.Source.Tex is { } tex)
         {
             removeKeys[tex.GamePath] = tex.File;
-            if (Edited(modRoot, tex.File, tex.Sha8) && tex.Sha8.Length > 0) kept.Add(tex.File); else TryDelete(Full(modRoot, tex.File));
+            if (Edited(modRoot, tex.File, tex.Sha8) && tex.Sha8.Length > 0) kept.Add(tex.File); else TryDeleteIn(modRoot, tex.File);
         }
         return true;
     }
@@ -724,9 +740,10 @@ internal static class MatcapWriter
     /// <returns>False when the backup is still in place (the move failed).</returns>
     private static bool Retire(string modRoot, string rel)
     {
-        var from = BackupPath(modRoot, BackupSubdir, rel);
+        // Outside the mod's backup folders is no backup of ours: nothing to retire.
+        if (!ModPath.TryBackup(modRoot, BackupSubdir, rel, out var from) || !ModPath.TryBackup(modRoot, SupersededSubdir, rel, out var to))
+            return true;
         if (!File.Exists(from)) return true;
-        var to = BackupPath(modRoot, SupersededSubdir, rel);
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(to)!);
@@ -742,10 +759,41 @@ internal static class MatcapWriter
     private static Outcome HandEdited(string file) => Outcome.Refuse(CodeEdited, string.Format(ProteusLoc.Localize("Matcap.Refused.HandEdited.Fmt",
         "{0} was edited by hand since Proteus wrote it, so it was left alone."), file));
 
-    internal static string Full(string modRoot, string rel) => Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar));
+    /// <summary><paramref name="rel"/> inside the mod; throws <see cref="UnsafeModPathException"/> (an IOException) for one
+    /// that would land outside it (<see cref="ModPath"/>). Every caller here checked it first; the panel's and the preview's
+    /// read-only callers already catch an IOException.</summary>
+    internal static string Full(string modRoot, string rel) => ModPath.Resolve(modRoot, rel.Replace('\\', '/'));
 
-    internal static string BackupPath(string modRoot, string subdir, string rel) =>
-        Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, subdir, rel.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar));
+    /// <summary>A feature backup of <paramref name="rel"/>, never outside <c>Proteus/&lt;subdir&gt;</c> (see <see cref="Full"/>).</summary>
+    internal static string BackupPath(string modRoot, string subdir, string rel) => ModPath.Backup(modRoot, subdir, rel.Replace('\\', '/'));
+
+    /// <summary>
+    /// The first place <paramref name="req"/> would write that lands outside the mod, or null: every model and its
+    /// backup, every material and baked texture, and the shared mask and flat normal named by <paramref name="token"/>.
+    /// A material name carrying a ':' (a stream) is caught here too.
+    /// </summary>
+    private static string? Outside(string modRoot, ApplyRequest req, string token)
+    {
+        foreach (var m in req.Models)
+            if (!ModPath.TryResolve(modRoot, m.Rel.Replace('\\', '/'), out _) || !ModPath.TryBackup(modRoot, BackupSubdir, m.Rel.Replace('\\', '/'), out _))
+                return m.Rel;
+        foreach (var p in req.Materials)
+        {
+            if (!ModPath.TryResolve(modRoot, MaterialFile(p.Name), out _)) return MaterialFile(p.Name);
+            if (p.Source.Tex is { } tex && !ModPath.TryResolve(modRoot, tex.File, out _)) return tex.File;
+            foreach (var x in p.Meshes)
+                if (!ModPath.TryResolve(modRoot, x.Rel.Replace('\\', '/'), out _)) return x.Rel;
+        }
+        if (!ModPath.TryResolve(modRoot, MaskFile(token), out _)) return MaskFile(token);
+        if (req.FlatNormalTemp != null && !ModPath.TryResolve(modRoot, FlatNormalFile(token), out _)) return FlatNormalFile(token);
+        return null;
+    }
+
+    /// <summary>Deletes <paramref name="rel"/> of the mod; one outside it is never ours to delete.</summary>
+    private static void TryDeleteIn(string modRoot, string rel)
+    {
+        if (ModPath.TryResolve(modRoot, rel.Replace('\\', '/'), out var full)) TryDelete(full);
+    }
 
     private static void Place(string modRoot, string rel, byte[] bytes, List<string> created)
     {
@@ -756,16 +804,17 @@ internal static class MatcapWriter
         if (!existed) created.Add(rel);
     }
 
+    /// <summary>Whether our file was changed since we wrote it. One outside the mod counts as edited: kept, never deleted.</summary>
     private static bool Edited(string modRoot, string rel, string sha8)
     {
-        var full = Full(modRoot, rel);
+        if (!ModPath.TryResolve(modRoot, rel.Replace('\\', '/'), out var full)) return true;
         try { return File.Exists(full) && sha8.Length > 0 && HairPortPlan.Sha8(File.ReadAllBytes(full)) != sha8; }
         catch { return true; }
     }
 
     private static HashSet<string>? NamesIn(string modRoot, string rel)
     {
-        var full = Full(modRoot, rel);
+        if (!ModPath.TryResolve(modRoot, rel.Replace('\\', '/'), out var full)) return null;
         try { return File.Exists(full) ? TryNames(File.ReadAllBytes(full)) : null; }
         catch { return null; }
     }

@@ -393,7 +393,7 @@ internal static class MatcapStudio
             var template = env.ReadGameFile(MatcapMaterial.VanillaTemplatePath);
             if (template == null)
                 return (null, null, null, "no-template", ProteusLoc.Localize("Matcap.Refused.NoTemplate", "The game's reflection material could not be read, so no matcap material could be made."));
-            mtrl = MatcapMaterial.Build(template, entry.Normal, MatcapWriter.MaskGamePath(record.Token), lib.Texture, entry.AlphaThreshold);
+            mtrl = MatcapMaterial.Build(template, entry.Normal, MatcapWriter.MaskGamePath(record.Token.Length > 0 ? record.Token : MatcapPlan.TokenFor(Path.GetFileName(modRoot.TrimEnd('\\', '/')))), lib.Texture, entry.AlphaThreshold);
         }
         return (src, mtrl, null, "", "");
     }
@@ -500,8 +500,11 @@ internal static class MatcapStudio
     /// </summary>
     private static bool EditedSinceWritten(string modRoot, string rel, string sha8)
     {
-        var full = MatcapWriter.Full(modRoot, rel);
-        try { return File.Exists(full) && sha8.Length > 0 && HairPortPlan.Sha8(File.ReadAllBytes(full)) != sha8; }
+        try
+        {
+            var full = MatcapWriter.Full(modRoot, rel);   // outside the mod: throws, and counts as edited
+            return File.Exists(full) && sha8.Length > 0 && HairPortPlan.Sha8(File.ReadAllBytes(full)) != sha8;
+        }
         catch { return true; }
     }
 }
