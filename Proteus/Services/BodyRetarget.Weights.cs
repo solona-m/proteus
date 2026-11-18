@@ -116,7 +116,8 @@ internal static partial class BodyRetarget
     /// <see cref="EaseCrotch"/>). Null for none.</param>
     internal static WeightPlan? PlanWeights(byte[] garment, IReadOnlyList<SlotPair> pairs, bool acrossBodies = false,
                                             byte[]? before = null, IReadOnlySet<int>? held = null,
-                                            IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null)
+                                            IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null,
+                                            float[]? seamFade = null)
     {
         if (pairs.Count == 0 || pairs.Any(p => p.SourceModel == null || p.TargetModel == null)) return null;
 
@@ -311,6 +312,10 @@ internal static partial class BodyRetarget
         // the crotch.
         KeepToSide(own, result, bodyBones);
         KeepOffLegs(model, own, result, legFill);
+
+        // A seam shared with the other piece keeps the author's weights in both, faded in over its band — see
+        // PinSharedSeam. Last, so nothing above carries the refit's weights back onto it.
+        if (seamFade != null) FadeSeamWeights(own, result, seamFade, seams?.ClassOf);
 
         if (trace != null && seams != null)
         {

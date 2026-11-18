@@ -74,6 +74,7 @@ public class OpenPatchGameTopLocalTests(ITestOutputHelper output)
     [MemberData(nameof(Cases))]
     [Trait("Plan", "AC-open-patch-authored-9")]
     [Trait("Plan", "AC-open-patch-authored-4")]
+    [Trait("Suite", "Diagnostic")]
     public void A_game_top_on_a_mod_path_is_no_worse(string garmentName, string modNeed, string? rel, string path)
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));

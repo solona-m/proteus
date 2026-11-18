@@ -132,6 +132,7 @@ public class TbseSizeSetPinLocalTests(ITestOutputHelper o)
                    CrossSexRefitLocalTests.Tbse, CrossSexNudeLegsLocalTests.LavaBod, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-tbsex-nude-legs-4")]
     [Trait("Plan", "EDGE-tbsex-nude-legs-10")]
+    [Trait("Suite", "Diagnostic")]
     public void Halones_tbse_size_set_is_unchanged() // [AC-tbsex-nude-legs-4] [EDGE-tbsex-nude-legs-10]
         => Check("halone's", HandsFeetPortLocalTests.HalonesChosen, HalonesRows, HalonesFiles, leaveOut: ["_glv"]);
 
@@ -140,6 +141,7 @@ public class TbseSizeSetPinLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-tbsex-nude-legs-4")]
     [Trait("Plan", "EDGE-tbsex-nude-legs-10")]
     [Trait("Plan", "AC-equinox-legs-slits-7")]
+    [Trait("Suite", "Diagnostic")]
     public void Sheer_tbse_size_set_is_unchanged() // [AC-tbsex-nude-legs-4] [EDGE-tbsex-nude-legs-10]
         // equinox-legs-slits: Sheer's top is sized in "Chest size", the group the game draws it from (priority 1, over
         // "Content Type"), so its men's TBSE top is cut from that group's nearest size, Perky - Small, not Perky - Medium:
@@ -151,6 +153,7 @@ public class TbseSizeSetPinLocalTests(ITestOutputHelper o)
                    CrossSexRefitLocalTests.Tbse, CrossSexNudeLegsLocalTests.LavaBod, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-tbsex-nude-legs-4")]
     [Trait("Plan", "EDGE-tbsex-nude-legs-10")]
+    [Trait("Suite", "Diagnostic")]
     public void Stormblessed_tbse_size_set_is_unchanged() // [AC-tbsex-nude-legs-4] [EDGE-tbsex-nude-legs-10]
         // featureless-bulge: Stormblessed's legs onto TBSE Gen A go onto it made featureless (69 -> 36 folds through the job).
         => Check("stormblessed", SizeSetCrossSexLocalTests.Stormblessed, StormblessedRows, StormblessedFiles,

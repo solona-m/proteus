@@ -261,6 +261,28 @@ public class HarnessRouterTests : IDisposable
         Assert.All(calls, c => Assert.Contains("names", c));
     }
 
+    [Fact]
+    [Trait("Plan", "AC-row-matcap-glass-4")]
+    public async Task State_lists_gear_materials_from_the_resource_map()
+    {
+        f.Game.ResourceMap = new(StringComparer.OrdinalIgnoreCase)
+        {
+            [$@"{f.ModsRoot}\Gear\mat\b.mtrl"] = new(["chara/accessory/a0153/material/v0001/mt_c0201a0153_wrs_b.mtrl"]),
+            [$@"|prefix|{f.ModsRoot}\Gear\Proteus Matcaps\cut.mtrl"] = new(["chara/accessory/a0153/material/v0001/mt_c0201a0153_wrs_b_mcutabc1231.mtrl"]),
+            [$@"{f.ModsRoot}\Gear\tex\n.tex"] = new(["chara/accessory/a0153/texture/c0201a0153_wrs_b_n.tex"]),
+            [$@"{f.ModsRoot}\Body\skin.mtrl"] = new(["chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_a.mtrl"]),
+        };
+        var mats = (await f.Get("/state")).Body.GetProperty("materials").EnumerateArray().ToList();
+        Assert.Equal(2, mats.Count);   // gear materials only: no texture, no body material
+        Assert.Equal("chara/accessory/a0153/material/v0001/mt_c0201a0153_wrs_b.mtrl", mats[0].GetProperty("gamePath").GetString());
+        Assert.EndsWith(@"Gear\mat\b.mtrl", mats[0].GetProperty("resolved").GetString());
+        Assert.DoesNotContain("|prefix|", mats[1].GetProperty("resolved").GetString());   // Penumbra's prefix stripped
+        Assert.EndsWith("cut.mtrl", mats[1].GetProperty("resolved").GetString());
+
+        f.Game.ResourceMap = null;
+        Assert.Empty((await f.Get("/state")).Body.GetProperty("materials").EnumerateArray());
+    }
+
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

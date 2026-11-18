@@ -11,6 +11,8 @@ namespace Proteus.Services.Matcap;
 /// A row matcap's cut, planned: a copy of the part's own material whose normal has blue 0 on the chosen colour-table row,
 /// so character.shpk discards there (normal blue × vertex alpha &lt; <c>g_AlphaThreshold</c>) and the matcap copy beneath
 /// shows through. characterreflection never discards in its colour passes, so the cut must be the part's own material.
+/// A glass (characterglass.shpk) source never discards either: its cut copy is moved to character.shpk first
+/// (<see cref="MatcapGlassCut"/>), always in the threshold-0 class, so the row's triangles draw solid rather than glass.
 /// <para/>
 /// The cut follows how the author's material resolves, per variant folder f (<c>gp_f</c> the material's game path there,
 /// <c>cut_f</c> the cut's): (a) every container that redirects <c>gp_f</c> gets <c>cut_f</c> → a cut of its own file;
@@ -32,7 +34,8 @@ internal static class MatcapRowCut
 
     public const string CodeEmpty = "row-empty", CodeShader = "row-shader", CodeNoNormal = "row-no-normal", CodeBake = "row-bake",
                         CodeTextureVaries = "row-texture-varies", CodeFileSwap = "row-file-swap",
-                        CodeAmbiguous = "row-ambiguous-option", CodeUnreadable = "row-unreadable", CodeNoSource = "row-no-source";
+                        CodeAmbiguous = "row-ambiguous-option", CodeUnreadable = "row-unreadable", CodeNoSource = "row-no-source",
+                        CodeGlassLayout = "row-glass-layout", CodeGlassTemplate = "row-glass-template";
 
     public sealed record Inputs(string ModRoot, MatcapPlan.Target Target, string Source, IReadOnlyCollection<int> Folders,
                                 int WornFolder, MatcapStudio.Environment Env, int Row, SubRowPick Sub, string Token, string CutName,
@@ -68,7 +71,12 @@ internal static class MatcapRowCut
     }
 
     public sealed record Plan(List<CutFile> Files, List<Bake> Bakes, List<MatcapRecord.RowFolder> Folders, string SwapsSha8,
-                              bool AllThresholdZero, bool AnyThresholdZero, List<string> FollowTargets);
+                              bool AllThresholdZero, bool AnyThresholdZero, List<string> FollowTargets)
+    {
+        /// <summary>A glass source's cut copy was moved to character.shpk (<see cref="MatcapGlassCut"/>): the row's
+        /// triangles draw solid, not glass.</summary>
+        public bool Glass { get; init; }
+    }
 
     public sealed record Refusal(string Code, string Message);
 
@@ -149,12 +157,37 @@ internal static class MatcapRowCut
         var files = new Dictionary<string, CutFile>(StringComparer.Ordinal);
         var follow = new List<string>();
         string cutStem = MatcapWriter.StemOf(i.CutName).ToLowerInvariant();
+        byte[]? glassTemplate = null;
+        bool templateRead = false, anyGlass = false;
         foreach (var s in sources)
         {
             var where = s.Container is { } c ? Describe(c) : ProteusLoc.Localize("Matcap.Row.GameFile", "the game's own file");
-            var h = MatcapMaterial.ReadHeader(s.Bytes);
+            var original = MatcapMaterial.ReadHeader(s.Bytes);
+            // A glass part can't be cut (its shader never discards): Proteus's own cut copy is moved to character.shpk
+            // instead (MatcapGlassCut). Decided on the author's header, before the converted one (threshold 0.5) is read.
+            bool glass = original != null && string.Equals(original.Shader, MatcapGlassCut.GlassShader, StringComparison.OrdinalIgnoreCase);
+            var srcBytes = s.Bytes;
+            var h = original;
+            if (glass)
+            {
+                if (!templateRead) { glassTemplate = i.Env.ReadGameFile(MatcapGlassCut.TemplatePath); templateRead = true; }
+                var (converted, why) = MatcapGlassCut.Convert(s.Bytes, glassTemplate);
+                if (why == MatcapGlassCut.Failure.Layout)
+                    return Refuse(CodeGlassLayout, Sentence(string.Format(ProteusLoc.Localize("Matcap.Refused.RowGlassLayout.Fmt",
+                        "{0} uses {1} in a layout Proteus can't move to character.shpk for a row matcap (it needs exactly a normal, mask and index map and a Dawntrail colour table)."),
+                        where, original!.Shader)));
+                if (why == MatcapGlassCut.Failure.Template)
+                    return Refuse(CodeGlassTemplate, ProteusLoc.Localize("Matcap.Refused.RowGlassTemplate",
+                        "The game's own material a glass part's cut is built from could not be read, so nothing was changed."));
+                if (converted == null)
+                    return Refuse(CodeBake, string.Format(ProteusLoc.Localize("Matcap.Refused.RowBake.Fmt", "The row couldn't be cut: {0}."),
+                        ProteusLoc.Localize("Matcap.Refused.RowBake.Write", "the cut material couldn't be written")));
+                srcBytes = converted;
+                h = MatcapMaterial.ReadHeader(converted);
+                anyGlass = true;
+            }
             if (h == null || !string.Equals(h.Shader, CutShader, StringComparison.OrdinalIgnoreCase))
-                return Refuse(CodeShader, ShaderRefusal(where, h?.Shader, s.File, i.Env.GearShadersOn, declined));
+                return Refuse(CodeShader, ShaderRefusal(where, original?.Shader, s.File, i.Env.GearShadersOn, declined));
             var normalPath = h.TextureOf(MatcapMaterial.SamplerNormal);
             if (string.IsNullOrEmpty(normalPath))
                 return Refuse(CodeNoNormal, ProteusLoc.Localize("Matcap.Refused.RowNoNormal",
@@ -192,8 +225,9 @@ internal static class MatcapRowCut
                 }
             }
 
-            float threshold = h.AlphaThreshold ?? 0f;
-            bool zero = threshold <= 0f;
+            // Glass never reads a threshold: always the threshold-0 class (off-row blue 255, opaque off the row).
+            float threshold = glass ? 0f : h.AlphaThreshold ?? 0f;
+            bool zero = glass || threshold <= 0f;
             var normalSha = HairPortPlan.Sha8(normal.Bytes!);
             var indexSha = index is { Bytes: { } ib } ? HairPortPlan.Sha8(ib) : "";
             // The threshold class keys the off-row blue (255 for threshold 0); an alpha-tested source's own threshold keys
@@ -216,11 +250,15 @@ internal static class MatcapRowCut
             }
 
             int ni = h.Textures.ToList().FindIndex(t => string.Equals(t, normalPath, StringComparison.OrdinalIgnoreCase));
-            var cut = ni < 0 ? null : MatcapMaterial.RetargetByIndex(s.Bytes, new Dictionary<int, string> { [ni] = bake.GamePath });
+            var cut = ni < 0 ? null : MatcapMaterial.RetargetByIndex(srcBytes, new Dictionary<int, string> { [ni] = bake.GamePath });
             if (cut == null)
                 return Refuse(CodeBake, string.Format(ProteusLoc.Localize("Matcap.Refused.RowBake.Fmt", "The row couldn't be cut: {0}."),
                     ProteusLoc.Localize("Matcap.Refused.RowBake.Write", "the cut material couldn't be written")));
             if (zero) cut = TextureLoader.EnsureConstantValues(cut, MatcapMaterial.ConstAlphaThreshold, CutThreshold).data;
+            // The final glass cut passes the gate again, with its normal now the bake (a malformed .mtrl crashes the game).
+            if (glass && !MatcapGlassCut.IsSound(s.Bytes, cut, glassTemplate!, bake.GamePath))
+                return Refuse(CodeBake, string.Format(ProteusLoc.Localize("Matcap.Refused.RowBake.Fmt", "The row couldn't be cut: {0}."),
+                    ProteusLoc.Localize("Matcap.Refused.RowBake.Write", "the cut material couldn't be written")));
             var cutSha = HairPortPlan.Sha8(cut);
             if (!files.TryGetValue(cutSha, out var cf))
             {
@@ -249,7 +287,7 @@ internal static class MatcapRowCut
                                               .Order(StringComparer.OrdinalIgnoreCase));
         var plan = new Plan(files.Values.ToList(), bakes.Values.ToList(), cases,
                             swapText.Length == 0 ? "" : HairPortPlan.Sha8(System.Text.Encoding.UTF8.GetBytes(swapText)),
-                            files.Values.All(f => f.ThresholdZero), files.Values.Any(f => f.ThresholdZero), follow);
+                            files.Values.All(f => f.ThresholdZero), files.Values.Any(f => f.ThresholdZero), follow) { Glass = anyGlass };
         return (plan, null);
     }
 
@@ -570,11 +608,13 @@ internal static class MatcapRowCut
     /// </summary>
     internal static string ShaderRefusal(string where, string? shader, string? file, bool? gearShadersOn, IReadOnlyCollection<string> declined)
     {
-        var text = LegacyShaderRefusal(where, shader, file, gearShadersOn, declined);
-        // The place leads these sentences and reads "the option …": a sentence starts with a capital.
-        return text.Length > 0 && char.IsLower(text[0])
-            ? char.ToUpper(text[0], System.Globalization.CultureInfo.CurrentCulture) + text[1..] : text;
+        return Sentence(LegacyShaderRefusal(where, shader, file, gearShadersOn, declined));
     }
+
+    /// <summary>The place leads these sentences and reads "the option …": a sentence starts with a capital.</summary>
+    internal static string Sentence(string text) =>
+        text.Length > 0 && char.IsLower(text[0])
+            ? char.ToUpper(text[0], System.Globalization.CultureInfo.CurrentCulture) + text[1..] : text;
 
     private static string LegacyShaderRefusal(string where, string? shader, string? file, bool? gearShadersOn, IReadOnlyCollection<string> declined)
     {

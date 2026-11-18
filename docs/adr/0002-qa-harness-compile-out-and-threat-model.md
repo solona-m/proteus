@@ -170,6 +170,34 @@ whole-mod backup first and put-back restores it byte for byte, the preview still
 writes no mod (a temporary Penumbra mod, cut copies at the cut's own paths only),
 and the whole harness stays compiled out of every CI build.
 
+**Amendment (2026-11-18, refit one worn mod now).** `auto-refit` also takes
+`{"refitWornNow":true,"mod":"<folder>"}`: "Refit what I'm wearing now" for the pieces
+worn from that **one** mod (the folder resolved through Penumbra's own list, so a
+path never reaches the disk), so QA can check the split-waist seam fix in game. This
+changes the 2026-11-07 statement above that auto refit is never written to the
+configuration, in one bounded way:
+- Refused unless auto refit can run now (on, a preferred body, nothing working), so
+  nothing is ever left armed; the walk's "refit everything" is never set, and pieces
+  of every other mod are never enqueued.
+- Before anything starts, the mod's collection setting is recorded in the binding
+  ledger (as the matcap job's library setting is) and the collection's auto refit
+  preference (`AutoRefitByCollection`) is recorded in memory and in the session's
+  record folder; a record that cannot be written refuses the request.
+- The job backs the whole mod up first; restore by job puts its files back (files
+  only, as every job's restore). Put-back restores the setting and the preference
+  only while each is still what the job left — one the player changed meanwhile is
+  theirs — and the preference's restore is the harness's one `Configuration` write.
+  While auto refit is working the preference waits for the next put-back; a job that
+  timed out leaves it as it is and says so.
+- Compiled out of every CI build like the rest of the harness.
+
+**Amendment (2026-11-18, row matcaps on glass).** `equip` takes optional `dyes`
+(two Glamourer stain ids), so QA can check a dyed part: the stains are recorded with
+the slot for the session and put-back restores the slot's original item and dyes, as
+for any equip. `/state` gains read-only `materials` (gear material game paths and the
+files Penumbra resolves them to, scrubbed like `models`). A glass part's row cut is
+written by the same `matcap` job and backup as before.
+
 ## Consequences
 
 Easier: QA can test the plugin in a running game unattended once the user turns

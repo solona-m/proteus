@@ -133,6 +133,7 @@ public class LaurelTightsRegressionLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-snap-push-3")]
     [Trait("Plan", "EDGE-snap-push-5")]
     [Trait("Plan", "EDGE-snap-push-10")]
+    [Trait("Suite", "Diagnostic")]
     public void Laurel_tights_onto_Rue_WC_A_show_no_thigh_on_the_automatic_refit()
         => NoThighThrough("automatic refit", Auto(Before), Auto(new BodyRetarget.Tuning()));
 
@@ -140,6 +141,7 @@ public class LaurelTightsRegressionLocalTests(ITestOutputHelper output)
     /// automatic refit makes, through the atlas wherever the two are not one mesh. No more folds, no more cloth inside.</summary>
     [LocalDataFact(Laurel, Neolithe)]
     [Trait("Plan", "AC-snap-push-5")]
+    [Trait("Suite", "Diagnostic")]
     public void Laurel_onto_Neolithe_plain_legs_is_no_worse()
     {
         var bytes = File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(LocalData.Path(Laurel), Bottoms));
@@ -170,6 +172,7 @@ public class LaurelTightsRegressionLocalTests(ITestOutputHelper output)
     [LocalDataFact(Laurel, Neolithe, Rue)]
     [Trait("Plan", "AC-snap-push-3")]
     [Trait("Plan", "EDGE-snap-push-10")]
+    [Trait("Suite", "Diagnostic")]
     public void Laurel_tights_onto_Rue_WC_A_show_no_thigh_in_the_Studio()
         => NoThighThrough("Studio", Studio(Before), Studio(new BodyRetarget.Tuning()));
 }

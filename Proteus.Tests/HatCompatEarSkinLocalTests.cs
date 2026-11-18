@@ -56,6 +56,7 @@ public class HatCompatEarSkinLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-miqote-ear-skin-2")]
     [Trait("Plan", "EDGE-miqote-ear-skin-2")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void UmbrasEarKeepsItsSkinUnderAHatAndIsNeverPressed()
     {
         var r = Solve(Author(UmbraMod, UmbraRel));
@@ -192,6 +193,7 @@ public class HatCompatEarSkinLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-miqote-ear-skin-3")]
     [Trait("Plan", "AC-miqote-ear-skin-4")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void NoMiqoteHairstyleGainsPokeThroughOutsideItsEar()
     {
         string mods = LocalData.Path(LocalData.Mods);

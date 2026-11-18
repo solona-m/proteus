@@ -84,6 +84,20 @@ internal static class LocalData
     /// the c0201 bibo material — the mod the design-restore sweep held off on 2026-11-07, leaving the body invisible.</summary>
     internal const string CliaMod = Mods + ":clia skin - by solona";
 
+    /// <summary>Applenzo's "[Holo] Sarelle Outfit V1.4.1op", installed: a dress split at the waist between an e0628 top
+    /// and legs (<c>mt_c0201e0628_top_dress.mtrl</c> in both), double-sided, the two edges coincident and weighted alike;
+    /// tops on Tre, YAB, Rue, LavaBod, legs on Bibo+, YAB, Rue — three waists (main, Rue, Gen 3). Only ever read.</summary>
+    internal const string SarelleMod = Mods + ":[Holo] Sarelle Outfit V1.4.1op";
+
+    /// <summary>"[YAS] Tre" 5.5.3 (8xB), installed: the body Sarelle's tops are made on. Only ever read.</summary>
+    internal const string TreMod = Mods + ":hs-[YAS] Tre-5.5.3-8xB";
+
+    /// <summary>"Bibo+", installed: the body Sarelle's "bibo l" legs read as made on (Type A - Large). Only ever read.</summary>
+    internal const string BiboPlusMod = Mods + ":Bibo+";
+
+    /// <summary>"Rue+" 2.2.7 (y0f), installed: the body of Sarelle's Rue waist. Only ever read.</summary>
+    internal const string RueMod = Mods + ":hs-Rue+-2.2.7-y0f";
+
     /// <summary>"charmed - by solona", installed: the Enaretos bracelet (a0153 wrs). A Single group "Enaretos Bracelet" /
     /// "Everything" ships <c>mt_c0201a0153_wrs_a.mtrl</c> (moved to character.shpk by the gear shader upgrade, index/mask
     /// form, no mask) with its <c>_n</c>/<c>_id</c>/<c>_m</c>, the still-legacy <c>mt_c0101a0153_wrs_a.mtrl</c> and

@@ -107,6 +107,7 @@ public class VirtuDancerRefitLocalTests(ITestOutputHelper output)
     [MemberData(nameof(Bodies))]
     [Trait("Plan", "AC-keep-shape-flat-card-1")]
     [Trait("Plan", "EDGE-keep-shape-flat-card-12")]
+    [Trait("Suite", "Diagnostic")]
     public void Virtu_Dancer_stays_body_scale_on_every_option(string body, string slot)
     {
         var failures = new List<string>();
@@ -146,6 +147,7 @@ public class VirtuDancerRefitLocalTests(ITestOutputHelper output)
     [MemberData(nameof(Reported))]
     [Trait("Plan", "AC-keep-shape-flat-card-1")]
     [Trait("Plan", "AC-keep-shape-flat-card-4")]
+    [Trait("Suite", "Diagnostic")]
     public void The_reported_cases_reproduce_without_the_fallback_and_log_it(string slot, string rel)
     {
         var (_, refit) = Assert.Single(Refits(Tre, slot, rel));

@@ -313,6 +313,8 @@ internal static class MatcapJob
             librarySetting,
             row = entry?.Row is { } er ? RowView(er) : null,
             rowHoles = prepared?.RowHoles ?? false,
+            rowGlass = prepared?.RowGlass ?? false,
+            rowGlassTriangles = prepared?.RowGlassTriangles ?? 0,
             cutAlphaSet = prepared?.CutAlphaSet ?? false,
             rowFollowWarn = args.Row > 0 && prepared?.Request is { } rq
                 ? RowFollowWarn(args.ModRoot, MatcapRowCut.SourceNameOf(rq.Materials[0].Row?.CutName ?? ""), args.Port) : false,

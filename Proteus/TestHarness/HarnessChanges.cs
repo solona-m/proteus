@@ -41,6 +41,13 @@ internal sealed record PutBackReport(IReadOnlyList<UndoEntry> Gear, IReadOnlyLis
 
     /// <summary>The output locks, move fault, shell fault and auto-redraw override (issue sweep D).</summary>
     public OutputPutBack? Output { get; init; }
+
+    /// <summary>The auto refit preference the worn-refit trigger recorded: restored, changed, skipped-busy,
+    /// recorded-before-finish, dropped, failed or none (see <see cref="HarnessAutoRefitPreference.PutBack"/>).</summary>
+    public string AutoRefitPreference { get; init; } = "none";
+
+    /// <summary>Mods the worn-refit trigger refitted, each with the job to restore it by (put-back leaves their files).</summary>
+    public IReadOnlyList<UndoEntry> JobBackedMods { get; init; } = [];
 }
 
 /// <summary>What put-back did about the shell output routes: each held file, the move fault, the shell fault (cleared and
@@ -89,6 +96,25 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
 
     /// <summary>Library mods a matcap job wrote a setting of this session.</summary>
     private readonly HashSet<string> matcapMods = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Mods the worn-refit trigger backed up and refitted, by the job that did (restored by job, not by put-back).</summary>
+    private readonly Dictionary<string, string> jobBackedMods = new(StringComparer.OrdinalIgnoreCase);
+
+    private HarnessAutoRefitPreference? autoRefitPreference;
+
+    /// <summary>The auto refit preference the worn-refit trigger recorded (see <see cref="HarnessAutoRefitPreference"/>).</summary>
+    public HarnessAutoRefitPreference AutoRefitPreference => autoRefitPreference ??= new(game, log, recordRoot, session);
+
+    /// <summary>A mod the worn-refit trigger refitted under a job's backup: put-back's notes name the job to restore by.</summary>
+    public void NoteJobBackedMod(string modDir, string jobId) => jobBackedMods[modDir] = jobId;
+
+    /// <summary>The job-backed mods for put-back's report, said once: the next put-back no longer lists them.</summary>
+    private List<UndoEntry> TakeJobBackedMods()
+    {
+        var taken = jobBackedMods.Select(kv => new UndoEntry(kv.Key, "restore-by-job", kv.Value)).ToList();
+        jobBackedMods.Clear();
+        return taken;
+    }
 
     /// <summary>Record a test image the seed route wrote, to delete at put-back.</summary>
     public void NoteSeededImage(string path, byte[] bytes) => seededImages[path] = HairPortPlan.Sha8(bytes);
@@ -242,7 +268,9 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
                 autoRefitPubesOverride = null;
                 if (refit.Item2.Count > 0)
                     log?.Information("[Proteus] test harness: auto refit wrote into {0} while its override stood (not undone by put-back)",
-                                     string.Join(", ", refit.Item2));
+                                     string.Join(", ", refit.Item2.Select(m => jobBackedMods.TryGetValue(m, out var job)
+                                                                                ? $"{m} (written by job {job}: restore by job)"
+                                                                                : m)));
             }
         }
         catch (Exception ex) { log?.Warning(ex, "[Proteus] test harness: clearing the auto-refit override failed"); }
@@ -267,7 +295,7 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
     /// Equip <paramref name="sentId"/> in <paramref name="slot"/> (a canonical slot name) once <see cref="Gate"/> passed,
     /// recording the slot's first original and what is worn after (read back in the same tick).
     /// </summary>
-    public ChangeResult Equip(string slot, ulong sentId, (int Set, int Variant)? requested)
+    public ChangeResult Equip(string slot, ulong sentId, (int Set, int Variant)? requested, byte dye1 = 0, byte dye2 = 0)
     {
         if (!game.PlayerPresent()) return ChangeResult.Fail(409, "not-logged-in", "there is no character to equip");
         if (game.GearNow() is not { } before)
@@ -278,13 +306,13 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         // A slot the state leaves out is unknown, not Nothing: putting back item 0 would unequip the real piece.
         if (!before.TryGetValue(slot, out var prev))
             return ChangeResult.Fail(503, "glamourer-unavailable", $"Glamourer's state has no readable {slot} slot");
-        var ec = game.SetGear(slot, sentId, 0, 0);
+        var ec = game.SetGear(slot, sentId, dye1, dye2);
         if (ec == "ItemInvalid") return ChangeResult.Fail(400, "item-invalid", $"Glamourer cannot put {sentId} in {slot}");
         if (ec != null) return ChangeResult.Fail(409, "glamourer-refused", $"Glamourer refused the equip: {ec}");
 
         Worn? readBack = game.GearNow() is { } after && after.TryGetValue(slot, out var worn) ? worn : null;
         bool verified = readBack != null;
-        var applied = readBack ?? new Worn(sentId, 0, 0);
+        var applied = readBack ?? new Worn(sentId, dye1, dye2);
         var original = gear.TryGetValue(slot, out var existing) ? existing.Original : prev;
         gear[slot] = new GearRecord(slot, original, applied, requested, verified, DateTime.UtcNow);
         log?.Information("[Proteus] test harness: equipped {0}: sent {1}, worn {2}, was {3}", slot, sentId, applied.Item, prev.Item);
@@ -474,6 +502,11 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         try { binding = bindings?.PutBack(skipHalfRecordedBinding); }
         catch (Exception ex) { log?.Warning(ex, "[Proteus] test harness: putting back the binding session failed"); }
 
+        // The auto refit preference the worn-refit trigger recorded: back while still what its job left.
+        string preference;
+        try { preference = autoRefitPreference?.PutBack(game.AutoRefit().Busy) ?? "none"; }
+        catch (Exception ex) { log?.Warning(ex, "[Proteus] test harness: putting back the auto refit preference failed"); preference = "failed"; }
+
         // The matcap seed route's images: files of the harness's own, deleted while still what it wrote.
         List<UndoEntry> images;
         try { images = PutBackSeededImages(); }
@@ -482,7 +515,8 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         matcapMods.Clear();
         return new PutBackReport(gearResults, holdResults, sweep, redraw || binding?.Restored == true, binding)
                { Studio = studioResults, MatcapImages = images, MatcapMods = mods, Sidecar = sidecars, AutoRefit = autoRefit,
-                 Output = output };
+                 Output = output, AutoRefitPreference = preference,
+                 JobBackedMods = TakeJobBackedMods() };
     }
 
     // ── the Studio ──────────────────────────────────────────────────────────
@@ -664,9 +698,12 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
                                  .Concat(autoRefitPubesOverride != null ? ["the auto-refit pubes override"] : [])
                                  .Concat(OutputLocks.Active ? ["output locks"] : [])
                                  .Concat(shellFaultArmed ? ["the shell fault"] : [])
-                                 .Concat(autoRedrawOverride != null ? ["the auto-redraw override"] : []));
+                                 .Concat(autoRedrawOverride != null ? ["the auto-redraw override"] : [])
+                                 .Concat(autoRefitPreference?.Recorded == true ? ["the auto refit preference (the worn-refit trigger's)"] : [])
+                                 .Concat(jobBackedMods.Select(kv => $"{kv.Key}: restore by job {kv.Value}")));
 
     internal bool Empty => gear.Count == 0 && holds.Count == 0 && bindings?.HasSession != true && studio == null
                         && sidecar.Empty && autoRefitOverride == null && autoRefitPubesOverride == null
-                        && !OutputLocks.Active && !shellFaultArmed && autoRedrawOverride == null;
+                        && !OutputLocks.Active && !shellFaultArmed && autoRedrawOverride == null
+                        && autoRefitPreference?.Recorded != true && jobBackedMods.Count == 0;
 }

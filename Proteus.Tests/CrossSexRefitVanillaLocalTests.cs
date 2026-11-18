@@ -104,6 +104,7 @@ public class CrossSexRefitVanillaLocalTests(ITestOutputHelper o)
     [InlineData(TbseX, "erect l cut", true)]
     [Trait("Plan", "AC-vanilla-cross-sex-legs-3")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Fuath_pantaloons_refit_from_the_vanilla_body_onto_tbse_for_men(string onto, string folder, bool pushOut) // [AC-vanilla-cross-sex-legs-3]
     {
         var inputs = Inputs(onto, folder, pushOut);
@@ -123,6 +124,7 @@ public class CrossSexRefitVanillaLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, TbseX, IvcsMen, LocalData.TbseUvMaps)]
     [Trait("Plan", "EDGE-vanilla-cross-sex-legs-9")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Tbse_x_sfw_legs_match_too_little_and_are_not_saved() // [EDGE-vanilla-cross-sex-legs-9]
     {
         var s = Assert.Single(CrossSexRefitJob.Run(Inputs(TbseX, "sfw", false)).Sizes);
@@ -138,6 +140,8 @@ public class CrossSexRefitVanillaLocalTests(ITestOutputHelper o)
     /// band that meets his thigh meets the refit too.
     /// </summary>
     [LocalDataFact(LocalData.GameData, Tbse, LocalData.TbseUvMaps)]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void The_tights_straps_leave_no_hole_in_the_thigh_between_them()
     {
         var (bytes, gamePath) = LegsOf(GameData.Value, "Antiquated Aoidos");

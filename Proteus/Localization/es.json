@@ -6727,6 +6727,14 @@
     "message": "Un matcap de fila necesita la pieza en character.shpk, y {0} usa {1}.",
     "description": ""
   },
+  "Matcap.Refused.RowGlassLayout.Fmt": {
+    "message": "{0} usa {1} con una estructura que Proteus no puede pasar a character.shpk para un matcap de fila (necesita exactamente un mapa normal, una máscara y un mapa de índice, y una tabla de colores de Dawntrail).",
+    "description": ""
+  },
+  "Matcap.Refused.RowGlassTemplate": {
+    "message": "No se pudo leer el material propio del juego a partir del cual se crea el recorte de una pieza de cristal, así que no se cambió nada.",
+    "description": ""
+  },
   "Matcap.Refused.RowLegacyWear.Fmt": {
     "message": "{0} sigue con el shader antiguo (characterlegacy.shpk), y un matcap de fila necesita character.shpk. Póntelo una vez para que los shaders del equipo lo pasen a character.shpk y después añade el matcap de fila. Si sigue con el shader antiguo, pasa el ratón por el recuento en {1} para ver por qué.",
     "description": ""
@@ -6847,6 +6855,10 @@
     "message": "Algunos huecos recortados de esta pieza están dentro de los triángulos de la fila, así que mostrarán el matcap.",
     "description": ""
   },
+  "Parts.Matcap.RowGlassWarn.Fmt": {
+    "message": "Esta pieza es de cristal, que no se puede recortar: Proteus dibuja en su lugar {1} triángulo(s) alrededor de la fila con su propia copia opaca del material (character.shpk). Tu material de cristal no cambia, y «{0}» lo deshace todo.",
+    "description": ""
+  },
   "Parts.Matcap.Chat.Applied.Fmt": {
     "message": "Matcap aplicado a {0} archivo(s) de modelo.",
     "description": ""
@@ -6857,6 +6869,10 @@
   },
   "Parts.Matcap.Chat.Edges": {
     "message": "Revisa los bordes transparentes en el juego.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Glass.Fmt": {
+    "message": "Esta pieza es de cristal: {0} triángulo(s) alrededor de la fila ahora se dibujan opacos, no como cristal.",
     "description": ""
   },
   "Parts.Matcap.Chat.Skipped.Fmt": {

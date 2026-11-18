@@ -64,6 +64,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-neckline-large-bust-4")]
     [Trait("Plan", "EDGE-neckline-large-bust-20")]
     [Trait("Plan", "EDGE-neckline-skin-tuck-16")]
+    [Trait("Suite", "Diagnostic")]
     public void A_game_top_on_Neolithe_shows_no_skin_through_and_no_holes(string garment, string rel)
         => Check(garment, Neolithe, rel);
 
@@ -79,6 +80,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-neckline-large-bust-4")]
     [Trait("Plan", "EDGE-neckline-large-bust-20")]
     [Trait("Plan", "EDGE-neckline-skin-tuck-14")]
+    [Trait("Suite", "Diagnostic")]
     public void A_game_top_on_Bibo_shows_no_skin_through_and_no_holes(string garment) => Check(garment, Bibo, null);
 
     [LocalDataTheory(LocalData.GameData, Rue)]
@@ -93,6 +95,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-neckline-large-bust-4")]
     [Trait("Plan", "EDGE-neckline-large-bust-20")]
     [Trait("Plan", "EDGE-neckline-skin-tuck-14")]
+    [Trait("Suite", "Diagnostic")]
     public void A_game_top_on_Rue_shows_no_skin_through_and_no_holes(string garment) => Check(garment, Rue, null);
 
     [LocalDataTheory(LocalData.GameData, LavaBod)]
@@ -108,6 +111,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-neckline-skin-tuck-14")]
     [Trait("Plan", "AC-neckline-large-bust-5")]
     [Trait("Plan", "EDGE-neckline-large-bust-21")]
+    [Trait("Suite", "Diagnostic")]
     public void A_game_top_on_LavaBod_shows_no_skin_through_and_no_holes(string garment) => Check(garment, LavaBod, Teardrop);
 
     /// <summary>
@@ -346,6 +350,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-coatee-strap-slit-3")]
     [Trait("Plan", "AC-coatee-strap-slit-4")]
     [Trait("Plan", "EDGE-coatee-strap-slit-15")]
+    [Trait("Suite", "Diagnostic")]
     public void A_game_top_shows_no_hole_looking_into_its_neckline(string garmentName, string modNeed, string? rel)
     {
         var r = Plan(garmentName, modNeed, rel);
@@ -767,6 +772,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-neckline-float-4")]
     [Trait("Plan", "EDGE-neckline-float-5")]
     [Trait("Plan", "EDGE-neckline-float-20")]
+    [Trait("Suite", "Diagnostic")]
     public void A_game_tops_neckline_sits_on_the_chest_as_authored(string garmentName, string modNeed, string? rel)
     {
         var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -885,6 +891,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
     /// </summary>
     [LocalDataTheory(LocalData.GameData, Neolithe, LavaBod, Rue, Bibo)]
     [MemberData(nameof(FloatCases))]
+    [Trait("Suite", "Diagnostic")]
     public void Neckline_float_is_measured(string garmentName, string modNeed, string? rel)
     {
         var r = Plan(garmentName, modNeed, rel);
@@ -1051,6 +1058,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [InlineData(Dirndl, LavaBod, Teardrop)]
     [InlineData(Dirndl, Neolithe, AlmondXs)]
     [InlineData(Scion, LavaBod, Teardrop)]
+    [Trait("Suite", "Diagnostic")]
     public void Deep_clear_signals_are_measured(string garmentName, string modNeed, string rel)
     {
         var r = Plan(garmentName, modNeed, rel);
@@ -1164,6 +1172,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [InlineData(Coatee, Coconut)]
     [Trait("Plan", "AC-studio-game-top-1")]
     [Trait("Plan", "AC-studio-game-top-2")]
+    [Trait("Suite", "Diagnostic")]
     public void A_studio_game_top_with_defaults_is_the_automatic_refit(string garmentName, string rel)
     {
         var r = Plan(garmentName, Rosaline, rel);
@@ -1345,6 +1354,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-coatee-strap-slit-15")]
     [Trait("Plan", "EDGE-coatee-strap-slit-17")]
     [Trait("Plan", "EDGE-coatee-strap-slit-19")]
+    [Trait("Suite", "Diagnostic")]
     public void A_game_tops_strap_tip_slits_are_drawn(string garmentName, string modNeed, string? rel, string race)
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));

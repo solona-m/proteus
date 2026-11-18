@@ -292,6 +292,8 @@ public sealed partial class PartsPanel : IStudioHarness
         rowMaterial = matcapRowOnly > 0 ? MatcapRowMaterial() : null,
         resolvedFrom = matcapRowOnly > 0 ? matcapPreviewResolvedFrom : null,
         rowHoles = matcapRowOnly > 0 && matcapRowHoles,
+        rowGlass = matcapRowOnly > 0 && matcapRowGlass,
+        rowGlassTriangles = matcapRowOnly > 0 && matcapRowGlass ? matcapRowGlassTriangles : 0,
     };
 
     StudioMatcapPreviewOutcome IStudioHarness.MatcapPreview(StudioMatcapPreviewRequest request, StudioSession session)

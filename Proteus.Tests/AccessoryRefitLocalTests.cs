@@ -46,6 +46,7 @@ public class AccessoryRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-jacket-refit-5")]
     [Trait("Plan", "EDGE-jacket-refit-26")]
     [Trait("Plan", "EDGE-jacket-refit-31")]
+    [Trait("Suite", "Diagnostic")]
     public void Scarlets_bracelet_jacket_is_sized_by_its_top_and_refits_clean()
     {
         string root = LocalData.Path(Scarlet);
@@ -115,6 +116,7 @@ public class AccessoryRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-jacket-refit-6")]
     [Trait("Plan", "EDGE-jacket-refit-5")]
     [Trait("Plan", "EDGE-jacket-refit-16")]
+    [Trait("Suite", "Diagnostic")]
     public void Scarlets_shared_jacket_file_has_two_tops_that_do_not_agree()
     {
         // As on disk: Neolithe S and M serve one jacket file, and Proteus's own refit option (made in the Studio)

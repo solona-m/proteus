@@ -141,6 +141,7 @@ public class SkirtHipsLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-skirt-hips-7")]
     [Trait("Plan", "EDGE-skirt-hips-1")]
     [Trait("Plan", "EDGE-skirt-hips-2")]
+    [Trait("Suite", "Diagnostic")]
     public void Rues_buttock_and_the_stocking_stay_under_Geometrics_skirt(string chest)
     {
         string? beneath = chest == "legs only" ? null : chest;
@@ -182,6 +183,7 @@ public class SkirtHipsLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-skirt-hips-5")]
     [Trait("Plan", "EDGE-skirt-hips-12")]
     [Trait("Plan", "AC-open-patch-authored-9")]
+    [Trait("Suite", "Diagnostic")]
     public void Hip_level_pants_are_no_worse()
     {
         var bodies = new[] { Body(Bibo), Body(Rue), Body(Neolithe) }.ToList();

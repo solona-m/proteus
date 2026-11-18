@@ -50,7 +50,8 @@ internal static class MatcapPanelModel
     /// <param name="Extra">Lines to act on (the library slot wasn't switched or is outranked, the character draws another
     /// file): kept in the panel too.</param>
     public sealed record JobReport(string Message, bool IsApply, int ModelCount, bool RowHoles, IReadOnlyList<string> SiblingsSkipped,
-                                   bool AlphaTested, bool Lod0Cut, IReadOnlyList<string> Extra, bool PortKept = false);
+                                   bool AlphaTested, bool Lod0Cut, IReadOnlyList<string> Extra, bool PortKept = false,
+                                   bool RowGlass = false, int RowGlassTriangles = 0);
 
     /// <summary>At most this many skipped options are named; the rest are counted.</summary>
     public const int SkippedNamed = 6;
@@ -69,6 +70,7 @@ internal static class MatcapPanelModel
         if (r.IsApply && r.PortKept) chat.Add(MatcapWriter.PortKeptText);
         if (r.RowHoles) chat.Add(s.ChatHoles);
         else if (r.AlphaTested) chat.Add(s.ChatEdges);
+        if (r.IsApply && r.RowGlass) chat.Add(string.Format(s.ChatGlassFmt, r.RowGlassTriangles));
         if (r.SiblingsSkipped.Count > 0)
         {
             var names = r.SiblingsSkipped.Select(OptionName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();

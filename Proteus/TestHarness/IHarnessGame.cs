@@ -306,6 +306,27 @@ internal interface IHarnessGame
     /// <summary>The mods auto refit wrote into while the override stood; the list is emptied. Any thread.</summary>
     IReadOnlyList<string> TakeRefitsWhileOverridden();
 
+    /// <summary>Whether "Refit what I'm wearing now" can run: auto refit on, a preferred body in the player's collection,
+    /// nothing working. Framework thread.</summary>
+    bool CanRunAutoRefitNow() => false;
+
+    /// <summary>Whether a drawn piece resolves into the mod folder. Framework thread.</summary>
+    bool IsWornFrom(string modRoot) => false;
+
+    /// <summary>
+    /// The forced auto refit of the pieces worn from one mod (see <c>AutoRefitWatcher.RunNowFor</c>): per piece its slot,
+    /// game path and outcome; null when auto refit cannot run now. Framework thread.
+    /// </summary>
+    IReadOnlyList<(string Slot, string GamePath, string Outcome)>? RunAutoRefitNowFor(string modRoot) => null;
+
+    /// <summary>A collection's auto refit preference as the configuration writes it; "" when it has none, null when it
+    /// cannot be read. Framework thread.</summary>
+    string? AutoRefitPreferenceJson(Guid collection) => null;
+
+    /// <summary>Put a collection's auto refit preference back from <see cref="AutoRefitPreferenceJson"/>'s text ("" takes it
+    /// out) and save the configuration; false when it cannot be. Framework thread.</summary>
+    bool RestoreAutoRefitPreference(Guid collection, string json) => false;
+
     /// <summary>Auto refit's "Keep my body's pubes": the user's setting, the harness's session override (null: none), and
     /// the effect. Any thread.</summary>
     (bool Config, bool? Override, bool Effective) AutoRefitPubes();

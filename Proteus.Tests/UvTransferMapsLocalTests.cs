@@ -19,6 +19,7 @@ public sealed class TbseBakeFixture
 
 /// <summary>The committed bibo↔TBSE maps: made from the inputs they say, and as good as the gate demands.</summary>
 [Trait("Speed", "Slow")]
+[Trait("Suite", "Diagnostic")] // TbseBakeFixture's lazy bake measured ~32 s idle: the whole class moves (SuiteBudgetTests.MovedFixtures)
 public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper output) : IClassFixture<TbseBakeFixture>
 {
     private const string Bibo = UvTransferBakeLocalTests.Bibo;
