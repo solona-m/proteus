@@ -119,18 +119,18 @@ class) — unless it is one of the Sensitive Areas writers' own tests or a
 build-enforced rule test (`LocalizationTests`, `SupplyChainTests`), which stay
 in the quick suite. Golden baselines (`GoldenTests`, `GoldenCrossBodyLocalTests`,
 `SkinTuckGoldenTests`) run with the release. The full suite's budget is
-10 minutes wall, build included. A test whose slowest row takes 15 s or more in
-a full run also gets `[Trait("Suite", "Diagnostic")]` (it keeps Slow;
-`SuiteBudgetTests` checks); a class fixture's setup counts against every test of
+10 minutes wall, build included. Diagnostic tests carry
+`[Trait("Suite", "Diagnostic")]` and keep Slow (`SuiteBudgetTests` checks). A
+full run over budget before a release: report the overrun to the owner and, in a
+reviewed follow-up (never mid-release), move the tests whose slowest row took
+15 s or more in that run (`--logger trx`) — but not a cheap test whose time is
+shared setup moved onto it; a class fixture's setup counts against every test of
 its class, and 7.5 s or more measured idle moves the whole class (tags on the
 class) unless it holds exempt tests. Exempt (listed in `SuiteBudgetTests`): the
-Sensitive Areas writers' own tests and tests that exercise a write/build/save/undo of
-those writers directly (not as setup),
-write-behaviour tests in a fixture class, the build-enforced rule tests, the
-golden baselines, and a failing test until it is fixed. A full run over budget
-before a release: report the overrun to the owner (slowest tests via
-`--logger trx`) and move tests in a reviewed follow-up, never mid-release. The
-worker has its own `npm test` in `worker/`.
+Sensitive Areas writers' own tests and tests that exercise a write/build/save/undo
+of those writers directly (not as setup), write-behaviour tests in a fixture
+class, the build-enforced rule tests, the golden baselines, and a failing test
+until it is fixed. The worker has its own `npm test` in `worker/`.
 
 ## Sensitive Areas — the security surface
 
