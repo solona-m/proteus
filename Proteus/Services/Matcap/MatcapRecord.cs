@@ -93,6 +93,82 @@ internal sealed class MatcapRecord
         /// <summary>Written before the files and cleared after: a crash leaves it set, and Undo cleans it up.</summary>
         [JsonPropertyName("Pending")] public bool Pending { get; set; }
         [JsonPropertyName("Source")] public SourceRef Source { get; set; } = new();
+        /// <summary>A row matcap's cut: null for a whole-part matcap (every entry before row matcaps existed).</summary>
+        [JsonPropertyName("Row")] public RowRef? Row { get; set; }
+    }
+
+    /// <summary>
+    /// A row matcap's cut: the row and sub-row, the cut copy name the row triangles now draw with, the cut files (one per
+    /// distinct source material, each with every redirect it was published at and the source it was cut from), the cut
+    /// normals, and per variant folder which source the cut followed — what Undo removes and Detect checks.
+    /// </summary>
+    public sealed class RowRef
+    {
+        public const string SubBoth = "both", SubA = "a", SubB = "b";
+
+        [JsonPropertyName("Row")] public int Row { get; set; }
+        [JsonPropertyName("Sub")] public string Sub { get; set; } = SubBoth;
+        /// <summary>The cut copy's name as the model names it (<c>/mt_…_mcut3fa21c1.mtrl</c>).</summary>
+        [JsonPropertyName("Cut")] public string Cut { get; set; } = "";
+        [JsonPropertyName("CutMeshes")] public List<MeshRef> CutMeshes { get; set; } = [];
+        /// <summary>The cut meshes' vertex alpha was raised to 1 (every source had no alpha threshold).</summary>
+        [JsonPropertyName("CutAlphaSet")] public bool CutAlphaSet { get; set; }
+        [JsonPropertyName("Files")] public List<RowFileRef> Files { get; set; } = [];
+        [JsonPropertyName("Normals")] public List<FileRef> Normals { get; set; } = [];
+        [JsonPropertyName("Fingerprint")] public RowFingerprint Fingerprint { get; set; } = new();
+    }
+
+    /// <summary>One cut copy of a source material: where it is, where it is redirected, and what it was cut from.</summary>
+    public sealed class RowFileRef
+    {
+        [JsonPropertyName("File")] public string File { get; set; } = "";
+        [JsonPropertyName("Sha8")] public string Sha8 { get; set; } = "";
+        [JsonPropertyName("ThresholdZero")] public bool ThresholdZero { get; set; }
+        [JsonPropertyName("Source")] public RowSource Source { get; set; } = new();
+        [JsonPropertyName("Normal")] public RowSource Normal { get; set; } = new();
+        [JsonPropertyName("Index")] public RowSource? Index { get; set; }
+        [JsonPropertyName("Redirects")] public List<RowRedirect> Redirects { get; set; } = [];
+    }
+
+    /// <summary>
+    /// A source file: a mod file (<see cref="File"/>, with the container that redirected it) or a game file
+    /// (<see cref="Game"/>), the game path it was read at, and its hash, size and write time when cut.
+    /// </summary>
+    public sealed class RowSource
+    {
+        [JsonPropertyName("GamePath")] public string GamePath { get; set; } = "";
+        [JsonPropertyName("Group")] public string? Group { get; set; }
+        [JsonPropertyName("Option")] public string? Option { get; set; }
+        [JsonPropertyName("Index")] public int? Index { get; set; }
+        [JsonPropertyName("File")] public string? File { get; set; }
+        [JsonPropertyName("Game")] public bool Game { get; set; }
+        [JsonPropertyName("Sha8")] public string Sha8 { get; set; } = "";
+        [JsonPropertyName("Size")] public long Size { get; set; }
+        [JsonPropertyName("MtimeUtc")] public long MtimeUtc { get; set; }
+    }
+
+    /// <summary>One redirect of a cut file or normal: the container and the game path.</summary>
+    public sealed class RowRedirect
+    {
+        [JsonPropertyName("Group")] public string Group { get; set; } = "";
+        [JsonPropertyName("Option")] public string? Option { get; set; }
+        [JsonPropertyName("Index")] public int? Index { get; set; }
+        [JsonPropertyName("GamePath")] public string GamePath { get; set; } = "";
+    }
+
+    /// <summary>Per variant folder, which source the cut followed; and a hash of the file swaps on the material's paths.</summary>
+    public sealed class RowFingerprint
+    {
+        public const string CaseContainer = "container", CaseGame = "game", CaseWorn = "worn", CaseNone = "none";
+
+        [JsonPropertyName("Folders")] public List<RowFolder> Folders { get; set; } = [];
+        [JsonPropertyName("SwapsSha8")] public string SwapsSha8 { get; set; } = "";
+    }
+
+    public sealed class RowFolder
+    {
+        [JsonPropertyName("Folder")] public int Folder { get; set; }
+        [JsonPropertyName("Case")] public string Case { get; set; } = RowFingerprint.CaseNone;
     }
 
     public sealed class SharedFiles
@@ -121,6 +197,8 @@ internal sealed class MatcapRecord
             return new MatcapRecord { Unreadable = true };
         }
         if (record == null) return new MatcapRecord { Unreadable = true };
+        // A later format (written by a newer Proteus) is never read as this one, so never written over.
+        if (record.Version > CurrentVersion) return new MatcapRecord { Unreadable = true };
         Contain(modRoot, record);
         return record;
     }
@@ -145,9 +223,20 @@ internal sealed class MatcapRecord
         record.Materials ??= [];
         record.Shared ??= new SharedFiles();
         dropped += record.Models.RemoveAll(m => m == null || !Inside(m.File));
+        // A row matcap's cut files, normals, cut meshes' models and mod-file sources must be inside the mod too: Undo
+        // deletes the cut files and Detect reads the sources.
+        static bool RowOutside(RowRef? row, Func<string?, bool> inside) =>
+            row != null
+            && ((row.Files ?? []).Any(f => f == null || !inside(f.File)
+                                           || f.Source is { Game: false, File: { } sf } && !inside(sf)
+                                           || f.Normal is { Game: false, File: { } nf } && !inside(nf)
+                                           || f.Index is { Game: false, File: { } xf } && !inside(xf))
+                || (row.Normals ?? []).Any(n => n == null || !inside(n.File))
+                || (row.CutMeshes ?? []).Any(x => x == null || !inside(x.Model)));
         dropped += record.Materials.RemoveAll(m => m == null || !Inside(m.File)
                                                    || m.Source?.Tex is { } tex && !Inside(tex.File)
-                                                   || (m.Meshes ?? []).Any(x => x == null || !Inside(x.Model)));
+                                                   || (m.Meshes ?? []).Any(x => x == null || !Inside(x.Model))
+                                                   || RowOutside(m.Row, Inside));
         if (record.Shared.Mask is { } mask && !Inside(mask.File)) { record.Shared.Mask = null; dropped++; }
         if (record.Shared.FlatNormal is { } flat && !Inside(flat.File)) { record.Shared.FlatNormal = null; dropped++; }
         if (!string.IsNullOrEmpty(record.Token) && !TokenShape.IsMatch(record.Token)) { record.Token = ""; dropped++; }
@@ -164,6 +253,8 @@ internal sealed class MatcapRecord
             return;
         }
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        // Version 2 only once a row matcap is recorded: a record of whole-part matcaps stays readable by older builds.
+        record.Version = record.Materials.Any(m => m.Row != null) ? CurrentVersion : 1;
         PenumbraModMeta.AtomicWrite(path, JsonSerializer.Serialize(record, new JsonSerializerOptions
         {
             WriteIndented = true, Encoder = ProteusJson.Encoder,
@@ -174,7 +265,16 @@ internal sealed class MatcapRecord
     public ModelEntry? Model(string rel) =>
         Models.FirstOrDefault(m => PenumbraModMeta.SameFile(m.File, rel));
 
+    /// <summary>The newest record format this build reads and writes: 2 added row matcaps (<see cref="MaterialEntry.Row"/>).</summary>
+    public const int CurrentVersion = 2;
+
+    /// <summary>The entry a material name belongs to: the matcap material itself, or a row matcap's cut copy.</summary>
+    public MaterialEntry? EntryFor(string name) =>
+        Materials.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase))
+        ?? Materials.FirstOrDefault(m => m.Row != null && string.Equals(m.Row.Cut, name, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>The materials whose meshes are in <paramref name="rel"/>.</summary>
     public IEnumerable<MaterialEntry> MaterialsOf(string rel) =>
-        Materials.Where(m => m.Meshes.Any(x => PenumbraModMeta.SameFile(x.Model, rel)));
+        Materials.Where(m => m.Meshes.Any(x => PenumbraModMeta.SameFile(x.Model, rel))
+                             || (m.Row?.CutMeshes.Any(x => PenumbraModMeta.SameFile(x.Model, rel)) ?? false));
 }

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Proteus.Services;
 using Proteus.Services.Matcap;
 using StbImageWriteSharp;
 
@@ -52,7 +53,8 @@ internal sealed partial class HarnessRouter
             if (error != null) return error;
             string root = Path.Combine(mods!.ModsRoot, dir!);
             if (Game.IsLegacyFolder(root)) return HarnessResponse.Error(409, "legacy-mod", "the mod is an old (v3) Penumbra mod");
-            modelView = MatcapJob.ReadModel(root, model, port, out var jobError);
+            request.Query.TryGetValue("material", out var rowMaterial);
+            modelView = MatcapJob.ReadModel(root, model, port, out var jobError, rowMaterial is { Length: > 0 } ? rowMaterial : null);
             if (jobError != null)
                 return HarnessResponse.Error(jobError.Code == "model-ambiguous" ? 409 : 404, jobError.Code, jobError.Message);
         }
@@ -143,8 +145,10 @@ internal sealed partial class HarnessRouter
     /// </summary>
     private async Task<HarnessResponse> MatcapPreviewAction(HarnessRequest request)
     {
-        var (body, bad) = JsonBody(request, "parts", "image", "pack", "library", "group", "option", "end");
+        var (body, bad) = JsonBody(request, "parts", "image", "pack", "library", "group", "option", "end", "row", "sub", "material");
         if (bad != null) return bad;
+        var (row, sub, rowMaterial, rowBad) = RowFields(body);
+        if (rowBad != null) return rowBad;
         string? image = OptionalString(body, "image", out bad); if (bad != null) return bad;
         string? library = OptionalString(body, "library", out bad); if (bad != null) return bad;
         string? group = OptionalString(body, "group", out bad); if (bad != null) return bad;
@@ -169,7 +173,7 @@ internal sealed partial class HarnessRouter
         bool hasSource = image != null || library != null;
         if (end)
         {
-            if (hasSource || labels.Count > 0 || body.TryGetProperty("pack", out _))
+            if (hasSource || labels.Count > 0 || body.TryGetProperty("pack", out _) || row > 0)
                 return HarnessResponse.Error(400, "invalid-field", "end takes nothing else");
         }
         else
@@ -178,20 +182,48 @@ internal sealed partial class HarnessRouter
             if (library != null && (group == null || option == null))
                 return HarnessResponse.Error(400, "invalid-field", "a library needs group and option");
             if (body.TryGetProperty("pack", out _) && image == null) return HarnessResponse.Error(400, "invalid-field", "pack goes with image");
-            if (!hasSource || labels.Count == 0)
-                return HarnessResponse.Error(400, "invalid-field", "a preview takes parts and an image or library, or end");
+            if (!hasSource || (labels.Count == 0 && row == 0))
+                return HarnessResponse.Error(400, "invalid-field", "a preview takes parts (or a row) and an image or library, or end");
+            if (rowMaterial != null && labels.Count > 0)
+                return HarnessResponse.Error(400, "invalid-field", "material goes with a row and no parts (the parts name their material)");
         }
         if (changes.Stopping) return HarnessResponse.Error(503, "harness-stopping", "the test harness is stopping");
-        var req = new StudioMatcapPreviewRequest(labels, image, pack, library, group, option, end);
+        var req = new StudioMatcapPreviewRequest(labels, image, pack, library, group, option, end, row, sub, rowMaterial);
         var result = await OnFramework(() => changes.Gate(jobs.Busy, Game.AutoRefit().Busy) ?? changes.StudioMatcapPreview(req));
         return StudioAnswer(result);
+    }
+
+    /// <summary>
+    /// The row matcap fields of a matcap or matcap-preview body: <c>row</c> 0–16 (0 or absent: the whole part), <c>sub</c>
+    /// "A", "B" or "both" (default both), <c>material</c> (with a row and no parts: whose parts it covers). Sub and material
+    /// need a row.
+    /// </summary>
+    internal static (int Row, SubRowPick Sub, string? Material, HarnessResponse? Bad) RowFields(JsonElement body)
+    {
+        int row = 0;
+        if (body.TryGetProperty("row", out var rv) && (rv.ValueKind != JsonValueKind.Number || !rv.TryGetInt32(out row) || row is < 0 or > 16))
+            return (0, SubRowPick.Both, null, HarnessResponse.Error(400, "invalid-field", "row must be 0 to 16"));
+        var subText = OptionalString(body, "sub", out var bad);
+        if (bad != null) return (0, SubRowPick.Both, null, bad);
+        SubRowPick? sub = subText?.ToLowerInvariant() switch
+        {
+            null or "both" => SubRowPick.Both, "a" => SubRowPick.A, "b" => SubRowPick.B, _ => null,
+        };
+        if (sub == null) return (0, SubRowPick.Both, null, HarnessResponse.Error(400, "invalid-field", "sub must be A, B or both"));
+        var material = OptionalString(body, "material", out bad);
+        if (bad != null) return (0, SubRowPick.Both, null, bad);
+        if (row == 0 && (subText != null || material != null))
+            return (0, SubRowPick.Both, null, HarnessResponse.Error(400, "invalid-field", "sub and material go with a row"));
+        return (row, sub.Value, material, null);
     }
 
     private async Task<HarnessResponse> MatcapAction(HarnessRequest request)
     {
         var (body, bad) = JsonBody(request, "mod", "model", "parts", "image", "library", "group", "option", "confirmEnable",
-                                   "undo", "forget", "pack");
+                                   "undo", "forget", "pack", "row", "sub", "material");
         if (bad != null) return bad;
+        var (row, sub, rowMaterial, rowBad) = RowFields(body);
+        if (rowBad != null) return rowBad;
         string? mod = OptionalString(body, "mod", out bad); if (bad != null) return bad;
         string? model = OptionalString(body, "model", out bad); if (bad != null) return bad;
         string? image = OptionalString(body, "image", out bad); if (bad != null) return bad;
@@ -227,13 +259,18 @@ internal sealed partial class HarnessRouter
         MatcapJob.Action kind;
         if (undo || forget)
         {
-            if (undo && forget || hasSource || labels.Count > 0)
+            if (undo && forget || hasSource || labels.Count > 0
+                || body.TryGetProperty("row", out _) || body.TryGetProperty("sub", out _) || body.TryGetProperty("material", out _))
                 return HarnessResponse.Error(400, "invalid-field", "undo and forget take mod and model only");
             kind = undo ? MatcapJob.Action.Undo : MatcapJob.Action.Forget;
         }
         else
         {
-            if (!hasSource || labels.Count == 0) return HarnessResponse.Error(400, "invalid-field", "an apply takes parts and an image or library");
+            // Parts may be left out only for a row matcap (its material's every part, as the panel with nothing ticked).
+            if (!hasSource || (labels.Count == 0 && row == 0))
+                return HarnessResponse.Error(400, "invalid-field", "an apply takes parts (or a row) and an image or library");
+            if (rowMaterial != null && labels.Count > 0)
+                return HarnessResponse.Error(400, "invalid-field", "material goes with a row and no parts (the parts name their material)");
             kind = MatcapJob.Action.Apply;
         }
         if (changes.Stopping) return HarnessResponse.Error(503, "harness-stopping", "the test harness is stopping");
@@ -260,7 +297,7 @@ internal sealed partial class HarnessRouter
                 MatcapJob.Action.Undo => "matcap-undo", MatcapJob.Action.Forget => "matcap-forget", _ => "matcap",
             }, dir!);
             var args = new MatcapJob.Args(dir!, modRoot, model, kind, labels, image, library, group, option, Flag("confirmEnable"),
-                                          port!, changes, Pack: Flag("pack"));
+                                          port!, changes, Pack: Flag("pack"), Row: row, Sub: sub, Material: rowMaterial);
             _ = jobs.Start(job, j => MatcapJob.Run(jobs, j, args));
             started = true;
             return HarnessResponse.Json(202, new { job = job.Id, modDir = dir, state = "queued" });

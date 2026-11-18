@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Utility;
 using Proteus.Localization;
 using Proteus.Services;
 using Proteus.Services.Matcap;
@@ -97,7 +99,173 @@ public sealed partial class PartsPanel
 
     private MatcapStudio.Environment MatcapEnv() =>
         new(path => textureLoader.LoadRawFile(null, path), textureLoader, matcapConfig.EnableCompression,
-            Path.Combine(Path.GetTempPath(), "Proteus", "matcap"));
+            Path.Combine(Path.GetTempPath(), "Proteus", "matcap"), RowOnly: matcapRowOnly, RowSub: matcapRowSub);
+
+    /// <summary>The colour-table row pair a matcap is cut to (0: the whole part), and its sub-row.</summary>
+    private int matcapRowOnly;
+    private SubRowPick matcapRowSub = SubRowPick.Both;
+
+    /// <summary>The last row picked, kept while the row is switched off so switching it on comes back to it.</summary>
+    private int matcapRowPick;
+
+    /// <summary>The material picked for a row matcap with nothing ticked, when the model has more than one (null: the first).</summary>
+    private string? matcapRowMaterial;
+
+    /// <summary>Set the row (0: the whole part) and sub-row — the panel's picker and the harness.</summary>
+    internal void SetMatcapRow(int row, SubRowPick sub)
+    {
+        matcapRowOnly = Math.Clamp(row, 0, 16);
+        if (matcapRowOnly > 0) matcapRowPick = matcapRowOnly;
+        matcapRowSub = sub;
+        PumpMatcapPreview();
+    }
+
+    /// <summary>
+    /// The parts Apply and the click preview cover: the ticked ones; or, with a row picked and nothing ticked, every whole
+    /// submesh of the row material that can take a matcap (<see cref="MatcapPlan.RowPool"/>) — the row picks the pixels,
+    /// so ticks only narrow it.
+    /// </summary>
+    private List<ModelPart> MatcapApplyParts()
+    {
+        if (parts == null) return [];
+        var chosen = parts.Parts.Where(p => ticked.Contains(p.Label)).ToList();
+        if (chosen.Count == 0 && matcapRowOnly > 0 && MatcapRowMaterial() is { } mat)
+            chosen = MatcapPlan.RowPool(parts.Parts, MatcapTargetKind(), parts.AttributeNames, mat);
+        return chosen;
+    }
+
+    /// <summary>
+    /// The material a row matcap works on: the ticked parts' (the first one's; two materials are refused), else the one
+    /// picked in the material list, else the first that can take one.
+    /// </summary>
+    private string? MatcapRowMaterial()
+    {
+        if (parts == null) return null;
+        var ticks = parts.Parts.Where(p => ticked.Contains(p.Label)).ToList();
+        if (ticks.Count > 0) return ticks.Select(p => p.Material).FirstOrDefault(m => !string.IsNullOrEmpty(m));
+        var all = MatcapPlan.RowMaterials(parts.Parts, MatcapTargetKind(), parts.AttributeNames);
+        return all.FirstOrDefault(m => string.Equals(m, matcapRowMaterial, StringComparison.OrdinalIgnoreCase)) ?? all.FirstOrDefault();
+    }
+
+    private string[] MatcapSubLabels() => [Strings.Matcap.RowSubBoth, Strings.Matcap.RowSubA, Strings.Matcap.RowSubB];
+
+    /// <summary>The picker's rows for one material, read off the framework thread, by (mod, model, material).</summary>
+    private string? matcapRowInfoKey;
+    private Task<MatcapStudio.RowInfo?>? matcapRowInfo;
+
+    /// <summary>Whether the row material has colours set in Proteus the cut won't follow, cached by (mod, material, metadata).</summary>
+    private (string Key, bool Warn)? matcapRowFollow;
+
+    /// <summary>
+    /// "Only on one colour row", the material list (nothing ticked, several materials), then the Colors window's own row
+    /// picker for the material — swatches, only the rows its index map uses, Glow, and hovering a row lights it.
+    /// </summary>
+    private void DrawMatcapRowPicker()
+    {
+        var s = Strings.Matcap;
+        bool on = matcapRowOnly > 0;
+        if (ImGui.Checkbox($"{s.RowOnly}##matcapRowOn", ref on))
+            SetMatcapRow(on ? Math.Max(1, matcapRowPick) : 0, matcapRowSub);
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.RowOnlyTip);
+        if (!on || parts == null) return;
+
+        // Several materials and nothing ticked: pick which one the row is on.
+        bool anyTicked = parts.Parts.Any(p => ticked.Contains(p.Label));
+        var materials = MatcapPlan.RowMaterials(parts.Parts, MatcapTargetKind(), parts.AttributeNames);
+        var mat = MatcapRowMaterial();
+        if (!anyTicked && materials.Count > 1)
+        {
+            int at = Math.Max(0, materials.FindIndex(m => string.Equals(m, mat, StringComparison.OrdinalIgnoreCase)));
+            var labels = materials.Select(MatcapWriter.StemOf).ToArray();
+            ImGui.SetNextItemWidth(220 * ImGuiHelpers.GlobalScale);
+            if (ImGui.Combo($"{s.RowMaterial}##matcapRowMat", ref at, labels, labels.Length))
+            {
+                matcapRowMaterial = materials[at];
+                PumpMatcapPreview();
+            }
+            mat = materials[at];
+        }
+
+        // The rows of the material, read once per (mod, model, material) on a worker.
+        var root = ModRoot();
+        if (mat == null || root == null || modelIndex < 0 || modelIndex >= models.Count) return;
+        var model = models[modelIndex];
+        var key = $"{root}|{model.File}|{mat}";
+        if (key != matcapRowInfoKey)
+        {
+            matcapRowInfoKey = key;
+            var env = MatcapEnv();
+            matcapRowInfo = Task.Run(() =>
+            {
+                try { return MatcapStudio.ReadRowInfo(root, model.File, model.GamePath, mat, env); }
+                catch (Exception ex) { log.Warning("[Proteus] matcap row picker: {0}", ex.Message); return null; }
+            });
+        }
+
+        if (matcapRowInfo is not { IsCompleted: true } task) { ImGui.TextDisabled(s.RowReading); return; }
+        if (task.Result is not { } info)
+        {
+            ProteusStyle.DisabledWrapped(s.RowNoRows);
+            return;
+        }
+
+        int pick = matcapRowOnly;
+        if (ColorTableEditor.DrawRowPicker($"matcaprow_{key}", info.Rows, info.UsedRows, [info.Leaf], ref pick, info.UsedSubRow)
+            || pick != matcapRowOnly)
+        {
+            matcapRowPick = pick;
+            SetMatcapRow(pick, matcapRowSub);
+        }
+
+        ImGui.SetNextItemWidth(110 * ImGuiHelpers.GlobalScale);
+        int sub = matcapRowSub switch { SubRowPick.A => 1, SubRowPick.B => 2, _ => 0 };
+        var subLabels = MatcapSubLabels();
+        if (ImGui.Combo($"{s.RowSub}##matcapRowSub", ref sub, subLabels, subLabels.Length))
+            SetMatcapRow(matcapRowOnly, sub switch { 1 => SubRowPick.A, 2 => SubRowPick.B, _ => SubRowPick.Both });
+        if (info.UsedSubRow != null && matcapRowSub != SubRowPick.Both && matcapRowSub.ToString() != info.UsedSubRow)
+            ImGui.TextColored(ProteusStyle.Warn, string.Format(s.RowSubOnlyFmt, info.UsedSubRow));
+    }
+
+    /// <summary>
+    /// Whether the row material has colours set in Proteus for this mod (Colors window rows, keyed by the material's file in
+    /// the mod): the cut copy won't follow them. Cached per mod, material and the last composite's entries.
+    /// </summary>
+    private bool MatcapRowFollowWarn()
+    {
+        if (matcapRowOnly <= 0 || ModRoot() is not { } root || MatcapRowMaterial() is not { } mat) return false;
+        var folder = Path.GetFileName(root.TrimEnd('\\', '/'));
+        var meta = compositor.LastDiscovered.FirstOrDefault(e => string.Equals(e.ModDirectory, folder, StringComparison.OrdinalIgnoreCase))?.Metadata;
+        // The material files with colour rows, snapshotted here on the framework thread (the Colors window edits that
+        // dictionary on this thread) — the worker only reads the snapshot, and its contents key the cache.
+        var coloured = (meta?.ContentMaterials ?? [])
+            .Where(kv => kv.Value?.ColorTableRows is { Count: > 0 }).Select(kv => kv.Key.Replace('\\', '/'))
+            .Order(StringComparer.OrdinalIgnoreCase).ToList();
+        var key = $"{root}|{mat}|{string.Join("|", coloured)}";
+        if (matcapRowFollow is { } c && c.Key == key) return c.Warn;
+        if (matcapRowFollowTask is { IsCompleted: false }) return false;   // being read
+        if (matcapRowFollowTask is { IsCompletedSuccessfully: true } done && done.Result.Key == key)
+        {
+            matcapRowFollow = done.Result;
+            return done.Result.Warn;
+        }
+        // The manifest read goes to a worker: the framework thread never waits on it.
+        var colouredSet = new HashSet<string>(coloured, StringComparer.OrdinalIgnoreCase);
+        matcapRowFollowTask = Task.Run(() =>
+        {
+            bool warn = colouredSet.Count > 0 && MatcapRowCut.FollowWarn(root, mat, f => colouredSet.Contains(f));
+            return (key, warn);
+        });
+        return false;
+    }
+
+    private Task<(string Key, bool Warn)>? matcapRowFollowTask;
+
+    /// <summary>For the harness: whether a mod's material file has colour rows set in Proteus (the last composite's entries).</summary>
+    private bool HasColours(string modDir, string materialRel)
+    {
+        var meta = compositor.LastDiscovered.FirstOrDefault(e => string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase))?.Metadata;
+        return meta?.PeekMaterialSettings(materialRel)?.ColorTableRows is { Count: > 0 };
+    }
 
     private void RescanMatcaps(bool force)
     {
@@ -132,10 +300,11 @@ public sealed partial class PartsPanel
     private (string Key, string? Blocked)? MatcapPreviewNow()
     {
         if (matcapPreview.Choice is not { } choice || modelIndex < 0 || modelIndex >= models.Count) return null;
-        var chosen = parts?.Parts.Where(p => ticked.Contains(p.Label)).ToList() ?? [];
-        var key = MatcapPreviewState.Key(models[modelIndex].File, choice, chosen);
+        var chosen = MatcapApplyParts();
+        var key = MatcapPreviewState.Key(models[modelIndex].File + (matcapRowOnly > 0 ? $"|row{matcapRowOnly}{matcapRowSub}|{MatcapRowMaterial()}" : ""),
+                                         choice, chosen);
         var blocked = MatcapPanelModel.PreviewBlocked(penumbra.IsAvailable, chosen, MatcapTargetKind(), vanilla != null, TargetIsContent,
-                                                      choice, matcapRoom, matcapRecord ?? MatcapRecord.Read(ModRoot() ?? ""));
+                                                      choice, matcapRoom, matcapRecord ?? MatcapRecord.Read(ModRoot() ?? ""), matcapRowOnly);
         return (key, blocked);
     }
 
@@ -186,10 +355,16 @@ public sealed partial class PartsPanel
             return;
         }
         var model = models[modelIndex];
-        var chosen = parts.Parts.Where(p => ticked.Contains(p.Label)).ToList();
+        var chosen = MatcapApplyParts();
         var drawnAt = OpenModelGamePaths();
         var modsRoot = penumbra.GetModDirectory() ?? "";
         var env = MatcapEnv() with { TempDir = Path.Combine(Path.GetTempPath(), "Proteus", "matcap-preview") };
+        // A row matcap previews the cut of the option the character actually wears: where Penumbra resolves the part's
+        // material for the player, asked here on the framework thread (the worker only reads the answer).
+        string? resolvedMaterial = null;
+        if (matcapRowOnly > 0 && MatcapRowMaterial() is { } rowMat && MatcapPlan.TargetOf(model.GamePath, out _) is { } rowTarget
+            && MatcapPlan.MaterialGamePaths(rowTarget, rowMat, [], [1]).FirstOrDefault() is { } rowPath)
+            resolvedMaterial = penumbra.ResolvePlayer(rowPath);
         matcapBuild = Task.Run(() =>
         {
             MatcapPreview.Built built;
@@ -197,7 +372,8 @@ public sealed partial class PartsPanel
             {
                 // The bytes on disk, as Apply reads them.
                 var bytes = File.ReadAllBytes(Path.Combine(root, model.File.Replace('\\', Path.DirectorySeparatorChar)));
-                built = MatcapPreview.Build(new MatcapPreview.Input(root, model.File, model.GamePath, drawnAt, bytes, chosen, choice, env, modsRoot));
+                built = MatcapPreview.Build(new MatcapPreview.Input(root, model.File, model.GamePath, drawnAt, bytes, chosen, choice, env,
+                                                                    modsRoot, resolvedMaterial));
             }
             catch (Exception ex)
             {
@@ -223,8 +399,13 @@ public sealed partial class PartsPanel
             if (matcapPreview.ShownKey != null) EndLivePreview(refreshGame: true, keepMatcapWanted: true);
             return;
         }
+        matcapRowHoles = built.RowHoles;
+        matcapPreviewResolvedFrom = built.ResolvedFrom;
         PushMatcapPreview(gen, key, built);
     }
+
+    /// <summary>Which cut copy the shown row preview pushed: "penumbra" (resolved), "heuristic", or null (not a row preview).</summary>
+    private string? matcapPreviewResolvedFrom;
 
     private void PushMatcapPreview(int gen, string key, MatcapPreview.Built built)
     {
@@ -288,14 +469,30 @@ public sealed partial class PartsPanel
         var root = vanilla == null ? ModRoot() : null;
         if (matcapIndex?.Current == null && matcapScan == null) RescanMatcaps(false);
 
-        // Read the record and its states when the open mod changes or after a write — never every frame, and never a write.
+        // Read the record when the open mod changes or after a write — never every frame, and never a write. Its states
+        // (which read files and hash changed row sources) come from a worker: now, and while the pane shows, whenever the
+        // worker's manifest check (at most every 2 s) finds the mod's manifest changed.
         var key = root ?? "";
         if (matcapRecordFor != key)
         {
             matcapRecord = root != null ? MatcapRecord.Read(root) : new MatcapRecord();
-            matcapStates = root != null ? MatcapWriter.Detect(root) : new Dictionary<string, MatcapWriter.State>();
             matcapRecordFor = key;
+            if (root == null) matcapStates = new Dictionary<string, MatcapWriter.State>();
+            else StartMatcapDetect(root, force: true);
         }
+        if (matcapStatesTask is { IsCompleted: true } done)
+        {
+            // Cleared on any end, so a failure (a model held open by another program) never stops the checks.
+            if (done.IsCompletedSuccessfully)
+            {
+                if (done.Result.States is { } states) matcapStates = states;
+                matcapManifestStamps = done.Result.Stamps;
+            }
+            else log.Warning("[Proteus] matcap states: the check failed ({0}); it runs again shortly", done.Exception?.GetBaseException().GetType().Name ?? "cancelled");
+            matcapStatesTask = null;
+        }
+        if (root != null && MatcapStatesSchedule.Due(Environment.TickCount64, matcapStatesCheckedAt, matcapStatesTask == null))
+            StartMatcapDetect(root, force: false);
         // First use: the pane is shown. Idempotent, so calling it every frame starts one download per session.
         matcapPack?.EnsureAsync();
         var packImages = matcapPackView.Images(matcapPack);
@@ -309,7 +506,8 @@ public sealed partial class PartsPanel
         }
 
         var model = modelIndex >= 0 && modelIndex < models.Count ? models[modelIndex] : (PenumbraModMeta.Redirect?)null;
-        var chosen = parts?.Parts.Where(p => ticked.Contains(p.Label)).ToList() ?? [];
+        var chosen = MatcapApplyParts();
+        bool rowPool = matcapRowOnly > 0 && parts != null && !parts.Parts.Any(p => ticked.Contains(p.Label));
         // Parsed once per model, not every frame.
         if (!ReferenceEquals(matcapRoomFor, brushBase))
         {
@@ -322,6 +520,7 @@ public sealed partial class PartsPanel
         var rel = model?.File ?? "";
         var adapter = new PenumbraMatcapAdapter(penumbra);
 
+        DrawMatcapRowPicker();
         matcapPanel.Draw(new MatcapPanel.Context
         {
             Penumbra = penumbra.IsAvailable,
@@ -358,6 +557,39 @@ public sealed partial class PartsPanel
             PreviewShown = matcapPreview.ShownKey != null,
             PreviewNote = matcapPreview.Wanted ? matcapPreview.Note : null,
             PreviewDrawnNote = matcapPreview.DrawnNote,
+            Row = matcapRowOnly,
+            RowPoolMaterial = rowPool ? MatcapRowMaterial() : null,
+            GamePiece = vanilla != null,
+            RowFollowWarn = MatcapRowFollowWarn(),
+            RowHoles = matcapRowHoles,
+        });
+    }
+
+    /// <summary>The states worker: (states, or null when the manifest was unchanged; the manifest stamps it saw).</summary>
+    private Task<(IReadOnlyDictionary<string, MatcapWriter.State>? States, Dictionary<string, long> Stamps)>? matcapStatesTask;
+    private long matcapStatesCheckedAt = long.MinValue / 2;
+    private Dictionary<string, long>? matcapManifestStamps;
+    /// <summary>The last row preview found cut-out holes inside the row's triangles.</summary>
+    private bool matcapRowHoles;
+
+    /// <summary>
+    /// Re-read the entries' states on a worker: <paramref name="force"/> (mod open, after a write) always; otherwise only
+    /// when the manifest files changed since the last look. The framework thread only starts the task.
+    /// </summary>
+    private void StartMatcapDetect(string root, bool force)
+    {
+        matcapStatesCheckedAt = Environment.TickCount64;
+        var before = matcapManifestStamps;
+        Func<string, byte[]?> readGame = path => textureLoader.LoadRawFile(null, path);
+        matcapStatesTask = Task.Run(() =>
+        {
+            var stamps = MatcapStatesSchedule.ManifestStamps(root);
+            if (!force && !MatcapStatesSchedule.Changed(before, stamps))
+                return ((IReadOnlyDictionary<string, MatcapWriter.State>?)null, stamps);
+            var started = Environment.TickCount64;
+            var states = MatcapWriter.Detect(root, readGame);
+            log.Debug("[Proteus] matcap states: {0} entr(ies) in {1} ms", states.Count, Environment.TickCount64 - started);
+            return (states, stamps);
         });
     }
 
@@ -367,8 +599,14 @@ public sealed partial class PartsPanel
         if (matcapJob is { IsCompleted: false } || parts == null || modelIndex < 0) return;
         // A pending brush stroke rewrites the whole model from its opening bytes: save it first, or stop.
         if (!FlushPending()) return;   // the save says why in the status line
-        var chosen = parts.Parts.Where(p => ticked.Contains(p.Label)).ToList();
+        var chosen = MatcapApplyParts();
         var env = MatcapEnv();
+        // A row matcap is the mod's own gear only: refused here, before any job, for the game's own pieces.
+        if (matcapRowOnly > 0 && vanilla != null && MatcapPlan.KindOfApply(chosen) == MatcapPlan.ApplyKind.New)
+        {
+            matcapError = Strings.Matcap.RowGameGear;
+            return;
+        }
 
         // A library that is off is switched on only once the user says so: asked here, before anything is written —
         // whatever the panel's cached status said (EDGE: "Cancel writes nothing").
@@ -394,7 +632,7 @@ public sealed partial class PartsPanel
         if (kind == MatcapPlan.ApplyKind.Change)
         {
             if (ModRoot() is not { } changeRoot) return;
-            var names = MatcapPlan.ChangeNames(chosen);
+            var names = MatcapPlan.ChangeNames(chosen, MatcapRecord.Read(changeRoot));
             var changePath = models[modelIndex].GamePath;
             matcapJob = Task.Run(() =>
             {
@@ -418,6 +656,8 @@ public sealed partial class PartsPanel
             var prepared = MatcapStudio.Prepare(root, model.File, model.GamePath, bytes, chosen, choice, env);
             var outcome = prepared.Ok ? MatcapWriter.Apply(root, prepared.Request!)
                                       : MatcapWriter.Outcome.Refuse(prepared.Code, prepared.Message);
+            // A row matcap over cut-out holes inside the row's triangles: said with the result, since they show the matcap.
+            if (outcome.Ok && prepared.RowHoles) outcome = outcome with { Message = outcome.Message + " " + Strings.Matcap.RowHolesWarn };
             return new MatcapJobResult(root, outcome, outcome.Ok && choice.IsLibrary ? choice : null, confirmEnable,
                                        prepared.SiblingsSkipped, prepared.Lod0Cut, prepared.AlphaTested, model.GamePath) { IsApply = true };
         });

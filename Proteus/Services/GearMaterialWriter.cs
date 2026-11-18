@@ -377,6 +377,41 @@ public static class GearMaterialWriter
     }
 
     /// <summary>
+    /// A material's own colours as editor rows (1–16, sub-rows A and B): diffuse, specular and glow, for the row
+    /// picker's swatches. Read only; null without a Dawntrail table. Values above 1 are scaled down to fit a swatch.
+    /// </summary>
+    public static List<ColorTableRowPreset>? ReadRows(byte[] mtrl)
+    {
+        int at = ColorTableStart(mtrl);
+        if (at < 0) return null;
+        (float R, float G, float B) Rgb(int b, int half) => (
+            (float)BitConverter.UInt16BitsToHalf(BitConverter.ToUInt16(mtrl, b + half * 2)),
+            (float)BitConverter.UInt16BitsToHalf(BitConverter.ToUInt16(mtrl, b + (half + 1) * 2)),
+            (float)BitConverter.UInt16BitsToHalf(BitConverter.ToUInt16(mtrl, b + (half + 2) * 2)));
+        static string Hex((float R, float G, float B) c)
+        {
+            float m = MathF.Max(1f, MathF.Max(c.R, MathF.Max(c.G, c.B)));
+            int B8(float v) => (int)MathF.Round(Math.Clamp(float.IsFinite(v) ? v / m : 0f, 0f, 1f) * 255f);
+            return $"#{B8(c.R):X2}{B8(c.G):X2}{B8(c.B):X2}";
+        }
+        ColorTableSubRowPreset Sub(int gameRow)
+        {
+            int b = at + gameRow * RowBytes;
+            var e = Rgb(b, HEmissive);
+            float strength = Math.Clamp(MathF.Max(e.R, MathF.Max(e.G, e.B)), 0f, 1f);
+            return new ColorTableSubRowPreset
+            {
+                Diffuse = Hex(Rgb(b, HDiffuse)), Specular = Hex(Rgb(b, HSpecular)),
+                Emissive = float.IsFinite(strength) ? strength : 0f, EmissiveColor = Hex(e),
+            };
+        }
+        var rows = new List<ColorTableRowPreset>(RowCount / 2);
+        for (int pair = 0; pair < RowCount / 2; pair++)
+            rows.Add(new ColorTableRowPreset { Row = pair + 1, SubRowA = Sub(pair * 2), SubRowB = Sub(pair * 2 + 1) });
+        return rows;
+    }
+
+    /// <summary>
     /// Copy <paramref name="src"/>'s whole 32×64 colour table into <paramref name="dst"/>, each located from its
     /// OWN header, so a pack rebuilt onto characterscroll keeps its look. Graft AFTER Build. No-op without a
     /// Dawntrail table on either side.

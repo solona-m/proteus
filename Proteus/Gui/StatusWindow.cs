@@ -703,12 +703,14 @@ public class StatusWindow : Window
     /// <summary>The colour editor, as its own window — stays open until closed.</summary>
     private void DrawColorWindow()
     {
-        // No colour editor open means no highlight glow.
-        if (_colorWindowMod == null) { ClearColorHighlights(); return; }
+        // No colour editor open means no highlight glow — unless another row picker (the Matcaps tool's) drew this
+        // frame: then its hover and pinned Glow live on, and are committed here as the editor's would be.
+        bool pickerDrew = ColorTableEditor.TakePickerDrew();
+        if (_colorWindowMod == null) { KeepOrClearColorHighlights(pickerDrew); return; }
 
         compositor.RefreshDisplayNames();   // the editor's title names the mod
         var entry = compositor.LastDiscovered.FirstOrDefault(e => e.ModDirectory == _colorWindowMod);
-        if (entry == null) { _colorWindowMod = null; ClearColorHighlights(); return; }
+        if (entry == null) { _colorWindowMod = null; KeepOrClearColorHighlights(pickerDrew); return; }
 
         // A pinned Glow lives while this window draws (#82): outside Begin, so a collapsed window still renews it.
         var pinNow = RowHighlightClock.NowMs();
@@ -727,6 +729,16 @@ public class StatusWindow : Window
         ColorTableEditor.CommitRowHover(RowHighlightClock.NowMs(), config.PluginEnabled, compositor.CompositeBusy);
 
         if (!open) _colorWindowMod = null;
+    }
+
+    /// <summary>With the Colors window closed: a row picker that drew this frame keeps its pin and gets its hover
+    /// committed; otherwise every highlight is cleared, as before.</summary>
+    private void KeepOrClearColorHighlights(bool pickerDrew)
+    {
+        if (!pickerDrew) { ClearColorHighlights(); return; }
+        var now = RowHighlightClock.NowMs();
+        ColorTableEditor.Highlighter?.RenewPin(now);
+        ColorTableEditor.CommitRowHover(now, config.PluginEnabled, compositor.CompositeBusy);
     }
 
     /// <summary>Every colour highlight off: the gear Glow, the skin Glow, and any row hover.</summary>

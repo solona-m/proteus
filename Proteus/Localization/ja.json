@@ -6670,5 +6670,157 @@
   "Parts.Matcap.PortKept": {
     "message": "このモデルはProteusが移植した髪型です。マットキャップがある間、Proteusはこのモデルをそのまま残し、同じ素材を共有する他の種族の移植もマットキャップを取り消すまで自動では作り直しません。スタジオでそれらの種族を手動で移植した場合は作り直されます。",
     "description": ""
+  },
+  "Matcap.Refused.RowFileSwap.Fmt": {
+    "message": "{0} がこのパーツのマテリアルを別のファイルに差し替えているため、行マットキャップは追従できません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoNormal": {
+    "message": "このパーツのマテリアルには、行マットキャップの切り抜きに使うノーマルマップがありません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowAmbiguousOption.Fmt": {
+    "message": "グループ「{0}」に「{1}」という名前のオプションが2つあるため、行マットキャップは区別できません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowShader.Fmt": {
+    "message": "行マットキャップにはパーツが character.shpk である必要がありますが、{0} は {1} を使っています。",
+    "description": ""
+  },
+  "Matcap.Refused.RowOwnedByFeature.Fmt": {
+    "message": "{0} は Proteus の装備シェーダーアップグレードで書き換えられています。先にそれを元に戻してから行マットキャップを追加してください。",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Fmt": {
+    "message": "行を切り抜けませんでした: {0}。",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Normal": {
+    "message": "ノーマルマップを読み込めませんでした",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Index": {
+    "message": "インデックスマップを読み込めませんでした",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Write": {
+    "message": "切り抜いたマテリアルを書き込めませんでした",
+    "description": ""
+  },
+  "Matcap.Refused.RowTextureVaries.Fmt": {
+    "message": "{0} がこのパーツのノーマルマップかインデックスマップを差し替えるため、1つの切り抜きではすべての選択肢に合いません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowEmpty.Fmt": {
+    "message": "このパーツには行 {0} を使うピクセルがありません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowNothingLeft": {
+    "message": "このマテリアルのパーツにはすべてマットキャップが付いています。",
+    "description": ""
+  },
+  "Matcap.Refused.RowNotGear": {
+    "message": "1つのカラー行へのマットキャップは装備とアクセサリーでのみ使えます。",
+    "description": ""
+  },
+  "Matcap.Refused.RowOneMaterial": {
+    "message": "1つのカラー行へのマットキャップは一度に1つのマテリアルにしか使えません。1つのマテリアルのパーツだけにチェックを入れてください。",
+    "description": ""
+  },
+  "Matcap.Refused.RowMixedThreshold": {
+    "message": "このパーツのオプションは切り抜き方が一致せず、頂点カラーで切り抜かれてしまいます。行マットキャップは両方には合いません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowVertexAlpha": {
+    "message": "このパーツの頂点カラーが行マットキャップを切り抜いてしまい、変更もできません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowGameGear": {
+    "message": "1つのカラー行へのマットキャップはModの装備で使えます。ゲーム本体の装備には使えません。",
+    "description": ""
+  },
+  "Matcap.Row.GameFile": {
+    "message": "ゲーム本体のファイル",
+    "description": ""
+  },
+  "Matcap.Row.DefaultData": {
+    "message": "Modの既定ファイル",
+    "description": ""
+  },
+  "Matcap.Row.Option.Fmt": {
+    "message": "「{0}」のオプション「{1}」",
+    "description": ""
+  },
+  "Matcap.Row.Container.Fmt": {
+    "message": "「{0}」の項目 {1}",
+    "description": ""
+  },
+  "Parts.Matcap.RowOnly": {
+    "message": "1つのカラー行だけ",
+    "description": ""
+  },
+  "Parts.Matcap.RowOnlyTip": {
+    "message": "マットキャップをパーツのマテリアルの1つのカラー行のピクセル（レースや縁取りの模様など）だけに付けます。何もチェックしなければ、このマテリアルのパーツすべてが対象になります。",
+    "description": ""
+  },
+  "Parts.Matcap.RowReading": {
+    "message": "カラー行を読み込み中…",
+    "description": ""
+  },
+  "Parts.Matcap.RowNoRows": {
+    "message": "このパーツのマテリアルには選べるカラー行がありません。",
+    "description": ""
+  },
+  "Parts.Matcap.RowSub": {
+    "message": "サブ行",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubBoth": {
+    "message": "AとB",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubA": {
+    "message": "Aのみ",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubB": {
+    "message": "Bのみ",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubOnly.Fmt": {
+    "message": "このマテリアルはサブ行 {0} だけを使います。",
+    "description": ""
+  },
+  "Parts.Matcap.RowMaterial": {
+    "message": "マテリアル",
+    "description": ""
+  },
+  "Parts.Matcap.RowAll.Fmt": {
+    "message": "{0} で描画されるパーツすべてが対象です。",
+    "description": ""
+  },
+  "Parts.Matcap.RowFollowWarn": {
+    "message": "このマテリアルには Proteus で設定した色があります。マットキャップを付けた行のピクセルはマテリアルのコピーで描かれるため、その色に追従しません。",
+    "description": ""
+  },
+  "Parts.Matcap.RowHolesWarn": {
+    "message": "このパーツの切り抜き穴の一部が行の三角形の中にあるため、そこにマットキャップが見えます。",
+    "description": ""
+  },
+  "Parts.Matcap.RowStale": {
+    "message": "この行マットキャップを作った後に作者のマテリアルが変わりました。元に戻してから、もう一度適用してください。",
+    "description": ""
+  },
+  "Matcap.Refused.RowManifestUnreadable": {
+    "message": "Modのファイル一覧（meta.json）を読み込めなかったため、何も変更していません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoSource": {
+    "message": "Proteus はこのパーツのマテリアルを Mod でもゲームでも見つけられなかったため、切り抜くものがありません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowMapSwap.Fmt": {
+    "message": "{0} がこのパーツのノーマルマップかインデックスマップを別のファイルに差し替えているため、行マットキャップは追従できません。",
+    "description": ""
   }
 }
