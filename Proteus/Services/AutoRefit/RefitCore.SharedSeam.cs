@@ -183,7 +183,7 @@ internal static partial class RefitCore
             anySplit = true;
             if (readings++ >= SeamReadingCap)
                 return new SeamGate(null, $"no chest piece sharing the seam is made on {chestDir} among the first "
-                                          + $"{SeamReadingCap} read");
+                                          + $"{SeamReadingCap} read", Transient: unread);
             var pick = read(f, top.Bytes, top.Model, top.Bones);
             if (!IsSkinReading(pick))
             {
@@ -192,8 +192,10 @@ internal static partial class RefitCore
             }
             if (!string.Equals(pick!.Dir, chestDir, StringComparison.OrdinalIgnoreCase)) continue;
             if (BodyFit(points, chestCat, legsCat, race, bellyCheck) is { } misfit)
-                return new SeamGate(null, $"{f.File}'s split {misfit}");
-            return new SeamGate(new SeamTop(f.File, pick.Dir, points), null);
+                return new SeamGate(null, $"{f.File}'s split {misfit}", Transient: unread);
+            // A locked file read before this one may have been the seam top, or a locked legs file may have widened its
+            // split: not kept either.
+            return new SeamGate(new SeamTop(f.File, pick.Dir, points), null, Transient: unread);
         }
         return new SeamGate(null, anySplit ? $"no chest piece sharing the seam is made on {chestDir}"
                                            : "its chest and legs files share no split",

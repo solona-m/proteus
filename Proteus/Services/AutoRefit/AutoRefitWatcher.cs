@@ -854,7 +854,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
     /// <summary>
     /// One worn piece through the walk's checks — the just-refitted window, <see cref="AutoRefitDecisions.ShouldRefit"/>,
-    /// a refit the player undid — and enqueued when it passes. Shared by <see cref="Walk"/> and <see cref="RunNowFor"/>,
+    /// a refit the player undid — and enqueued when it passes. Shared by <see cref="Walk"/> and the harness's <c>RunNowFor</c>,
     /// so a forced refit of one mod is exactly the walk's. Framework thread.
     /// </summary>
     /// <returns>"enqueued", or why not: "just-refitted", "declined", "skipped:&lt;reason&gt;".</returns>
@@ -909,40 +909,6 @@ public sealed partial class AutoRefitWatcher : IDisposable
                             accessory ? AutoRefitTargets.ChosenOf(pref) : null,
                             ModSettings: modSettings));
         return "enqueued";
-    }
-
-    /// <summary>
-    /// "Refit what I'm wearing now" for the pieces drawn from one mod alone — the test harness's (see
-    /// <c>AutoRefitNowJob</c>): each piece goes through the walk's own checks (<see cref="WalkSlot"/>) as forced, and
-    /// nothing worn from any other mod is touched. Never arms <see cref="RunNow"/>'s walk. Framework thread.
-    /// </summary>
-    /// <returns>Per worn piece of that mod, its slot, game path and outcome ("enqueued" or "not-enqueued:&lt;reason&gt;");
-    /// one "-" row naming the reason when nothing of it could be looked at; null when auto refit cannot run now.</returns>
-    internal IReadOnlyList<(string Slot, string GamePath, string Outcome)>? RunNowFor(string modRoot)
-    {
-        var activity = Activity();
-        if (disposed || !EffectivelyEnabled || current.Busy || activity.Running || activity.Queued > 0 || activity.Undoing)
-            return null;
-        var models = penumbra.GetActivePlayerModelPaths();
-        if (!DrawnModelPaths.HasBodySlotModel(models)) return [("-", "", "not-enqueued:blank-models")];
-        if (penumbra.GetPlayerCollection() is not { } collection) return [("-", "", "not-enqueued:no-collection")];
-        if (!config.AutoRefitByCollection.TryGetValue(collection.Id.ToString("D"), out var pref) || !pref.HasAnyBody())
-            return [("-", "", "not-enqueued:no-preferred-body")];
-
-        var now = ReadWorn(models, penumbra.GetModDirectory(), out var resolvedOf);
-        string want = Path.GetFullPath(modRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        long tick = Environment.TickCount64;
-        var outcomes = new List<(string, string, string)>();
-        foreach (var (slot, worn) in now)
-        {
-            if (resolvedOf[slot].Root is not { } root
-                || !string.Equals(Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                                  want, StringComparison.OrdinalIgnoreCase))
-                continue;
-            string outcome = WalkSlot(slot, now, resolvedOf, pref, collection.Id, all: true, tick);
-            outcomes.Add((slot, worn.GamePath, outcome == "enqueued" ? outcome : "not-enqueued:" + outcome));
-        }
-        return outcomes;
     }
 
     /// <summary>What each body and accessory slot draws: the mod and file supplying it, or the game's own. Framework
@@ -1606,9 +1572,10 @@ public sealed partial class AutoRefitWatcher : IDisposable
             && (r.Forced || !ChoseOtherwise(g, root, group))
             && (r.Forced || RecordedEntry(root, group, option, savePath) is not { Seam: null }))
         {
-            compareSeam = true;
-            (sharedSeam, seamKey) = ResolveSharedSeam(r.ModRoot, g, state, vanillaCat, targets, redirects, ownRecord,
-                                                      garment, bytes, race, item);
+            // A resolve that could not decide now (a file locked, the chest's body missing) compares nothing: an existing
+            // refit is put back as it is rather than remade without the seam it holds.
+            (sharedSeam, seamKey, compareSeam) = ResolveSharedSeam(r.ModRoot, g, state, vanillaCat, targets, redirects,
+                                                                   ownRecord, garment, bytes, race, item);
         }
         if (await LetBeOrPutBack(r, g, root, group, option, savePath, cutFrom, item, lead.Name, ct,
                                  pick, chestBeneath: chestBeneathTo?.Rel, chestBeneathDir: chestDir,
@@ -1701,7 +1668,9 @@ public sealed partial class AutoRefitWatcher : IDisposable
         if (await SaveAndWear(r, g, root, group, savePath, lead, labelFrom, refit, cutFrom, route, item, gameGear,
                               new BodyRetargetWriter.Provenance(pick.Dir, pick.Option.Rel, recorded,
                                                                 AutoRefitTargets.BodiesOf(recordedOn, lead.Dir),
-                                                                RefitCore.RecordedSeam(seamKey, plan.Report.SeamKept)))
+                                                                plan.Report.SeamKept || plan.Report.SeamDropped != null
+                                                                    ? RefitCore.RecordedSeam(seamKey, plan.Report.SeamKept)
+                                                                    : null))
             is not { } savedRoot)
             return;
         Outcome(r, onTarget: true, pick, RecordedFile(savedRoot, group, option, savePath));
@@ -2412,15 +2381,17 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// <summary>
     /// The garment's side of a seam it shares with the other piece of its mod (see <see cref="RefitCore.ResolveSeamGate"/>),
     /// and the key its record compares; nulls when there is none (said in the log). The gate's answer is kept across runs
-    /// (<see cref="RefitCore.CrossRunSeams"/>), keyed on the mod's files and the installed bodies.
+    /// (<see cref="RefitCore.CrossRunSeams"/>), keyed on the mod's files and the installed bodies. <c>Conclusive</c> is false
+    /// when the answer could not be decided now — a candidate file locked, the chest's body not installed — and then the
+    /// caller compares no seam with an existing refit.
     /// </summary>
-    private (BodyRetarget.SharedSeam? Seam, string? Key) ResolveSharedSeam(
+    private (BodyRetarget.SharedSeam? Seam, string? Key, bool Conclusive) ResolveSharedSeam(
         string modRoot, Gathered g, BodyModIndex.State state, BodySizeCatalog vanillaCat, AutoRefitTargets targets,
         IReadOnlyList<PenumbraModMeta.Redirect> redirects, BodyRetargetWriter.Record? ownRecord, ModelParts garment,
         byte[] bytes, string race, string item)
     {
         void Note(string note) => log.Information("[Proteus] auto refit: {0}: {1}", item, note);
-        if (RefitCore.SeamFilesOf(redirects, ownRecord, race, Note) is not { } files) return (null, null);
+        if (RefitCore.SeamFilesOf(redirects, ownRecord, race, Note) is not { } files) return (null, null, true);
         // A mod with no split at all says so only at Debug: that is most outfit mods.
         void Said(RefitCore.SeamGate gate, string why)
         {
@@ -2431,7 +2402,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         if (state.Find(chestDir) is not { } chestEntry)
         {
             Note("shared seam: not held — the chest's body is not installed");
-            return (null, null);
+            return (null, null, false);
         }
         AssertOffFramework("reading the shared seam");
         string key = RefitCore.SeamCacheKey(modRoot, files, chestDir, legsDir, race,
@@ -2444,7 +2415,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
             Note, chestName: chestEntry.Name));
         var (seam, seamKey, why) = RefitCore.SeamForGarment(gate, garment, bytes, chestDir, legsDir);
         if (seam == null) Said(gate, why);
-        return (seam, seamKey);
+        return (seam, seamKey, !gate.Transient);
     }
 
     /// <summary>

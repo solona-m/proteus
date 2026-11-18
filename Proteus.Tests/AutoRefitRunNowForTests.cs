@@ -12,8 +12,13 @@ namespace Proteus.Tests;
 /// </summary>
 public class AutoRefitRunNowForTests
 {
-    private static string Source([CallerFilePath] string here = "")
-        => File.ReadAllText(Path.Combine(Path.GetDirectoryName(here)!, "..", "Proteus", "Services", "AutoRefit", "AutoRefitWatcher.cs"));
+    private static string Dir([CallerFilePath] string here = "")
+        => Path.Combine(Path.GetDirectoryName(here)!, "..", "Proteus", "Services", "AutoRefit");
+
+    /// <summary>The watcher's main file and its harness-only partial, together.</summary>
+    private static string Source()
+        => File.ReadAllText(Path.Combine(Dir(), "AutoRefitWatcher.cs")) + "\n"
+           + File.ReadAllText(Path.Combine(Dir(), "AutoRefitWatcher.Harness.cs"));
 
     private static string Method(string source, string signature)
     {
@@ -72,5 +77,31 @@ public class AutoRefitRunNowForTests
         // seam is resolved for it (the refit is as before; a racial bake after the refit is RefitCore.Finish's).
         var src = Source();
         Assert.Contains("if (r.ModRoot != null && root != null && !route.Any && primary is \"_top\" or \"_dwn\"", src);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-split-waist-seam-37")]
+    public void RunNowFor_IsCompiledOutWithTheHarness()
+    {
+        // ADR 0002: the trigger's watcher half lives in the harness partial, compiled out of every CI build.
+        string harness = File.ReadAllText(Path.Combine(Dir(), "AutoRefitWatcher.Harness.cs"));
+        Assert.StartsWith("#if PROTEUS_TEST_HARNESS", harness);
+        Assert.Contains("RunNowFor(string modRoot)", harness);
+        Assert.DoesNotContain("RunNowFor(string modRoot)", File.ReadAllText(Path.Combine(Dir(), "AutoRefitWatcher.cs")));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-split-waist-seam-28")]
+    [Trait("Plan", "AC-split-waist-seam-10")]
+    public void InconclusiveResolve_ComparesNoSeam()
+    {
+        // A resolve that could not decide now (a candidate locked, the chest's body missing) compares no seam, so a held
+        // refit is put back as it is, never remade without its seam and recorded with none.
+        var src = Source();
+        Assert.Contains("(sharedSeam, seamKey, compareSeam) = ResolveSharedSeam(", src);
+        Assert.Contains("return (null, null, false);", src);
+        Assert.Contains("return (seam, seamKey, !gate.Transient);", src);
+        // And a hold that never happened records no seam at all.
+        Assert.Contains("plan.Report.SeamKept || plan.Report.SeamDropped != null", src);
     }
 }

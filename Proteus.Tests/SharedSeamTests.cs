@@ -556,4 +556,29 @@ public class SharedSeamTests
         }
         Assert.Equal(2 * Segments, ring);
     }
+
+    [Fact]
+    [Trait("Plan", "AC-split-waist-seam-8")]
+    public void Fallback_DropsPin_WhenFoldsRise()
+    {
+        // One cloth triangle, 50 mm across: the refit carries it 100 mm along -X; holding its seam corner where the author
+        // put it (the others past the band) would turn the triangle over. The hold is let go and the moves are untouched.
+        var pos = new[] { new Vector3(0f, 1f, 0.2f), new Vector3(0.05f, 1f, 0.2f), new Vector3(0.025f, 1.05f, 0.2f) };
+        var mesh = new SyntheticModel.SurfaceMesh(Cloth, pos, [Vector3.UnitZ, Vector3.UnitZ, Vector3.UnitZ], new Vector2[3],
+                                                  [[("j_kosi", 1f)], [("j_kosi", 1f)], [("j_kosi", 1f)]], [(0u, [0, 1, 2])]);
+        var parts = ModelPartReader.Read(SyntheticModel.BuildSurface([], mesh))!;
+        var sets = BodyRetarget.Sets.From(parts);
+        var delta = Enumerable.Repeat(new SecondSkinWriter.Vec3(-0.1f, 0f, 0f), sets.NodeCount).ToArray();
+        var before = (SecondSkinWriter.Vec3[])delta.Clone();
+        Assert.Equal(0, BodyRetarget.FoldedTriangles(sets, delta));
+        int seamVertex = Enumerable.Range(0, 3).First(v => At(parts, v).X == 0f);
+
+        var pin = BodyRetarget.PinSharedSeam(sets, new BodyRetarget.SharedSeam([seamVertex], 1, "fold"), delta, null, null, null,
+                                             null, parts.Positions.Length / 3);
+
+        Assert.False(pin.Kept);
+        Assert.StartsWith("holding it folded", pin.Dropped);
+        Assert.Equal(before, delta);
+        Assert.Null(pin.VertexFade);
+    }
 }

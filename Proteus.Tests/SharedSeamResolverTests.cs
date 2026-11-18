@@ -359,4 +359,26 @@ public sealed class SharedSeamResolverTests : IDisposable
 
     private static string SourceRoot([System.Runtime.CompilerServices.CallerFilePath] string here = "")
         => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, ".."));
+
+    [Fact]
+    [Trait("Plan", "EDGE-split-waist-seam-11")]
+    [Trait("Plan", "EDGE-split-waist-seam-28")]
+    public void LockedSecondLegsFile_FoundSeamNotKept()
+    {
+        // Two legs files, one locked now: the seam found from the other is used, but the answer is not cached — the
+        // locked file could have widened the split, or held the seam top.
+        Write("legs/b.mdl", SharedSeamTests.LegsBytes(doubleSided: true, y0: 0.8f));
+        var redirects = Redirects((TopPath, "top/a.mdl", "Top Size / Body A"), (LegsPath, "legs/a.mdl", "Leg Size / A"),
+                                  (LegsPath, "legs/b.mdl", "Leg Size / B"));
+        using (new FileStream(Path.Combine(root, "legs/b.mdl"), FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var gate = Gate(_ => Pick("Body"), redirects: redirects);
+            Assert.NotNull(gate.Top);
+            Assert.True(gate.Transient);
+            var cache = new RefitCore.SeamCache();
+            cache.GetOrAdd("k", () => gate);
+            Assert.Equal(0, cache.Count);
+        }
+        Assert.False(Gate(_ => Pick("Body"), redirects: redirects).Transient);
+    }
 }
