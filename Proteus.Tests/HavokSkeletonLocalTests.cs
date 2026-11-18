@@ -58,6 +58,7 @@ public class HavokSkeletonLocalTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, IvcsHighlander)]
     [Trait("Plan", "AC-refit-other-race-1")]
     [Trait("Plan", "EDGE-refit-other-race-18")]
+    [Trait("Suite", "Diagnostic")]
     public void A_custom_skeleton_is_read_from_its_animation_container_with_its_own_bones()
     {
         var ivcs = HavokSkeleton.Read(File.ReadAllBytes(LocalData.Path(IvcsHighlander)));

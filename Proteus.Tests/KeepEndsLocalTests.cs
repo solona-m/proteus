@@ -547,6 +547,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [LocalDataFact(SheerElegance, Bibo, Neolithe)]
     [Trait("Plan", "AC-keep-hand-foot-skin-3")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void A_glove_is_never_lifted_like_a_breast()
     {
         // The underbust lift is for tops. A Bibo+ corset refitted onto Neolithe's chest is where it acts: worn as a top,
@@ -862,6 +863,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "EDGE-keep-ends-studio-10")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Studio_game_boots_route_as_the_automatic_refit_does()   // [EDGE-keep-ends-studio-10]
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
@@ -887,6 +889,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, Bibo)]
     [Trait("Plan", "EDGE-keep-ends-studio-11")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Studio_baked_boots_keep_their_feet()   // [EDGE-keep-ends-studio-11]
     {
         // A man's game boots baked onto a woman, as the panel bakes them, then refitted with the foot kept and drawn with

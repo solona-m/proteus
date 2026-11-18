@@ -124,6 +124,7 @@ public class CrossSexRefitVanillaLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, TbseX, IvcsMen, LocalData.TbseUvMaps)]
     [Trait("Plan", "EDGE-vanilla-cross-sex-legs-9")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Tbse_x_sfw_legs_match_too_little_and_are_not_saved() // [EDGE-vanilla-cross-sex-legs-9]
     {
         var s = Assert.Single(CrossSexRefitJob.Run(Inputs(TbseX, "sfw", false)).Sizes);

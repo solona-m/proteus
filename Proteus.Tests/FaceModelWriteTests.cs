@@ -36,6 +36,8 @@ public class FaceModelWriteTests(ITestOutputHelper o)
     /// early, neither holds.
     /// </summary>
     [LocalDataFact(LocalData.GameData)]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void ParseFindsAFacesBoundingBoxes()
     {
         int faces = 0, withNeck = 0;

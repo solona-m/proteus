@@ -161,6 +161,7 @@ public class CrotchWeightsLocalTests(ITestOutputHelper output)
     [InlineData(Neolithe, "DEFAULT · Gen A Large")]
     [InlineData(Bibo, "Type A - Large")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Full_back_briefs_are_not_vetoed_on_the_largest_sizes(string body, string label)
     {
         // [AC-crotch-leg-weights-9] [EDGE-crotch-leg-weights-22]

@@ -1179,6 +1179,7 @@ public class KeepEndsTests
     [Fact]
     [Trait("Plan", "EDGE-keep-ends-studio-25")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Studio_limb_ambiguous_still_prefills_and_no_skin_does_not()   // [EDGE-keep-ends-studio-25]
     {
         InBodies(dir =>

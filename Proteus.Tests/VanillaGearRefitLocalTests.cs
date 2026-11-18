@@ -1168,6 +1168,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [InlineData(Coatee, Coconut)]
     [Trait("Plan", "AC-studio-game-top-1")]
     [Trait("Plan", "AC-studio-game-top-2")]
+    [Trait("Suite", "Diagnostic")]
     public void A_studio_game_top_with_defaults_is_the_automatic_refit(string garmentName, string rel)
     {
         var r = Plan(garmentName, Rosaline, rel);

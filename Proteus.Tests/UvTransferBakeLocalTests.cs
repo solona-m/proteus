@@ -27,6 +27,7 @@ public class UvTransferBakeLocalTests(ITestOutputHelper output)
     /// <summary>A body file the job cannot read fails the bake whole: no map comes back, and the reason does.</summary>
     [LocalDataFact(LocalData.GameData, Bibo, Tbse)]
     [Trait("Plan", "EDGE-tbse-uvmap-28")]
+    [Trait("Suite", "Diagnostic")]
     public void Unreadable_input_fails_without_maps() // [EDGE-tbse-uvmap-28]
     {
         var good = Inputs();

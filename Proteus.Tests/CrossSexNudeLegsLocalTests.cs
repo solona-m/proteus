@@ -323,6 +323,8 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
 
     [LocalDataFact(LocalData.GameData, StormblessedLegs, LavaBod, CrossSexRefitLocalTests.Tbse)]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-4")]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void A_pair_the_match_refuses_never_tries_the_nude_legs() // [EDGE-cross-sex-area-coverage-4]
     {
         // No body maps: the SFW pair is refused in the match itself, before any share is measured.
@@ -343,6 +345,8 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, CrossSexRefitLocalTests.SheerLegs, CrossSexRefitLocalTests.Bibo,
                    CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-cross-sex-area-coverage-3")]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void Sheer_legs_read_as_nude_bibo_fit_gen_a() // [AC-cross-sex-area-coverage-3]
     {
         // Its skin lies exactly on Bibo+'s nude Type A (and B, C), 4 mm from SFW Undies: made nude, not SFW.
@@ -399,6 +403,7 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-tbsex-nude-legs-1")]
     [Trait("Plan", "AC-tbsex-nude-legs-6")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Coverage_refusal_tries_the_nude_legs() // [AC-tbsex-nude-legs-1] [AC-tbsex-nude-legs-6]
     {
         var bibo = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.Bibo));

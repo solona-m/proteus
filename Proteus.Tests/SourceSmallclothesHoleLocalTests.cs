@@ -407,6 +407,7 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
     }
 
     [LocalDataFact(LocalData.GameData, MuseRoot)]
+    [Trait("Suite", "Diagnostic")]
     public void The_game_legs_panties_follow_the_rule()
     {
         // [EDGE-bra-hole-transfer-3] The game's legs stand their panties over a hole too (see the survey), but only its

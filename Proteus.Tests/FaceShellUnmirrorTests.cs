@@ -55,6 +55,7 @@ public class FaceShellUnmirrorTests(ITestOutputHelper o)
     /// triangles across the sheet.
     /// </summary>
     [LocalDataFact(LocalData.GameData)]
+    [Trait("Suite", "Diagnostic")]
     public void A_face_shell_with_its_shapes_baked_in_keeps_its_sides()
     {
         var plain = CutAndMeasure(withShapes: false);

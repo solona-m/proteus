@@ -222,6 +222,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     [Fact]
     [Trait("Plan", "AC-refit-nipple-smooth-6")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Only_moved_skin_is_reshaded_and_nothing_folds()
     {
         var garmentBytes = Garment(0f, 0f, BothCups);

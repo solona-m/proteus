@@ -494,6 +494,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [LocalDataFact(LocalData.GameData, Sheer, CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-sizeset-cross-sex-5")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-20")]
+    [Trait("Suite", "Diagnostic")]
     public void No_mens_wearer_is_said_with_why() // [AC-sizeset-cross-sex-5] [EDGE-sizeset-cross-sex-20]
     {
         // The game's racial deformer can't be read: no men's wearer for any size. Said as that, nothing written.

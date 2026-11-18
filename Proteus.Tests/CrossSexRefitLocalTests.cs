@@ -222,6 +222,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, SheerTop, Bibo, Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-uvmap-nipples-10")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void RefitMap_sheer_elegance_bust_lands_at_tbse_nipple_height() // [AC-uvmap-nipples-10] [EDGE-uvmap-nipples-31] [AC-uvmap-nipples-8]
     {
         var inputs = Inputs(SheerTop, 101, Bibo, UvBakeInputs.BiboChest, Tbse, UvBakeInputs.TbseChest);
@@ -458,6 +459,8 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     /// for, nor one that falls through to one.</summary>
     [LocalDataFact(LocalData.GameData, ThornPrincess)]
     [Trait("Plan", "AC-own-model-overwrite-8")]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void Thorn_princess_s_mens_save_is_not_said_to_be_worn_by_races_with_their_own_model() // [AC-own-model-overwrite-8]
     {
         var redirects = PenumbraModMeta.ReadAllRedirects(LocalData.Path(ThornPrincess));

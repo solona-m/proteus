@@ -135,6 +135,7 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     [InlineData((ushort)1401, (ushort)201)]   // an Au Ra's, sunk into a Midlander's
     [InlineData((ushort)201, (ushort)801)]    // a Midlander's, floating off a Miqo'te's
     [Trait("Plan", "EDGE-hair-race-port-30")]
+    [Trait("Suite", "Diagnostic")]
     public void Unbent_hair_fails_the_fit_check(ushort from, ushort to)
     {
         var game = Load();
@@ -333,6 +334,7 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     /// <summary>A port keeps every shape key, LOD and mesh of the game's own hairstyles that carry them.</summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "EDGE-hair-race-port-26")]
+    [Trait("Suite", "Diagnostic")]
     public void Port_keeps_shapes_and_lods()
     {
         var game = Load();

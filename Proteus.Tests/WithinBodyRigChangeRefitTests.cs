@@ -117,6 +117,7 @@ public class WithinBodyRigChangeRefitTests(ITestOutputHelper output)
     /// the cloth sits no further from its skin's weighting than the author had it, and no new ragged edges appear.
     /// </summary>
     [LocalDataFact(Rue, OldThing)]
+    [Trait("Suite", "Diagnostic")]
     public void Rue_Yiggle_to_plain_chest_takes_the_new_rig_and_keeps_the_author_s_fit()
     {
         string rue = LocalData.Path(Rue);

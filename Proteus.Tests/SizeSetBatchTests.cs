@@ -416,6 +416,8 @@ public class SizeSetBatchTests : IDisposable
 
     [Fact]
     [Trait("Plan", "EDGE-headless-size-set-23")]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void No_ends_through_the_command_leaves_shoes_out() // [EDGE-headless-size-set-23]
     {
         var (exit, stdout, stderr) = Cli(Args(ShoeMod(), "rue"));

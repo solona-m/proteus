@@ -53,6 +53,7 @@ public class RacialRouteLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-racial-gear-upscale-5")]
     [Trait("Plan", "EDGE-racial-gear-upscale-12")]
     [Trait("Plan", "EDGE-racial-gear-upscale-16")]
+    [Trait("Suite", "Diagnostic")]
     public void Shaping_down_and_back_gives_the_model_back(string path)
     {
         var data = Data();
@@ -189,6 +190,7 @@ public class RacialRouteLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-racial-gear-upscale-5")]
     [Trait("Plan", "AC-racial-gear-upscale-6")]
     [Trait("Plan", "EDGE-racial-gear-upscale-10")]
+    [Trait("Suite", "Diagnostic")]
     public void Pantalettes_refit_onto_bibo_land_on_her_drawn_body()
     {
         var data = Data();

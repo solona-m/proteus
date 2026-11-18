@@ -563,6 +563,7 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
     [LocalDataTheory(LocalData.GameData, Bibo, LocalData.DeiGratiaPack)]
     [MemberData(nameof(Paths))]
     [Trait("Plan", "AC-seam-weights-3")]
+    [Trait("Suite", "Diagnostic")]
     public void Dei_Gratia_seam_rule_moves_nothing(string path)
     {
         var i = Read(Bibo, NudeM);

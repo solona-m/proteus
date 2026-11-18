@@ -79,6 +79,8 @@ public class DesignRestoreSweepLocalTests(ITestOutputHelper output)
 
     [LocalDataFact(LocalData.YabMod, LocalData.CliaMod, LocalData.GameData)]
     [Trait("Plan", "AC-sweep-keeps-deps-4")]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void LocalData_YabSkinOff_Clia_SparedViaBiboMaterial()
     {
         var (kept, strays, resolved) = Case(skin: null);

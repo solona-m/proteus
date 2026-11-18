@@ -54,6 +54,9 @@ public class SuiteBudgetTests
         "SizeSetMadeOnLocalTests.Cli_made_on_not_a_body_is_refused_and_writes_nothing",
         "SizeSetMadeOnLocalTests.Oblique_without_made_on_gets_nothing_and_is_told_to_choose_it", // manifest byte-identical after a refused run
         "SizeSetMadeOnSkinlessLocalTests.Second_Tutting_run_adds_nothing",
+        // Direct ModelMaterialWriter / ModelAttributeWriter calls on real models (kept although ≥ 20 s in the full run).
+        "MatcapTailLocalTests.Real_tail_models_take_matcap_published_beside_the_games_material",
+        "MatcapDownstreamLocalTests.Refit_sizeset_hatcompat_lod0geometry_brush_no_nan_boundary_coincident",
     };
 
     /// <summary>Failing tests stay in the release run so the failure stays visible. Drop an entry once it is fixed.</summary>

@@ -310,6 +310,7 @@ public class OtherRaceRefitLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "EDGE-refit-race-down-3")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void A_game_made_for_side_below_is_each_race_s_own_body()
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));

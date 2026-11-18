@@ -459,6 +459,7 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
     /// part standing prouder than it. ("Pasties", which the plan named too, ships no top model to refit.)</summary>
     [LocalDataFact(NipSlip, Bibo, Lava)]
     [Trait("Plan", "AC-refit-nipple-smooth-3")]
+    [Trait("Suite", "Diagnostic")]
     public void Gear_made_on_a_nippled_body_keeps_its_nipples()
     {
         var garment = File.ReadAllBytes(Path.Combine(LocalData.Path(NipSlip), "size/medium/chara/equipment/e6058/model/c0201e6058_top.mdl"));
@@ -544,6 +545,7 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
     /// from TBSE onto TBSE-X: the pass reads the shirt's cover, and the refit fits no worse than without it.</summary>
     [LocalDataFact(CasualFitShirt, TheBodySe, TheBodySeX)]
     [Trait("Plan", "EDGE-refit-nipple-smooth-23")]
+    [Trait("Suite", "Diagnostic")]
     public void A_man_s_shirt_refit_is_no_worse()
     {
         string tbse = Path.Combine(LocalData.Path(TheBodySe), "common/1/c0101e0000_top.mdl");

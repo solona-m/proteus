@@ -89,6 +89,7 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, CrossSexRefitLocalTests.SheerTop, CrossSexRefitLocalTests.Bibo,
                    CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-mens-ends-crotch-9")]
+    [Trait("Suite", "Diagnostic")]
     public void Sheer_top_made_mens_is_unchanged() // [AC-mens-ends-crotch-9]
         => Check("sheer top", SheerTopPin,
                  Hash(CrossSexRefitJob.Run(Inputs(CrossSexRefitLocalTests.SheerTop, 101, CrossSexRefitLocalTests.Bibo,

@@ -572,6 +572,7 @@ public class SizeSetSourceTests(ITestOutputHelper output)
     [LocalDataFact(Yab, Rue, BeMine)]
     [Trait("Plan", "EDGE-bulk-nearest-source-1")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Identical_author_sizes_tie_to_author_order()
     {
         string copy = CopyWithout(BeMine, "Size", "XSmall", "Small", "Medium", "Large", "XLarge",

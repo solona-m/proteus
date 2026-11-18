@@ -110,6 +110,7 @@ public class PioneerBottomsRefitTests(ITestOutputHelper output)
     /// slit opens at the back.
     /// </summary>
     [LocalDataFact(LocalData.GameData, LocalData.Mods + ":Neolithe [ALL IN ONE]")]
+    [Trait("Suite", "Diagnostic")]
     public void The_new_skin_stops_under_the_hem_and_no_slit_opens_at_the_back()
     {
         var refit = RefitOntoNeolitheGenCSmall();

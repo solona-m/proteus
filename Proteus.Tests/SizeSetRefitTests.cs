@@ -700,6 +700,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.ShiftPack, Yab, Bibo)]
     [Trait("Plan", "AC-keep-ends-studio-6")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void A_size_the_body_mod_lacks_is_noted_and_the_rest_made()   // [AC-keep-ends-studio-6]
     {
         // Bibo+ without its Type A Medium legs: no Bibo M shoe, and a note saying so; Bibo S and L are made.
@@ -999,6 +1000,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [LocalDataFact(Heartthrob, Bibo, Rue, Yab)]
     [Trait("Plan", "EDGE-keep-ends-studio-23")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void A_skin_only_shoe_follows_the_legs_options()   // [EDGE-keep-ends-studio-23]
     {
         // Heartthrob's Small skirt and a shoe reaching no leg, sized together in "Bottom Size": each size the skirt
@@ -1553,6 +1555,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, Lace, Rue)]
     [Trait("Plan", "EDGE-sizeset-game-body-source-9")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Lace_boots_beside_legs_read_off_no_body_make_nothing()   // [EDGE-sizeset-game-body-source-9]
     {
         // The boots in one group with legs the size set cannot read: the legs are never read off the game's body, so
