@@ -323,6 +323,7 @@ public sealed partial class PartsPanel : IStudioHarness
         matcapRecordFor = null;
         try { matcapRoom = brushBase != null ? ModelMaterialWriter.MaterialRoom(brushBase) : 0; } catch { matcapRoom = 0; }
         matcapRowOnly = request.Row;   // PROTOTYPE
+        if (request.Row > 0) matcapRowPick = request.Row;
         matcapRowSub = request.Sub;
         RequestMatcapPreview(choice!);
         return new StudioMatcapPreviewOutcome(null, MatcapPreviewView(), View());

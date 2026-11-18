@@ -109,6 +109,7 @@ public sealed partial class PartsPanel
     internal void SetMatcapRow(int row, SubRowPick sub)
     {
         matcapRowOnly = Math.Clamp(row, 0, 16);
+        if (matcapRowOnly > 0) matcapRowPick = matcapRowOnly;
         matcapRowSub = sub;
         PumpMatcapPreview();
     }
@@ -126,25 +127,75 @@ public sealed partial class PartsPanel
         return chosen;
     }
 
-    private static readonly string[] MatcapRowLabels =
-        ["Whole part", .. Enumerable.Range(1, 16).Select(r => $"Row {r:00}")];
     private static readonly string[] MatcapSubLabels = ["A and B", "A only", "B only"];
 
-    /// <summary>PROTOTYPE: the row picker, above the pane (English only until it ships).</summary>
+    /// <summary>PROTOTYPE: the last row picked, kept while the cut is ticked off so ticking it on comes back to it.</summary>
+    private int matcapRowPick;
+
+    /// <summary>PROTOTYPE: the picker's rows for one material, read off the framework thread, by (mod, model, material).</summary>
+    private string? matcapRowInfoKey;
+    private Task<MatcapStudio.RowInfo?>? matcapRowInfo;
+
+    /// <summary>The material the row picker shows: the first ticked part's, else the first part that can take a matcap.</summary>
+    private string? MatcapRowMaterial()
+    {
+        if (parts == null) return null;
+        var ticks = parts.Parts.Where(p => ticked.Contains(p.Label)).ToList();
+        var pool = ticks.Count > 0 ? ticks : parts.Parts.Where(p => p.Island < 0 && CanTick(p) && !MatcapPlan.IsOnMatcap(p)).ToList();
+        return pool.Select(p => p.Material).FirstOrDefault(m => !string.IsNullOrEmpty(m));
+    }
+
+    /// <summary>
+    /// PROTOTYPE: "Only on one colour row", then the Colors window's own row picker for the part's material — swatches,
+    /// only the rows its index map uses, and hovering a row lights it on the character (English only until it ships).
+    /// </summary>
     private void DrawMatcapRowPicker()
     {
-        ImGui.TextDisabled("Prototype: matcap on one colour row (click a matcap to preview; Apply not built yet)");
-        ImGui.SetNextItemWidth(130 * ImGuiHelpers.GlobalScale);
-        int row = matcapRowOnly;
-        if (ImGui.Combo("##matcapRow", ref row, MatcapRowLabels, MatcapRowLabels.Length)) SetMatcapRow(row, matcapRowSub);
-        if (matcapRowOnly > 0)
+        bool on = matcapRowOnly > 0;
+        if (ImGui.Checkbox("Only on one colour row (prototype)##matcapRowOn", ref on))
+            SetMatcapRow(on ? Math.Max(1, matcapRowPick) : 0, matcapRowSub);
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Click a matcap to preview it on just that row's pixels. Apply isn't built yet.");
+        if (!on) return;
+
+        // The rows of the material, read once per (mod, model, material) on a worker.
+        var mat = MatcapRowMaterial();
+        var root = ModRoot();
+        if (mat == null || root == null || modelIndex < 0 || modelIndex >= models.Count) return;
+        var model = models[modelIndex];
+        var key = $"{root}|{model.File}|{mat}";
+        if (key != matcapRowInfoKey)
         {
-            ImGui.SameLine();
-            ImGui.SetNextItemWidth(110 * ImGuiHelpers.GlobalScale);
-            int sub = matcapRowSub switch { SubRowPick.A => 1, SubRowPick.B => 2, _ => 0 };
-            if (ImGui.Combo("##matcapRowSub", ref sub, MatcapSubLabels, MatcapSubLabels.Length))
-                SetMatcapRow(matcapRowOnly, sub switch { 1 => SubRowPick.A, 2 => SubRowPick.B, _ => SubRowPick.Both });
+            matcapRowInfoKey = key;
+            var env = MatcapEnv();
+            matcapRowInfo = Task.Run(() =>
+            {
+                try { return MatcapStudio.ReadRowInfo(root, model.File, model.GamePath, mat, env); }
+                catch (Exception ex) { log.Warning("[Proteus] matcap row picker: {0}", ex.Message); return null; }
+            });
         }
+
+        if (matcapRowInfo is not { IsCompleted: true } task) { ImGui.TextDisabled("Reading the colour rows…"); return; }
+        if (task.Result is not { } info)
+        {
+            ProteusStyle.DisabledWrapped("This part's material has no colour rows to pick from.");
+            return;
+        }
+
+        int pick = matcapRowOnly;
+        if (ColorTableEditor.DrawRowPicker($"matcaprow_{key}", info.Rows, info.UsedRows, [info.Leaf], ref pick, info.UsedSubRow)
+            || pick != matcapRowOnly)
+        {
+            matcapRowPick = pick;
+            SetMatcapRow(pick, matcapRowSub);
+        }
+
+        ImGui.SetNextItemWidth(110 * ImGuiHelpers.GlobalScale);
+        int sub = matcapRowSub switch { SubRowPick.A => 1, SubRowPick.B => 2, _ => 0 };
+        if (ImGui.Combo("Sub-row##matcapRowSub", ref sub, MatcapSubLabels, MatcapSubLabels.Length))
+            SetMatcapRow(matcapRowOnly, sub switch { 1 => SubRowPick.A, 2 => SubRowPick.B, _ => SubRowPick.Both });
+        if (info.UsedSubRow != null && matcapRowSub != SubRowPick.Both && matcapRowSub.ToString() != info.UsedSubRow)
+            ImGui.TextColored(ProteusStyle.Warn, $"This material only uses sub-row {info.UsedSubRow}.");
     }
 
     private void RescanMatcaps(bool force)

@@ -343,25 +343,69 @@ internal static class MatcapStudio
     /// (<c>_id</c>: red = row pair, green = sub-row A at 255), or for a material without one from the normal's alpha.
     /// Null when written, else why not.
     /// </summary>
+    /// <summary>A texture the mod draws at <paramref name="gamePath"/> (its default data first), else the game's, decoded.</summary>
+    private static (byte[] Rgba, int W, int H)? LoadTex(string modRoot, List<PenumbraModMeta.Redirect> redirects, Environment env,
+                                                        string? gamePath)
+    {
+        if (string.IsNullOrEmpty(gamePath)) return null;
+        var gp = gamePath.Replace('\\', '/');
+        byte[]? bytes = null;
+        foreach (var r in redirects.Where(r => string.Equals(r.GamePath.Replace('\\', '/'), gp, StringComparison.OrdinalIgnoreCase))
+                                   .OrderBy(r => r.Source.Length == 0 ? 0 : 1))
+        {
+            try { var full = MatcapWriter.Full(modRoot, r.File); if (File.Exists(full)) { bytes = File.ReadAllBytes(full); break; } }
+            catch { }
+        }
+        bytes ??= env.ReadGameFile(gp);
+        if (bytes == null) return null;
+        var t = env.Loader.LoadTexBytesAsRgba(bytes, gp);
+        return t is { } x ? (x.rgba, x.width, x.height) : null;
+    }
+
+    /// <summary>What the Matcaps tool's row picker shows for one material: its rows, the rows (and the one sub-row,
+    /// when all agree) its index map selects, null when unknown, and the leaf the game loads it by.</summary>
+    public sealed record RowInfo(List<ColorTableRowPreset> Rows, HashSet<int>? UsedRows, string? UsedSubRow, string Leaf);
+
+    /// <summary>
+    /// <see cref="RowInfo"/> for <paramref name="materialName"/> as the model at <paramref name="modelRel"/> draws it, or
+    /// null when the material has no colour table. Reads files and decodes the index map: call off the framework thread.
+    /// </summary>
+    public static RowInfo? ReadRowInfo(string modRoot, string modelRel, string modelGamePath, string materialName, Environment env)
+    {
+        if (MatcapPlan.TargetOf(modelGamePath, out _) is not { } target) return null;
+        var redirects = PenumbraModMeta.ReadAllRedirects(modRoot);
+        if (SourceMaterial(modRoot, target, materialName, redirects, env, modelRel) is not { } mtrl) return null;
+        if (GearMaterialWriter.ReadRows(mtrl) is not { } rows) return null;
+        var leaf = materialName.Replace('\\', '/');
+        leaf = leaf[(leaf.LastIndexOf('/') + 1)..];
+        HashSet<int>? used = null;
+        string? sub = null;
+        if (MatcapMaterial.ReadHeader(mtrl) is { } sh)
+        {
+            var idPath = sh.TextureOf(ShaderUpgradePlan.SamplerIndex);
+            if (!string.IsNullOrEmpty(idPath))
+            {
+                if (LoadTex(modRoot, redirects, env, idPath) is { } id)
+                {
+                    var scan = ContentIndexTexture.Read(id.Rgba);
+                    if (scan.Rows.Count > 0) { used = scan.Rows; sub = scan.SubRow; }
+                }
+            }
+            else if (LoadTex(modRoot, redirects, env, sh.TextureOf(MatcapMaterial.SamplerNormal)) is { } n)
+            {
+                // No index map: the normal's alpha picks the row (legacy materials), one column only.
+                var rowsUsed = new HashSet<int>();
+                for (int i = 3; i < n.Rgba.Length; i += 4) rowsUsed.Add(ContentIndexTexture.RowOf(n.Rgba[i]));
+                if (rowsUsed.Count > 0) used = rowsUsed;
+            }
+        }
+        return new RowInfo(rows, used, sub, leaf);
+    }
+
     private static string? BakeRowNormal(string modRoot, List<PenumbraModMeta.Redirect> redirects, Environment env,
                                          MatcapMaterial.Header sh, string outPath)
     {
-        (byte[] Rgba, int W, int H)? Load(string? gamePath)
-        {
-            if (string.IsNullOrEmpty(gamePath)) return null;
-            var gp = gamePath.Replace('\\', '/');
-            byte[]? bytes = null;
-            foreach (var r in redirects.Where(r => string.Equals(r.GamePath.Replace('\\', '/'), gp, StringComparison.OrdinalIgnoreCase))
-                                       .OrderBy(r => r.Source.Length == 0 ? 0 : 1))
-            {
-                try { var full = MatcapWriter.Full(modRoot, r.File); if (File.Exists(full)) { bytes = File.ReadAllBytes(full); break; } }
-                catch { }
-            }
-            bytes ??= env.ReadGameFile(gp);
-            if (bytes == null) return null;
-            var t = env.Loader.LoadTexBytesAsRgba(bytes, gp);
-            return t is { } x ? (x.rgba, x.width, x.height) : null;
-        }
+        (byte[] Rgba, int W, int H)? Load(string? gamePath) => LoadTex(modRoot, redirects, env, gamePath);
 
         var nrm = Load(sh.TextureOf(MatcapMaterial.SamplerNormal));
         if (nrm is not { } n) return "its normal map could not be read";

@@ -55,7 +55,25 @@ public class RowHoverWiringTests
     }
 
     private static string Editor => Source("Gui/ColorTableEditor.cs");
-    private static string DrawRows => Method(Editor, "public static void DrawRows(");
+    /// <summary>DrawRows with the row buttons it draws through (DrawRowButtons, shared with the pick-only DrawRowPicker).</summary>
+    private static string DrawRows
+    {
+        get
+        {
+            var rows = Method(Editor, "public static void DrawRows(");
+            Assert.Contains("DrawRowButtons(", rows);
+            return rows + Method(Editor, "private static void DrawRowButtons(");
+        }
+    }
+
+    /// <summary>The Matcaps tool's pick-only picker draws the same buttons, so it lands and lights rows the same way.</summary>
+    [Fact]
+    public void DrawRowPicker_draws_through_the_shared_row_buttons()
+    {
+        var picker = Method(Editor, "public static bool DrawRowPicker(");
+        Assert.Contains("DrawRowButtons(", picker);
+        Assert.Contains("RowPickerView.ToggleRelevant(usedRows)", picker);
+    }
     private static string Commit => Method(Editor, "internal static void CommitRowHover(");
     private static string Status => Source("Gui/StatusWindow.cs");
     private static string Gear => Source("Interop/ColorTableHighlighter.cs");

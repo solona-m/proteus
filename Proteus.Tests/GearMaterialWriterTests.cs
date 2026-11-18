@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using Proteus.Services;
 using Xunit;
 
@@ -572,5 +573,37 @@ public class GearMaterialWriterTests
         for (int i = at; i < at + len && i < a.Length && i < b.Length; i++)
             if (a[i] != b[i]) n++;
         return n;
+    }
+
+    /// <summary>
+    /// <see cref="GearMaterialWriter.ReadRows"/> — the row picker's swatches for a regular mod's material — reads back
+    /// what <see cref="GearMaterialWriter.PatchColorTable"/> wrote, on the right row pair and sub-row, glow as colour and
+    /// strength, and is null without a colour table.
+    /// </summary>
+    [Fact]
+    public void ReadRows_reads_back_the_written_colours_by_row_and_sub_row()
+    {
+        // The smallest material with a colour table: no textures, no strings, one colour set, a 32×64 table.
+        var mtrl = new byte[16 + 4 + 32 * 64];
+        mtrl[14] = 1;
+        var rows = new Dictionary<int, GearColorRow>
+        {
+            [29] = new() { Diffuse = (1f, 0f, 0.5f), Specular = (0f, 1f, 0f) },   // row 15, sub-row B
+            [0] = new() { Emissive = (0f, 0f, 0.5f) },                           // row 1, sub-row A
+        };
+        var read = GearMaterialWriter.ReadRows(GearMaterialWriter.PatchColorTable(mtrl, rows));
+
+        Assert.NotNull(read);
+        Assert.Equal(16, read!.Count);
+        var r15 = read.Single(r => r.Row == 15);
+        Assert.Equal("#FF0080", r15.SubRowB!.Diffuse);
+        Assert.Equal("#00FF00", r15.SubRowB.Specular);
+        Assert.Equal("#000000", r15.SubRowA!.Diffuse);
+        var r1 = read.Single(r => r.Row == 1);
+        Assert.Equal(0.5f, r1.SubRowA!.Emissive, 3);
+        Assert.Equal("#000080", r1.SubRowA.EmissiveColor);
+
+        mtrl[14] = 0;
+        Assert.Null(GearMaterialWriter.ReadRows(mtrl));
     }
 }
