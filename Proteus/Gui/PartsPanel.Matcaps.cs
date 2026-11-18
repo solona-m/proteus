@@ -831,9 +831,6 @@ public sealed partial class PartsPanel
         var (_, panel, chat) = MatcapPanelModel.Report(new MatcapPanelModel.JobReport(r.Outcome.Message, r.IsApply, r.ModelCount, r.RowHoles,
                                                                                       r.SiblingsSkipped, r.AlphaTested, r.Lod0Cut, extra, r.PortKept,
                                                                                       r.RowGlass, r.RowGlassTriangles));
-        // An Apply says whether it converted glass; an Undo or Forget took any conversion away.
-        matcapRowGlass = r.IsApply && r.RowGlass;
-        matcapRowGlassTriangles = matcapRowGlass ? r.RowGlassTriangles : 0;
         status = panel;
         statusIsError = false;
         matcapError = null;
@@ -843,6 +840,10 @@ public sealed partial class PartsPanel
             r.SiblingsSkipped.Count > 0 ? " Skipped: " + string.Join(", ", r.SiblingsSkipped) + "." : "",
             extra.Count > 0 ? " " + string.Join(" ", extra) : "");
         AfterModChange(r.Root, r.Outcome.Files.Where(f => f.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)).ToList());
+        // After AfterModChange (whose preview take-down clears the line): an Apply says whether it converted glass; an Undo
+        // or Forget took any conversion away.
+        matcapRowGlass = r.IsApply && r.RowGlass;
+        matcapRowGlassTriangles = matcapRowGlass ? r.RowGlassTriangles : 0;
     }
 
     /// <summary>The warning when the character draws another file for this game path than the ones written.</summary>
