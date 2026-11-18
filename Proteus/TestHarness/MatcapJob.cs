@@ -127,7 +127,22 @@ internal static class MatcapJob
             }),
             materialRoom = room,
             rowFollowWarn = RowFollowWarn(modRoot, material ?? MatcapPlan.RowMaterials(parts, kind, attrs).FirstOrDefault(), port),
+            rowInfo = RowInfoView(modRoot, rel!, gamePath!, material ?? MatcapPlan.RowMaterials(parts, kind, attrs).FirstOrDefault(), port),
         };
+    }
+
+    /// <summary>
+    /// The rows the row material's index map uses (and the sub-row when every texel agrees): what the Studio's row picker
+    /// offers, so QA picks a row the part really draws. Null when the material has no colour table. Decodes the index map:
+    /// never on the framework thread (this body is built on the job's worker).
+    /// </summary>
+    internal static object? RowInfoView(string modRoot, string rel, string gamePath, string? material, MatcapHarnessPort port)
+    {
+        if (material == null) return null;
+        MatcapStudio.RowInfo? info;
+        try { info = MatcapStudio.ReadRowInfo(modRoot, rel, gamePath, material, port.Env); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException) { info = null; }
+        return info == null ? null : new { material, usedRows = info.UsedRows?.Order().ToList(), usedSubRow = info.UsedSubRow };
     }
 
     /// <summary>Whether the row material has colours set in Proteus the cut won't follow (the panel's warning).</summary>

@@ -111,6 +111,10 @@ internal static class MatcapWriter
         public static Outcome Refuse(string code, string message) => new(code, message, []);
     }
 
+    /// <summary>The refusal for an unreadable <c>Proteus/matcaps.json</c> (also the gear shader upgrade's, which then holds).</summary>
+    internal static string RecordUnreadableMessage => ProteusLoc.Localize("Matcap.Refused.RecordUnreadable",
+        "Proteus's record of this mod's matcaps (Proteus/matcaps.json) could not be read, so nothing was changed.");
+
     public const string CodeLegacy = "legacy-mod", CodeEdited = "edited", CodeLaterFeature = "later-feature",
                         CodeNothing = "nothing-to-undo", CodeCrossKind = "cross-kind-change", CodeUnreadable = "record-unreadable",
                         CodeFailed = "failed", CodeManaged = "imported-piece";
@@ -131,8 +135,7 @@ internal static class MatcapWriter
                     "This mod is still in Penumbra's old folder layout. Open it in Penumbra once so it is updated, then try again."));
             var record = MatcapRecord.Read(modRoot);
             if (record.Unreadable)
-                return Outcome.Refuse(CodeUnreadable, ProteusLoc.Localize("Matcap.Refused.RecordUnreadable",
-                    "Proteus's record of this mod's matcaps (Proteus/matcaps.json) could not be read, so nothing was changed."));
+                return Outcome.Refuse(CodeUnreadable, RecordUnreadableMessage);
 
             // Every place this call will write, checked before anything is: a model, a material or a file name from a mod's
             // own data that would land outside the mod (ModPath) refuses the whole apply with nothing written.
@@ -149,6 +152,14 @@ internal static class MatcapWriter
                     return Outcome.Refuse(CodeEdited, string.Format(ProteusLoc.Localize("Matcap.Refused.Changed.Fmt",
                         "{0} changed while the matcap was being prepared, so nothing was written. Try again."), m.Rel));
             }
+            // A row cut's mod-file sources must still be what it was cut from (the gear shader upgrade may have undone
+            // one since Prepare): size and write time first, a hash only when either differs or the time wasn't captured.
+            foreach (var src in req.Materials.Where(p => p.Row != null)
+                                    .SelectMany(p => p.Row!.Cut.Files)
+                                    .SelectMany(f => new[] { f.Source, f.Normal, f.Index }))
+                if (src is { Game: false, File: { Length: > 0 } sf } && !SourceUnchanged(modRoot, src))
+                    return Outcome.Refuse(CodeEdited, string.Format(ProteusLoc.Localize("Matcap.Refused.Changed.Fmt",
+                        "{0} changed while the matcap was being prepared, so nothing was written. Try again."), sf));
 
             if (string.IsNullOrEmpty(record.Token)) record.Token = req.Token;
             var created = new List<string>();          // files this call created
@@ -335,6 +346,21 @@ internal static class MatcapWriter
         }
     }
 
+    /// <summary>A row source still as it was cut: same size and write time, or (either differs, or no time was captured)
+    /// the same hash. A missing or unreadable file has changed.</summary>
+    internal static bool SourceUnchanged(string modRoot, MatcapRecord.RowSource s)
+    {
+        try
+        {
+            if (s.File == null || !ModPath.TryResolve(modRoot, s.File, out var full)) return false;
+            var fi = new FileInfo(full);
+            if (!fi.Exists) return false;
+            if (s.MtimeUtc != 0 && fi.Length == s.Size && fi.LastWriteTimeUtc.Ticks == s.MtimeUtc) return true;
+            return HairPortPlan.Sha8(File.ReadAllBytes(full)) == s.Sha8;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
+    }
+
     /// <summary>
     /// The record of a prepared row matcap: its cut files (<c>Proteus Matcaps/&lt;cut stem&gt;[_k].mtrl</c>) with every
     /// redirect and source, its cut normals (named as their game paths, under our folder) and the per-folder fingerprint.
@@ -387,8 +413,7 @@ internal static class MatcapWriter
         {
             var record = MatcapRecord.Read(modRoot);
             if (record.Unreadable)
-                return Outcome.Refuse(CodeUnreadable, ProteusLoc.Localize("Matcap.Refused.RecordUnreadable",
-                    "Proteus's record of this mod's matcaps (Proteus/matcaps.json) could not be read, so nothing was changed."));
+                return Outcome.Refuse(CodeUnreadable, RecordUnreadableMessage);
             var entry = record.Materials.FirstOrDefault(m => string.Equals(m.Name, materialName, StringComparison.OrdinalIgnoreCase));
             if (entry == null) return Outcome.Refuse(CodeNothing, ProteusLoc.Localize("Matcap.Refused.NoEntry", "That matcap is not in this mod's record."));
             if (entry.Source.Kind != source.Kind)
@@ -515,8 +540,7 @@ internal static class MatcapWriter
         {
             var record = MatcapRecord.Read(modRoot);
             if (record.Unreadable)
-                return Outcome.Refuse(CodeUnreadable, ProteusLoc.Localize("Matcap.Refused.RecordUnreadable",
-                    "Proteus's record of this mod's matcaps (Proteus/matcaps.json) could not be read, so nothing was changed."));
+                return Outcome.Refuse(CodeUnreadable, RecordUnreadableMessage);
             if (record.Model(rel) == null && !record.MaterialsOf(rel).Any())
                 return Outcome.Refuse(CodeNothing, ProteusLoc.Localize("Parts.Matcap.NothingToUndo", "There is no matcap on this model to undo."));
 
@@ -550,36 +574,18 @@ internal static class MatcapWriter
             var alreadyUndone = new List<string>();
             foreach (var g in group)
             {
-                // A model outside the mod is no work of ours: nothing to restore, retire or forget there.
-                if (!ModPath.TryResolve(modRoot, g, out var full) || !ModPath.TryBackup(modRoot, BackupSubdir, g, out var backup))
+                switch (ClassifyForUndo(modRoot, record, g, forgetOnly, out var later, out var backup))
                 {
-                    alreadyUndone.Add(g);
-                    continue;
+                    case UndoClass.AlreadyUndone: alreadyUndone.Add(g); break;
+                    case UndoClass.Forget: case UndoClass.Remade: forget.Add(g); break;
+                    case UndoClass.Keep: break;
+                    case UndoClass.LaterFeature: return Outcome.Refuse(CodeLaterFeature, ModelBackupOrder.BlockedMessage(later!));
+                    case UndoClass.Restore: restore.Add((g, backup!)); break;
+                    default:
+                        return Outcome.Refuse(CodeEdited, string.Format(ProteusLoc.Localize("Matcap.Refused.Edited.Fmt",
+                            "{0} was changed after its matcap was applied, so it was not undone. Its original is kept at {1}."),
+                            g, Path.GetRelativePath(modRoot, backup!)));
                 }
-                bool undoneBefore = record.Model(g) == null && !File.Exists(backup);
-                if (!File.Exists(full)) { (undoneBefore ? alreadyUndone : forget).Add(g); continue; }   // (e) gone: forget it
-                var names = NamesIn(modRoot, g);
-                bool namesOurs = names != null && record.Materials.Any(m => names.Contains(m.Name));
-                if (!namesOurs) { (undoneBefore ? alreadyUndone : forget).Add(g); continue; }            // (c) superseded: forget it
-                if (forgetOnly)
-                {
-                    // A refit or hair port written again from its source since (naming none of its own matcaps): forgotten
-                    // too, its backup retired — as Undo does.
-                    if (record.Model(g) is { } w && RemadeRegenerated(modRoot, g, record, w, File.ReadAllBytes(full))) forget.Add(g);
-                    continue;
-                }
-                if (ModelBackupOrder.LaterFeature(modRoot, BackupSubdir, g) is { } later)   // (a) a later feature
-                    return Outcome.Refuse(CodeLaterFeature, ModelBackupOrder.BlockedMessage(later));
-                var bytes = File.ReadAllBytes(full);
-                var sha = HairPortPlan.Sha8(bytes);
-                if (record.Model(g) is { } me && me.WrittenSha8s.Contains(sha) && File.Exists(backup))
-                    restore.Add((g, backup));                                               // (b) ours: restore it
-                else if (record.Model(g) is { } was && RemadeRegenerated(modRoot, g, record, was, bytes))
-                    forget.Add(g);                                                          // (f) a remade refit or port: forget it
-                else                                                                        // (d) edited on top
-                    return Outcome.Refuse(CodeEdited, string.Format(ProteusLoc.Localize("Matcap.Refused.Edited.Fmt",
-                        "{0} was changed after its matcap was applied, so it was not undone. Its original is kept at {1}."),
-                        g, Path.GetRelativePath(modRoot, backup)));
             }
 
             // Nothing to restore, forget or remove — the model was undone already and what is left is kept for refits or
@@ -654,6 +660,58 @@ internal static class MatcapWriter
                     "Their old backups could not be moved aside: {0}. The next matcap there moves them first."), string.Join(", ", unretired));
             return Outcome.Done(msg, touched);
         }
+    }
+
+    /// <summary>What an Undo (or, with <c>forgetOnly</c>, a Forget) does with one model of the apply group.</summary>
+    internal enum UndoClass
+    {
+        /// <summary>No work of ours: outside the mod, or restored by an earlier Undo (#96).</summary>
+        AlreadyUndone,
+        /// <summary>(e) gone, or (c) superseded: names none of our matcaps — forgotten.</summary>
+        Forget,
+        /// <summary>A Forget only: the model still draws its matcap, so it stays.</summary>
+        Keep,
+        /// <summary>(a) a later feature (the brush…) changed it after us: the Undo is refused.</summary>
+        LaterFeature,
+        /// <summary>(b) still as we wrote it: restored from the backup.</summary>
+        Restore,
+        /// <summary>(f) a refit or hair port remade from its source since: forgotten.</summary>
+        Remade,
+        /// <summary>(d) edited on top: the Undo is refused.</summary>
+        Edited,
+    }
+
+    /// <summary>
+    /// The one place an Undo's per-model decision is made, in its order — also asked by the gear shader upgrade, so what it
+    /// tells the user to undo first matches what this Undo then does. Reads the model; writes nothing.
+    /// </summary>
+    /// <param name="later">The later feature's name for <see cref="UndoClass.LaterFeature"/>.</param>
+    /// <param name="backup">The model's backup path, when it is inside the mod.</param>
+    internal static UndoClass ClassifyForUndo(string modRoot, MatcapRecord record, string g, bool forgetOnly,
+                                              out string? later, out string? backup)
+    {
+        later = null;
+        backup = null;
+        // A model outside the mod is no work of ours: nothing to restore, retire or forget there.
+        if (!ModPath.TryResolve(modRoot, g, out var full) || !ModPath.TryBackup(modRoot, BackupSubdir, g, out var b))
+            return UndoClass.AlreadyUndone;
+        backup = b;
+        bool undoneBefore = record.Model(g) == null && !File.Exists(b);
+        if (!File.Exists(full)) return undoneBefore ? UndoClass.AlreadyUndone : UndoClass.Forget;      // (e) gone
+        var names = NamesIn(modRoot, g);
+        bool namesOurs = names != null && record.Materials.Any(m => names.Contains(m.Name));
+        if (!namesOurs) return undoneBefore ? UndoClass.AlreadyUndone : UndoClass.Forget;              // (c) superseded
+        if (forgetOnly)
+            // A refit or hair port written again from its source since (naming none of its own matcaps): forgotten too,
+            // its backup retired — as Undo does.
+            return record.Model(g) is { } w && RemadeRegenerated(modRoot, g, record, w, File.ReadAllBytes(full))
+                ? UndoClass.Remade : UndoClass.Keep;
+        if (ModelBackupOrder.LaterFeature(modRoot, BackupSubdir, g) is { } l) { later = l; return UndoClass.LaterFeature; }
+        var bytes = File.ReadAllBytes(full);
+        var sha = HairPortPlan.Sha8(bytes);
+        if (record.Model(g) is { } me && me.WrittenSha8s.Contains(sha) && File.Exists(b)) return UndoClass.Restore;
+        if (record.Model(g) is { } was && RemadeRegenerated(modRoot, g, record, was, bytes)) return UndoClass.Remade;
+        return UndoClass.Edited;
     }
 
     /// <summary>The sentences naming the refits and the hair ports / earless copies that keep a matcap's files, each with a

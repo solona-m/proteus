@@ -6119,6 +6119,10 @@
     "message": "annulé par vous",
     "description": ""
   },
+  "Settings.GearShaders.Reason.RowMatcap": {
+    "message": "un matcap de ligne a été découpé dans sa mise à niveau précédente (annule d'abord le matcap)",
+    "description": ""
+  },
   "Settings.GearShaders.UpgradeNow": {
     "message": "Mettre à jour ce que je porte",
     "description": ""
@@ -6141,6 +6145,22 @@
   },
   "Settings.GearShaders.Edited.Fmt": {
     "message": "{0} a été modifié après sa mise à niveau du shader, donc l'annulation le laisse tel quel. L'original de l'auteur est conservé dans Proteus/shaderupgrade-backup/{0} : recopiez-le par-dessus le fichier pour annuler.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcap.Fmt": {
+    "message": "Un matcap de ligne a été découpé dans le matériau mis à niveau de {0}, donc Annuler le laisse tel quel. Annule d'abord ce matcap ({1}), puis ceci.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapKept.Fmt": {
+    "message": "Un matcap de ligne a été découpé dans le matériau mis à niveau de {0}, et les réajustements ou portages de cheveux faits à partir de {1} le dessinent encore. Refais-les ou annule-les, annule de nouveau le matcap, puis ceci.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapEdited.Fmt": {
+    "message": "Un matcap de ligne a été découpé dans le matériau mis à niveau de {0}, et {1} a été modifié après ce matcap, donc le matcap ne peut pas encore être annulé non plus. Annule d'abord la modification ultérieure (ou remets la copie de Proteus/matcap-backup), puis le matcap, puis ceci.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapLater.Fmt": {
+    "message": "Un matcap de ligne a été découpé dans le matériau mis à niveau de {0}, et {1} a modifié {2} après ce matcap. Annule d'abord {1}, puis le matcap, puis ceci.",
     "description": ""
   },
   "Settings.GearShaders.Busy": {
@@ -6707,8 +6727,16 @@
     "message": "Un matcap de ligne nécessite la pièce sur character.shpk, et {0} utilise {1}.",
     "description": ""
   },
-  "Matcap.Refused.RowOwnedByFeature.Fmt": {
-    "message": "{0} a été réécrit par la mise à niveau du shader d'équipement de Proteus. Annulez-la d'abord, puis ajoutez le matcap de ligne.",
+  "Matcap.Refused.RowLegacyWear.Fmt": {
+    "message": "{0} utilise encore l'ancien shader (characterlegacy.shpk), et un matcap de ligne a besoin de character.shpk. Porte-le une fois pour que les shaders d'équipement le passent à character.shpk, puis ajoute le matcap de ligne. S'il reste sur l'ancien shader, survole le compte sous {1} pour voir pourquoi.",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyDeclined.Fmt": {
+    "message": "{0} utilise encore l'ancien shader (characterlegacy.shpk) parce que tu as annulé sa mise à niveau, et un matcap de ligne a besoin de character.shpk. Porte-le et appuie sur « {1} » sous {2}, puis ajoute le matcap de ligne.",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyOff.Fmt": {
+    "message": "{0} utilise encore l'ancien shader (characterlegacy.shpk), et un matcap de ligne a besoin de character.shpk. Active « {1} » sous {2} et porte-le une fois, puis ajoute le matcap de ligne.",
     "description": ""
   },
   "Matcap.Refused.RowBake.Fmt": {

@@ -36,6 +36,8 @@ internal enum LeftReason
 {
     OldTable, UnsupportedForm, Unreadable, Compositor, WriteFailed, LegacyMod, MixedSpecular, SpecularFromOtherMod,
     UnsupportedPlacement, ProteusPack, Declined,
+    /// <summary>A row matcap was cut from the file's earlier upgrade: never rewritten under it.</summary>
+    RowMatcap,
 }
 
 /// <summary>

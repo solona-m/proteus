@@ -22,6 +22,8 @@ namespace Proteus.Services;
 /// backup, whether met by undo or by the next upgrade. Where that update can't be told from an edit of our output (an
 /// index/mask upgrade names no mask of ours), undo archives the original in
 /// <c>Proteus/shaderupgrade-backup-superseded/</c> instead of deleting it; a file it can't read is left alone.</item>
+/// <item>a file a recorded row matcap was cut from (its material, mask, or a mask a cut names) is never undone or
+/// rewritten while that matcap stands (<see cref="Matcap.MatcapRowCut.Dependencies"/>): undo stays in reverse order.</item>
 /// </list>
 /// Writes run under <see cref="ModManifestLock.Gate"/> then <see cref="MeshVolumeService.WriteLock"/> (the brush never
 /// takes the Gate, so the two cannot deadlock).
@@ -157,6 +159,46 @@ internal static class ShaderUpgradeWriter
             "{0} was edited after its shader upgrade, so Undo leaves it as it is. The author's original is kept in "
           + "Proteus/shaderupgrade-backup/{0}: copy it back over the file to undo."), rel);
 
+    /// <summary>The refusal an undo returns for a file a recorded row matcap depends on (<see cref="HeldByRowMatcap"/>).</summary>
+    internal static string RowMatcapMessage(string rel, Matcap.MatcapRowCut.RowHold hold) => hold.Kind switch
+    {
+        Matcap.MatcapRowCut.RowHoldKind.LaterFeature => string.Format(ProteusLoc.Localize("Settings.GearShaders.RowMatcapLater.Fmt",
+            "{0} has a row matcap cut from its upgraded material, and {1} changed {2} after that matcap. Undo {1} first, then the matcap, then this."),
+            rel, hold.Later ?? "", hold.Model),
+        Matcap.MatcapRowCut.RowHoldKind.Edited => string.Format(ProteusLoc.Localize("Settings.GearShaders.RowMatcapEdited.Fmt",
+            "{0} has a row matcap cut from its upgraded material, and {1} was changed after that matcap, so the matcap can't be undone yet either. Undo the later change first (or put back the copy in Proteus/matcap-backup), then the matcap, then this."),
+            rel, hold.Model),
+        Matcap.MatcapRowCut.RowHoldKind.KeptForRegenerated => string.Format(ProteusLoc.Localize("Settings.GearShaders.RowMatcapKept.Fmt",
+            "{0} has a row matcap cut from its upgraded material that refits or hair ports made from {1} still draw. Remake or undo them, undo the matcap again, then undo this."),
+            rel, hold.Model),
+        _ => string.Format(ProteusLoc.Localize("Settings.GearShaders.RowMatcap.Fmt",
+            "{0} has a row matcap cut from its upgraded material, so Undo leaves it as it is. Undo that matcap first ({1}), then undo this."),
+            rel, $"{ProteusLoc.Localize("Tab.Parts", "Studio")} > {ProteusLoc.Localize("Parts.Tool.Matcap", "Matcaps")}"),
+    };
+
+    /// <summary>
+    /// Whether a recorded row matcap depends on <paramref name="e"/>: its cut is a copy of the upgraded material (and names
+    /// its mask), so undoing or rewriting the entry would leave the cut on files that are gone. An unreadable matcap record
+    /// holds too (rows we can't see may exist). <paramref name="classify"/> reads the matcap's models to say what to undo
+    /// first — only for an undo's message, never in a walk. Takes no lock (the caller holds the Gate and the write lock).
+    /// </summary>
+    private static bool HeldByRowMatcap(string modRoot, FileEntry e, bool classify, out string message)
+    {
+        message = "";
+        if (!Matcap.MatcapRecord.Exists(modRoot)) return false;
+        var deps = Matcap.MatcapRowCut.Dependencies(modRoot, classify);
+        if (deps.Unreadable) { message = Matcap.MatcapWriter.RecordUnreadableMessage; return true; }
+        if (deps.ManifestUnreadable)
+        {
+            message = ProteusLoc.Localize("Matcap.Refused.RowManifestUnreadable",
+                "The mod's list of files (meta.json) could not be read, so nothing was changed.");
+            return true;
+        }
+        if (deps.HoldOf(e.Rel, e.Mask?.Rel, e.Mask?.GamePath) is not { } hold) return false;
+        message = RowMatcapMessage(e.Rel, hold);
+        return true;
+    }
+
     // ── apply ───────────────────────────────────────────────────────────────
 
     internal sealed record Outcome(List<string> Written, List<(string Rel, LeftReason Reason)> Left, bool Rewalk)
@@ -255,6 +297,14 @@ internal static class ShaderUpgradeWriter
         }
         var sha = Sha8(current);
         if (sha != w.SourceSha8) { rewalk = true; return; }   // changed since planning: look again
+
+        // An entry a row matcap was cut from is never forgotten or re-masked under it (the cut names its files); left
+        // alone, without a rewalk (it would only meet it again), until the matcap is undone.
+        if (EntryOf(record, w.Rel) is { } held && HeldByRowMatcap(modRoot, held, classify: false, out _))
+        {
+            left.Add((w.Rel, LeftReason.RowMatcap));
+            return;
+        }
 
         try
         {
@@ -459,6 +509,12 @@ internal static class ShaderUpgradeWriter
             if (ModelBackupOrder.LaterFeature(modRoot, BackupSubdir, rel) is { } later)
             {
                 message = ModelBackupOrder.BlockedMessage(later);
+                return Undone.Refused;
+            }
+            // A row matcap was cut from it after us: undo order stays reversed. Nothing is written, nothing declined.
+            if (HeldByRowMatcap(modRoot, entry, classify: true, out var held))
+            {
+                message = held;
                 return Undone.Refused;
             }
 

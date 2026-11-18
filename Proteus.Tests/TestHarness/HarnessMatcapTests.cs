@@ -69,6 +69,28 @@ public class HarnessMatcapTests : IDisposable
 
     public void Dispose() => f.Dispose();
 
+    [Fact]
+    [Trait("Plan", "EDGE-upgrade-vs-matcap-31")]
+    public void Matcaps_model_reports_row_info()
+    {
+        using var rf = new RowFixture();
+        var port = new MatcapHarnessPort(null, null, penumbra, rf.Env(), null, null);
+        JsonElement Body(string? material)
+        {
+            var body = MatcapJob.ReadModel(rf.ModRoot, RowFixture.ModelRel, port, out var error, material);
+            Assert.Null(error);
+            return JsonSerializer.SerializeToElement(body);
+        }
+        var info = Body(RowFixture.Mat).GetProperty("rowInfo");
+        Assert.Equal(RowFixture.Mat, info.GetProperty("material").GetString());
+        Assert.Equal([1, 15], info.GetProperty("usedRows").EnumerateArray().Select(x => x.GetInt32()));
+        Assert.Equal(JsonValueKind.Null, info.GetProperty("usedSubRow").ValueKind);   // rows A and B mixed
+        // The default: the first material that can take a row matcap.
+        Assert.Equal(RowFixture.Mat, Body(null).GetProperty("rowInfo").GetProperty("material").GetString());
+        // A material with no colour table (here: none the model draws) has none.
+        Assert.Equal(JsonValueKind.Null, Body("/mt_other.mtrl").GetProperty("rowInfo").ValueKind);
+    }
+
     private static string Code(JsonElement body) => body.GetProperty("error").GetProperty("code").GetString()!;
 
     /// <summary>A gear mod whose top has two submeshes, published at the e6255 top path.</summary>
