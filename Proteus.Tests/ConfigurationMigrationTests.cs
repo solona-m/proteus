@@ -279,6 +279,30 @@ public class ConfigurationMigrationTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-refit-keep-pubes-7")]
+    public void Refit_pubes_default_off()
+    {
+        // [AC-refit-keep-pubes-7] Off for a new config and for one saved before the settings existed; a saved "on" is
+        // read back. The headless size set's request carries none.
+        var fresh = new Configuration();
+        Assert.False(fresh.AutoRefitPubes);
+        Assert.False(fresh.SizeSetPubes);
+
+        var old = Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(
+            $$"""{"Version":{{Configuration.CurrentVersion}},"SizeSetYas":true}""")!;
+        old.Migrate();
+        Assert.False(old.AutoRefitPubes);
+        Assert.False(old.SizeSetPubes);
+
+        var on = Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(
+            $$"""{"Version":{{Configuration.CurrentVersion}},"AutoRefitPubes":true,"SizeSetPubes":true}""")!;
+        Assert.True(on.AutoRefitPubes);
+        Assert.True(on.SizeSetPubes);
+
+        Assert.False(new Proteus.Services.SizeSetRefit.Request("mod", [], true, false, []).Pubes);
+    }
+
+    [Fact]
     [Trait("Plan", "AC-size-set-keep-skin-1")]
     [Trait("Plan", "EDGE-size-set-keep-skin-1")]
     public void SizeSetKeepHiddenSkin_defaults_off_and_round_trips()

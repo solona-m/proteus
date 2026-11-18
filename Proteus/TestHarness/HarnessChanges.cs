@@ -63,6 +63,9 @@ internal sealed record AutoRedrawOverrideRecord(bool Enabled, bool BeforeEffecti
 /// <summary>The harness's session-only auto-refit switch: what it set, and the effective state before the first set.</summary>
 internal sealed record AutoRefitOverrideRecord(bool Enabled, bool BeforeEffective, DateTime AtUtc);
 
+/// <summary>The session override the auto-refit route set on "Keep my body's pubes", and what it was before.</summary>
+internal sealed record AutoRefitPubesOverrideRecord(bool Pubes, bool BeforeEffective, DateTime AtUtc);
+
 /// <summary>A change route's answer: 200 with a body, or an error status, code and message.</summary>
 internal sealed record ChangeResult(int Status, string? Code, string? Message, object? Body)
 {
@@ -174,6 +177,10 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
     public IReadOnlyList<LeftoverSidecar> LeftoverSidecars { get; set; } = [];
 
     private AutoRefitOverrideRecord? autoRefitOverride;
+    private AutoRefitPubesOverrideRecord? autoRefitPubesOverride;
+
+    /// <summary>What auto refit's switch was before the route first overrode it this session; null when it has not.</summary>
+    public bool? AutoRefitBeforeEffective => autoRefitOverride?.BeforeEffective;
 
     // ── shell output failures (issue sweep D) ──
 
@@ -227,6 +234,11 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
     public AutoRefitOverrideRecord NoteAutoRefitOverride(bool enabled, bool beforeEffective)
         => autoRefitOverride = new AutoRefitOverrideRecord(enabled, autoRefitOverride?.BeforeEffective ?? beforeEffective, DateTime.UtcNow);
 
+    /// <summary>Record the session override the auto-refit route set on the pubes setting; the first set keeps its Before.</summary>
+    public AutoRefitPubesOverrideRecord NoteAutoRefitPubesOverride(bool pubes, bool beforeEffective)
+        => autoRefitPubesOverride = new AutoRefitPubesOverrideRecord(pubes, autoRefitPubesOverride?.BeforeEffective ?? beforeEffective,
+                                                                     DateTime.UtcNow);
+
     /// <summary>Put the sidecars back and clear the override, from any thread (the off-thread stop): file work, the cache's
     /// forget and an in-memory switch, no framework hop. The recomposite is the caller's.</summary>
     internal (List<SidecarUndo> Sidecar, (string, IReadOnlyList<string>) AutoRefit) PutBackOffThreadParts()
@@ -238,11 +250,14 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         (string, IReadOnlyList<string>) refit = ("none", []);
         try
         {
-            if (autoRefitOverride != null)
+            // Either override alone counts: the pubes one is set without the switch's (auto refit's own setting decides).
+            if (autoRefitOverride != null || autoRefitPubesOverride != null)
             {
                 game.SetAutoRefitOverride(null);
+                game.SetAutoRefitPubesOverride(null);
                 refit = ("cleared", game.TakeRefitsWhileOverridden());
                 autoRefitOverride = null;
+                autoRefitPubesOverride = null;
                 if (refit.Item2.Count > 0)
                     log?.Information("[Proteus] test harness: auto refit wrote into {0} while its override stood (not undone by put-back)",
                                      string.Join(", ", refit.Item2.Select(m => jobBackedMods.TryGetValue(m, out var job)
@@ -654,6 +669,8 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         applySettling,
         sidecar = sidecar.View(),
         autoRefitOverride = autoRefitOverride is { } o ? new { enabled = o.Enabled, before = o.BeforeEffective, atUtc = o.AtUtc } : null,
+        autoRefitPubesOverride = autoRefitPubesOverride is { } po
+            ? new { pubes = po.Pubes, before = po.BeforeEffective, atUtc = po.AtUtc } : null,
         output = new
         {
             locksActive = OutputLocks.Active,
@@ -670,11 +687,12 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
                                      : [])
                                  .Concat(sidecar.Leftovers())
                                  .Concat(autoRefitOverride != null ? ["the auto-refit override"] : [])
+                                 .Concat(autoRefitPubesOverride != null ? ["the auto-refit pubes override"] : [])
                                  .Concat(OutputLocks.Active ? ["output locks"] : [])
                                  .Concat(shellFaultArmed ? ["the shell fault"] : [])
                                  .Concat(autoRedrawOverride != null ? ["the auto-redraw override"] : []));
 
     internal bool Empty => gear.Count == 0 && holds.Count == 0 && bindings?.HasSession != true && studio == null
-                        && sidecar.Empty && autoRefitOverride == null
+                        && sidecar.Empty && autoRefitOverride == null && autoRefitPubesOverride == null
                         && !OutputLocks.Active && !shellFaultArmed && autoRedrawOverride == null;
 }

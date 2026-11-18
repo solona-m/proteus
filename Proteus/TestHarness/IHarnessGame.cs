@@ -48,7 +48,8 @@ internal sealed record HairPortInfo(HairPortWatcher.View View, HairPortWatcher.S
 internal sealed record ModList(IReadOnlyDictionary<string, string> Mods, string ModsRoot);
 
 /// <summary>The size set's settings a harness refit runs with: the Studio's current ones.</summary>
-internal sealed record RefitOptions(bool Yas, bool Ends, bool Piercings, bool Remake, bool KeepHiddenSkin = false);
+internal sealed record RefitOptions(bool Yas, bool Ends, bool Piercings, bool Remake, bool KeepHiddenSkin = false,
+                                    bool Pubes = false);
 
 /// <summary>What an after-change did.</summary>
 /// <param name="Reloaded">Penumbra answered Success to the reload.</param>
@@ -325,6 +326,14 @@ internal interface IHarnessGame
     /// <summary>Put a collection's auto refit preference back from <see cref="AutoRefitPreferenceJson"/>'s text ("" takes it
     /// out) and save the configuration; false when it cannot be. Framework thread.</summary>
     bool RestoreAutoRefitPreference(Guid collection, string json) => false;
+
+    /// <summary>Auto refit's "Keep my body's pubes": the user's setting, the harness's session override (null: none), and
+    /// the effect. Any thread.</summary>
+    (bool Config, bool? Override, bool Effective) AutoRefitPubes();
+
+    /// <summary>Set (or with null, clear) the harness's session-only override of auto refit's pubes setting: memory only,
+    /// never saved. Any thread.</summary>
+    void SetAutoRefitPubesOverride(bool? pubes);
 
     /// <summary>The body index: built, stale, being read, generation. Any thread.</summary>
     (bool Built, bool Stale, bool Refreshing, long Generation) BodyIndex();

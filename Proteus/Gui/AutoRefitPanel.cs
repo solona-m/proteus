@@ -84,6 +84,17 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
         }
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(s.PiercingsTip);
 
+        using (ImRaii.Disabled(!on))
+        {
+            bool pubes = config.AutoRefitPubes;
+            if (ImGui.Checkbox(s.Pubes, ref pubes))
+            {
+                config.AutoRefitPubes = pubes;
+                config.Save();
+            }
+        }
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(s.PubesTip);
+
         ImGui.Spacing();
         ImGui.Separator();
         ImGui.Spacing();

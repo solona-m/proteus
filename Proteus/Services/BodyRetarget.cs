@@ -766,6 +766,8 @@ internal static partial class BodyRetarget
     /// the Studio, never a modder's top. Only with <paramref name="clearBody"/>.</param>
     /// <param name="carryPiercings">With <paramref name="replaceSkin"/>, bring the new body's piercings in with its skin
     /// (see <see cref="Rebuild"/>). Off by default: the user asks for them.</param>
+    /// <param name="carryPubes">With <paramref name="replaceSkin"/>, bring the new body's pubes in with its skin (see
+    /// <see cref="Rebuild"/>). Off by default: the user asks for them.</param>
     /// <param name="liftUnderbust">Lift the cloth under the new breasts off their underside (see LiftUnderbust). Off only
     /// for a men's top refitted for women (<see cref="CrossSexRefit"/>): a shirt cut for a pec has no cloth under a
     /// breast to lift, and lifting it turned over faces the face clearing does not (13 folds on the Lumberjack shirt
@@ -798,7 +800,7 @@ internal static partial class BodyRetarget
                                bool keepStandoff = false, bool carryPiercings = false, bool liftUnderbust = true,
                                bool seeInside = false, bool relaxSinkGuard = false, bool openSkin = false,
                                bool rebuildSwapsShapeOnly = false, IReadOnlySet<string>? swappedSkinTags = null,
-                               SharedSeam? sharedSeam = null)
+                               bool carryPubes = false, SharedSeam? sharedSeam = null)
     {
         // The pairs that go in for their shape only as asked — not one ReadySmallclothes turns so below, which keeps the
         // garment's own skin because its new body's smallclothes could not be brought in. A pair asked so is never readied
@@ -891,7 +893,7 @@ internal static partial class BodyRetarget
             bool see = seeInside && tuckSlot != null && !Tuned.NoSeeInside;
             var rebuilt = Rebuild(model, rebuildPairs, replaceSkin, weights, out var swapped, cutHidden, acrossBodies,
                                   swapMeshes, tuckSlot, carryPiercings, parted, see, openSkin, swappedSkinTags,
-                                  addedBySlot);
+                                  addedBySlot, carryPubes: carryPubes);
             if (rebuilt != null)
             {
                 model = rebuilt;

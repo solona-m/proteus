@@ -1236,11 +1236,13 @@ internal static partial class RefitCore
     /// refit.</param>
     /// <param name="carryPiercings">Bring the new body's piercings in with its skin (see <see cref="BodyRetarget.Rebuild"/>):
     /// <see cref="Configuration.AutoRefitPiercings"/>. Off by default.</param>
+    /// <param name="carryPubes">Bring the new body's pubes in with its skin: <see cref="Configuration.AutoRefitPubes"/>.
+    /// Off by default.</param>
     internal static BodyRetarget.Planned PlanRefit(ModelParts garment, byte[] bytes, IReadOnlyList<BodyRetarget.SlotPair> pairs,
                                                    string primary, bool across, bool gameGear, out List<string> pieceNames,
                                                    Action<string>? log = null, Action<string>? warn = null,
                                                    Action<string, SecondSkinWriter.Vec3[]>? trace = null,
-                                                   bool carryPiercings = false,
+                                                   bool carryPiercings = false, bool carryPubes = false,
                                                    BodyRetarget.SharedSeam? sharedSeam = null)
     {
         var skin = AutoRefitDecisions.SkinFor(gameGear);
@@ -1252,7 +1254,8 @@ internal static partial class RefitCore
                                  deepClear: DeepClearFor(skin.DeepClear, primary),
                                  keepStandoff: KeepStandoffFor(skin.KeepStandoff, primary),
                                  carryPiercings: carryPiercings, seeInside: SeeInsideFor(skin.SeeInside, primary),
-                                 relaxSinkGuard: skin.RelaxSinkGuard, openSkin: true, sharedSeam: sharedSeam);
+                                 relaxSinkGuard: skin.RelaxSinkGuard, openSkin: true, carryPubes: carryPubes,
+                                 sharedSeam: sharedSeam);
     }
 
     /// <summary>

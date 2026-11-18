@@ -139,6 +139,11 @@ check what Proteus reads from the drive while nothing changes:
   written to the configuration, so no save can keep it; put-back or unload clears
   it, and put-back lists any mod a refit wrote into while it stood (those writes are
   not undone by the harness).
+  *(2026-11-18, refit-keep-pubes.)* Its `pubes` field overrides "Keep my body's pubes
+  on refitted gear" the same way: memory only, never saved, cleared by put-back or
+  unload whether or not `enabled` was ever sent, and refits made while either override
+  stood are listed alike. `refit`'s `pubes` overrides the size set's box for one run,
+  as `keepHiddenSkin` does.
 
 **Amendment (2026-11-08, shell output failures).** Three more abilities, so QA can
 drive issue sweep D's recovery flows on demand:

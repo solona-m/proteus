@@ -176,32 +176,54 @@ internal sealed partial class HarnessRouter
 
     private async Task<HarnessResponse> AutoRefitAction(HarnessRequest request)
     {
-        var (body, bad) = JsonBody(request, "enabled", "refitWornNow", "mod");
+        var (body, bad) = JsonBody(request, "enabled", "refitWornNow", "mod", "pubes");
         if (bad != null) return bad;
         if (body.TryGetProperty("refitWornNow", out var now))
         {
             if (now.ValueKind != JsonValueKind.True) return HarnessResponse.Error(400, "invalid-field", "refitWornNow must be true");
-            if (body.TryGetProperty("enabled", out _))
-                return HarnessResponse.Error(400, "invalid-field", "give enabled or refitWornNow, not both");
+            if (body.TryGetProperty("enabled", out _) || body.TryGetProperty("pubes", out _))
+                return HarnessResponse.Error(400, "invalid-field", "give enabled/pubes or refitWornNow, not both");
             string? mod = OptionalString(body, "mod", out bad);
             if (bad != null) return bad;
             if (mod == null) return HarnessResponse.Error(400, "invalid-field", "mod is required with refitWornNow");
             return await RefitWornNow(mod);
         }
         if (body.TryGetProperty("mod", out _)) return HarnessResponse.Error(400, "invalid-field", "mod goes with refitWornNow");
-        if (!body.TryGetProperty("enabled", out var e) || e.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-            return HarnessResponse.Error(400, "invalid-field", "enabled is required: true or false");
-        bool enabled = e.GetBoolean();
+        bool hasEnabled = body.TryGetProperty("enabled", out var e), hasPubes = body.TryGetProperty("pubes", out var p);
+        if (!hasEnabled && !hasPubes)
+            return HarnessResponse.Error(400, "invalid-field", "enabled or pubes is required: true or false");
+        if (hasEnabled && e.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            return HarnessResponse.Error(400, "invalid-field", "enabled must be true or false");
+        if (hasPubes && p.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            return HarnessResponse.Error(400, "invalid-field", "pubes must be true or false");
+        bool? enabled = hasEnabled ? e.GetBoolean() : null;
+        bool? pubes = hasPubes ? p.GetBoolean() : null;
         if (changes.Stopping) return HarnessResponse.Error(503, "harness-stopping", "the test harness is stopping");
         if (jobs.Busy) return HarnessResponse.Error(409, "busy", "a harness job is running");
 
         var answer = await OnFramework(() =>
         {
             var before = Game.AutoRefitEnabled();
-            Game.SetAutoRefitOverride(enabled);
-            var record = changes.NoteAutoRefitOverride(enabled, before.Effective);
+            bool? beforeEnabled = null;
+            if (enabled is { } on)
+            {
+                Game.SetAutoRefitOverride(on);
+                beforeEnabled = changes.NoteAutoRefitOverride(on, before.Effective).BeforeEffective;
+            }
+            if (pubes is { } keep)
+            {
+                var pubesBefore = Game.AutoRefitPubes();
+                Game.SetAutoRefitPubesOverride(keep);
+                changes.NoteAutoRefitPubesOverride(keep, pubesBefore.Effective);
+            }
             var now = Game.AutoRefitEnabled();
-            return new { config = now.Config, harnessOverride = now.Override, effective = now.Effective, before = record.BeforeEffective };
+            var nowPubes = Game.AutoRefitPubes();
+            return new
+            {
+                config = now.Config, harnessOverride = now.Override, effective = now.Effective,
+                before = beforeEnabled ?? changes.AutoRefitBeforeEffective ?? before.Effective,
+                pubes = new { config = nowPubes.Config, harnessOverride = nowPubes.Override, effective = nowPubes.Effective },
+            };
         });
         return HarnessResponse.Json(200, answer);
     }

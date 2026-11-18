@@ -310,6 +310,21 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// its override stands. Worker or framework thread.</summary>
     partial void HarnessNoteRefit(string modDir);
 
+    /// <summary>Whether refits bring the new body's pubes in: <see cref="Configuration.AutoRefitPubes"/>, or the QA test
+    /// harness's session-only override of it (local builds only). Any thread.</summary>
+    internal bool CarryPubesNow
+    {
+        get
+        {
+            bool pubes = config.AutoRefitPubes;
+            HarnessPubes(ref pubes);
+            return pubes;
+        }
+    }
+
+    /// <summary>The QA test harness's session-only override of <see cref="Configuration.AutoRefitPubes"/>.</summary>
+    partial void HarnessPubes(ref bool pubes);
+
     // ── signals ─────────────────────────────────────────────────────────────
 
     private void OnEquipmentChanged() => RequestWalkIn(EquipSettleMs);
@@ -1649,10 +1664,12 @@ public sealed partial class AutoRefitWatcher : IDisposable
                             item);
         bool piercings = config.AutoRefitPiercings;
         log.Debug("[Proteus] auto refit: {0}: piercings {1}", item, piercings ? "carried" : "left out");
+        bool pubes = CarryPubesNow;
+        log.Debug("[Proteus] auto refit: {0}: pubes {1}", item, pubes ? "carried" : "left out");
         var plan = RefitCore.PlanRefit(garment, bytes, pairs, primary, across, gameGear, out var pieceNames,
                                        line => log.Debug("[Proteus] auto refit: {0}", line),
                                        line => log.Warning("[Proteus] auto refit: {0}", line),
-                                       carryPiercings: piercings, sharedSeam: sharedSeam);
+                                       carryPiercings: piercings, carryPubes: pubes, sharedSeam: sharedSeam);
         if (sharedSeam != null)
             log.Information("[Proteus] auto refit: {0}: shared seam {1}", item,
                             plan.Report.SeamDropped is { } droppedSeam

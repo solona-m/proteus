@@ -155,6 +155,14 @@
     "message": "关闭：装备适配时不带体型模组的穿孔。指甲始终会带上。\n已适配的装备保持原样；要更改，请撤销正在穿戴的装备的适配后重新适配。",
     "description": ""
   },
+  "AutoRefit.Pubes.Label": {
+    "message": "在重新适配的装备上保留我身体的阴毛",
+    "description": ""
+  },
+  "AutoRefit.Pubes.Tip": {
+    "message": "关闭：装备重新适配时不带身体模组的阴毛（其胯部网格和阴毛）。\n已重新适配的装备保持制作时的样子；要更改，请撤销并重新适配你正穿着的装备。",
+    "description": ""
+  },
   "AutoRefit.Working": {
     "message": "处理中…",
     "description": ""
@@ -3987,6 +3995,14 @@
     "message": "开启：在服装露出该皮肤的地方，新体型的穿孔随皮肤一同加入。\n指甲始终会带上。",
     "description": ""
   },
+  "Parts.Retarget.Pubes": {
+    "message": "保留新身体的阴毛",
+    "description": ""
+  },
+  "Parts.Retarget.Pubes.Tip": {
+    "message": "开启：在服装露出该皮肤且没有布料遮盖的地方，新身体的阴毛（其胯部网格和阴毛）会随皮肤一起带入。",
+    "description": ""
+  },
   "Parts.Retarget.CutForcedTip": {
     "message": "鞋子保留自己的脚、手套保留自己的手时始终开启：否则整条新腿或新手臂都会跟着放进去。",
     "description": ""
@@ -5361,6 +5377,14 @@
   },
   "SizeSet.Piercings.Tip": {
     "message": "开启：在部件露出该皮肤的地方，每个体型的穿孔随皮肤一同加入。指甲始终会带上。\n已制作的尺码只有在重新制作时才会改变。",
+    "description": ""
+  },
+  "SizeSet.Pubes": {
+    "message": "保留各新身体的阴毛",
+    "description": ""
+  },
+  "SizeSet.Pubes.Tip": {
+    "message": "开启：在部件露出该皮肤且没有布料遮盖的地方，每个身体的阴毛（其胯部网格和阴毛）会随皮肤一起带入。\n已制作的尺寸只有重新制作时才会改变。",
     "description": ""
   },
   "SizeSet.KeepHiddenSkin": {

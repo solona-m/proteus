@@ -30,13 +30,14 @@ internal static partial class CrossSexRefitJob
     /// (<see cref="NudeOf"/>); null fits every target as it was picked.</param>
     /// <param name="HeldParts">A shoe's or glove's parts, by label, held where they are with the foot or hand: Studio's
     /// unticked parts. Null holds none beside them.</param>
+    /// <param name="CarryPubes">Bring each new body's pubes in with its skin (see <see cref="BodyRetarget.Rebuild"/>).</param>
     internal sealed record Inputs(
         byte[] Garment, string GamePath, ushort To,
         BodySizeCatalog MadeFor, Func<BodyOption, bool>? FromPick,
         BodySizeCatalog Onto, Func<BodyOption, bool>? TargetPick,
         OtherRaceWearer.Inputs Wearer, UVRemapService UvRemap, IPluginLog Log,
         bool PushOut = true, bool CutHidden = true, bool CarryPiercings = false, bool? LiftUnderbust = null,
-        Func<BodyOption, BodyOption?>? Nude = null, IReadOnlySet<string>? HeldParts = null);
+        Func<BodyOption, BodyOption?>? Nude = null, IReadOnlySet<string>? HeldParts = null, bool CarryPubes = false);
 
     /// <summary>One size made, or refused.</summary>
     /// <param name="Target">The body it was fitted to: the one picked, or its nude smallclothes (<see cref="Asked"/>).</param>
@@ -236,7 +237,7 @@ internal static partial class CrossSexRefitJob
                                      clearBody: i.PushOut, alsoHeld: held, extra: null,
                                      log: line => i.Log.Debug("[Proteus] cross-sex refit: {0}", line),
                                      warn: line => i.Log.Warning("[Proteus] cross-sex refit: {0}", line),
-                                     carryPiercings: i.CarryPiercings);
+                                     carryPiercings: i.CarryPiercings, carryPubes: i.CarryPubes);
                 plan = slot == "_glv" && !BodyRetarget.Tuned.NoReshapeEnds
                     ? Reshaped(garment, baked, reading, pair, endPair, endLanded, held, target.Label, i) ?? Today()
                     : Today();
@@ -245,7 +246,7 @@ internal static partial class CrossSexRefitJob
                 plan = BodyRetarget.Plan(garment, baked, [pair], slot, replaceSkin: true, acrossBodies: true,
                                          clearBody: i.PushOut, cutHidden: i.CutHidden,
                                          tuckSlot: RefitCore.TuckSlot(i.CutHidden && i.PushOut, slot),
-                                         carryPiercings: i.CarryPiercings,
+                                         carryPiercings: i.CarryPiercings, carryPubes: i.CarryPubes,
                                          liftUnderbust: i.LiftUnderbust ?? CrossSexRefit.LiftsUnderbust(drawn, i.To),
                                          log: line => i.Log.Debug("[Proteus] cross-sex refit: {0}", line),
                                          warn: line => i.Log.Warning("[Proteus] cross-sex refit: {0}", line));
@@ -300,7 +301,7 @@ internal static partial class CrossSexRefitJob
                                  clearBody: i.PushOut, alsoHeld: held, extra: null,
                                  log: line => i.Log.Debug("[Proteus] cross-sex refit: {0}", line),
                                  warn: line => i.Log.Warning("[Proteus] cross-sex refit: {0}", line),
-                                 carryPiercings: i.CarryPiercings, reshapeEnd: true,
+                                 carryPiercings: i.CarryPiercings, carryPubes: i.CarryPubes, reshapeEnd: true,
                                  swappedSkinTags: KeepEnds.SkinTagsOf(garment));
         if (plan.Report.Swap is not { Posed: 0, Kept: 0, Removed: > 0 } swap)
         {

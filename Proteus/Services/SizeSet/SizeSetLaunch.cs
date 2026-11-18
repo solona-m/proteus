@@ -31,11 +31,12 @@ internal static class SizeSetLaunch
     /// <param name="mods">Penumbra's mod list (folder → name), asked for by the caller.</param>
     /// <param name="modsRoot">Penumbra's mod folder.</param>
     /// <param name="resolvePlayerPaths">Penumbra's resolve for the player's collection (IPC); null answers mean none.</param>
+    /// <param name="pubes">Bring each new body's pubes in with its skin: <see cref="Configuration.SizeSetPubes"/>.</param>
     internal static Prepared Prepare(IReadOnlyDictionary<string, string> mods, string modsRoot,
                                      Func<IReadOnlyList<string>, IReadOnlyDictionary<string, string?>?> resolvePlayerPaths,
                                      string modRoot, IReadOnlyList<string> keys, bool yas, bool remake, bool ends,
                                      bool piercings, bool keepHiddenSkin, string? madeOn,
-                                     Func<string, byte[]?> readGameFile, IPluginLog log)
+                                     Func<string, byte[]?> readGameFile, IPluginLog log, bool pubes = false)
     {
         var gameBodies = SizeSetRefit.GameBodies(keys, readGameFile, ends);
         // A women's mod's men's versions are made for the men's skeleton the player's collection gives (IVCS when
@@ -51,7 +52,7 @@ internal static class SizeSetLaunch
         }
         var request = new SizeSetRefit.Request(modRoot, keys, yas, remake, [], readGameFile, ends,
                                                race => gameBodies.GetValueOrDefault(race), piercings, across, madeOn,
-                                               KeepHiddenSkin: keepHiddenSkin);
+                                               KeepHiddenSkin: keepHiddenSkin, Pubes: pubes);
         return new Prepared(request, mods, modsRoot);
     }
 

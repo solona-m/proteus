@@ -247,12 +247,12 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     }
 
     public RefitOptions Options(bool remake) => new(config.SizeSetYas, config.SizeSetEnds, config.SizeSetPiercings, remake,
-                                                    config.SizeSetKeepHiddenSkin);
+                                                    config.SizeSetKeepHiddenSkin, config.SizeSetPubes);
 
     public SizeSetLaunch.Prepared PrepareSizeSet(string modRoot, IReadOnlyList<string> keys, RefitOptions options, ModList mods)
         => SizeSetLaunch.Prepare(mods.Mods, mods.ModsRoot, penumbra.ResolvePlayerPaths, modRoot, keys, options.Yas,
                                  options.Remake, options.Ends, options.Piercings, options.KeepHiddenSkin, null,
-                                 readGameFile, log);
+                                 readGameFile, log, pubes: options.Pubes);
 
     public Task<SizeSetLaunch.Outcome> RunSizeSet(SizeSetLaunch.Prepared prepared, Action<string> progress, Action afterChange,
                                                   Action<Action> postToFramework, CancellationToken ct)
@@ -495,6 +495,11 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
             return false;
         }
     }
+
+    public (bool Config, bool? Override, bool Effective) AutoRefitPubes()
+        => (config.AutoRefitPubes, autoRefit.HarnessPubesOverride, autoRefit.CarryPubesNow);
+
+    public void SetAutoRefitPubesOverride(bool? pubes) => autoRefit.HarnessPubesOverride = pubes;
 
     public (bool Built, bool Stale, bool Refreshing, long Generation) BodyIndex() => autoRefit.HarnessBodyIndexState();
 

@@ -27,8 +27,10 @@ internal static class RefitJob
 {
     /// <param name="KeepHiddenSkin">The request's override of the Studio's saved "Keep hidden skin" for this run alone,
     /// never saved; null runs with the saved choice.</param>
+    /// <param name="Pubes">The request's override of the size set's saved "Keep the new bodies' pubes" for this run
+    /// alone, never saved; null runs with the saved choice.</param>
     internal sealed record Args(string ModDir, string ModRoot, IReadOnlyList<string> Keys, bool Remake, ModList Mods,
-                                bool? KeepHiddenSkin = null);
+                                bool? KeepHiddenSkin = null, bool? Pubes = null);
 
     internal static async Task Run(HarnessJobs jobs, HarnessJob job, Args args)
     {
@@ -68,6 +70,7 @@ internal static class RefitJob
         var options = game.Options(args.Remake);
         // Before the nothing-to-make answer too, so every result reports the choice the run would use.
         if (args.KeepHiddenSkin is { } keepSkin) options = options with { KeepHiddenSkin = keepSkin };
+        if (args.Pubes is { } pubes) options = options with { Pubes = pubes };
         if (keys.Count == 0)
         {
             job.SetResult(new
