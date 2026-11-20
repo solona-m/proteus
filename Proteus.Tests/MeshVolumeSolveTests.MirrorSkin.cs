@@ -735,7 +735,9 @@ public partial class MeshVolumeSolveTests
     public void Centred_drag_that_sinks_riders_holds_nothing_off_the_centre()
     {
         // The whole skin of a centred sheet, its own mirror image: a Centred drag. Cloth 15 mm up follows the skin only
-        // 84 %, so a 120 mm move sinks it and the guard lifts it — but only Sides holds lifts off the centre.
+        // 84 %, so a 120 mm move sinks it and the guard lifts it, and nothing is held off the centre. (The lifts are
+        // straight up, so this shows a Centred drag's guard holds nothing; that the clamp is passed for Sides only is
+        // pinned by GuardRulePerOperation.)
         var l = Layered(11, 0.015f, centred: true);
         var all = All(l.SkinAt);
         var solve = SkinSolve(l.Model);

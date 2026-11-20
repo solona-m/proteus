@@ -176,6 +176,7 @@ public partial class MeshVolumeSolveTests
     [Trait("Plan", "AC-neolithe-skin-move-fails-1")]
     [Trait("Plan", "EDGE-neolithe-skin-move-fails-10")]
     [Trait("Plan", "EDGE-neolithe-skin-move-fails-11")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-2")]
     public void GuardRulePerOperation()
     {
         var moves = System.IO.File.ReadAllText(System.IO.Path.Combine(RepoRoot(), "Proteus", "Services", "MeshVolumeSolve.SkinMoves.cs"));

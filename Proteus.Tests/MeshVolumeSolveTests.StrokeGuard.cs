@@ -112,6 +112,18 @@ public partial class MeshVolumeSolveTests
         solve.MoveTo(At(l.Model.Positions, onto) - At(l.Model.Positions, from));
         Assert.True(solve.EndMove());
         var flat = solve.Positions().ToArray();
+        // Precondition: some rider is bound to a triangle the move flattened.
+        var inputs = solve.FollowInputs;
+        var binding = SkinFollow.Bind(inputs);
+        var vertexOf = new System.Collections.Generic.Dictionary<int, int>();
+        for (int v = 0; v < inputs.NodeOf.Length; v++) vertexOf.TryAdd(inputs.NodeOf[v], v);
+        bool Flattened(SkinFollow.BoundTriangle t)
+        {
+            var a = At(flat, vertexOf[t.A]); var b = At(flat, vertexOf[t.B]); var c = At(flat, vertexOf[t.C]);
+            return Vector3.Cross(b - a, c - a).LengthSquared() < 1e-14f;
+        }
+        Assert.Contains(Enumerable.Range(0, inputs.NodeCount),
+                        n => binding.BindWeight(n) > 0f && binding.TriangleOf(n).IsSet && Flattened(binding.TriangleOf(n)));
 
         solve.Paint(At(l.Model.Positions, onto), 0.03f, 0.002f);
         solve.EndStroke();
