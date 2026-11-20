@@ -146,9 +146,66 @@ public class SkinMoveLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-studio-move-skin-2")]
     [Trait("Plan", "AC-studio-move-skin-4")]
     [Trait("Plan", "AC-studio-move-skin-9")]
+    [Trait("Plan", "AC-neolithe-skin-move-fails-1")]
+    [Trait("Plan", "AC-neolithe-skin-move-fails-3")]
     [Trait("Speed", "Slow")]
     public void ThisOldThingRueAndNeolitheTopsSculpt(string need)
         => Sculpt(ReadFile(need), need.Split("/size/")[1].Split('/')[0]);
+
+    private const string RebelGirl = LocalData.Mods + ":Tight&Firm-RebelGirl (2)/default/chara/equipment/e6096/model/c0201e6096_top.mdl";
+
+    /// <summary>
+    /// #86's top, whose skin normals disagree with its faces: the guard at the end of a stroke does not run away
+    /// (neolithe-skin-move-fails). The author-relative rule threw its cloth 18 mm on a 3 mm Paint and 23 mm on a 0.5 mm
+    /// one; the stroke rule measured 0.96 and 0.07 mm. Relax and Smooth are logged and held to no worse than test tip's
+    /// release guard (16.03 and 3.33 mm, +10 %): their per-dab hold is a separate path, unchanged. One load, one solve,
+    /// one bind, each case undone before the next.
+    /// </summary>
+    [LocalDataFact(RebelGirl)]
+    [Trait("Plan", "AC-neolithe-skin-move-fails-4")]
+    [Trait("Plan", "AC-neolithe-skin-move-fails-1")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-9")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-16")]
+    [Trait("Speed", "Slow")]
+    public void RebelGirlTopStrokesDoNotRunAway()
+    {
+        var clock = Stopwatch.StartNew();
+        var model = ReadFile(RebelGirl);
+        var solve = SkinSolve(model);
+        var at = At(model.Positions, Spot(model, solve));
+        var skin = SkinVertices(model).ToHashSet();
+
+        void Case(string name, Action stroke, float worstMm)
+        {
+            stroke();
+            solve.EndStroke();
+            var after = solve.Positions();
+            float clothMax = 0f, skinMax = 0f;
+            int over5 = 0;
+            for (int v = 0; v < model.Positions.Length / 3; v++)
+            {
+                float d = (At(after, v) - At(model.Positions, v)).Length();
+                if (skin.Contains(v)) skinMax = MathF.Max(skinMax, d);
+                else { clothMax = MathF.Max(clothMax, d); if (d > 0.005f) over5++; }
+            }
+            int worse = SkinPoke.MadeWorse(model, after);
+            output.WriteLine($"{name}: guard {solve.LastGuard}, {solve.RidersLeftUnder} left under; cloth moved up to {clothMax * 1000f:F2} mm " +
+                             $"({over5} over 5 mm), skin {skinMax * 1000f:F2} mm; {worse} pushed through; {SkinPoke.Uncovered(model, after, 0.001f)} uncovered; " +
+                             $"{Folded(model, after)} folded");
+            Assert.True(solve.LastGuard.WorstMm <= worstMm, $"{name}: the guard lifted {solve.LastGuard.WorstMm:F2} mm (cap {worstMm} mm)");
+            Assert.Equal(0, worse);
+            while (solve.CanUndo) solve.Undo();
+            var back = solve.Positions();
+            for (int v = 0; v < model.Positions.Length / 3; v++)
+                Assert.True((At(back, v) - At(model.Positions, v)).Length() < 1e-6f, $"{name}: vertex {v} not undone");
+        }
+
+        Case("paint 3 mm", () => solve.Paint(at, 0.06f, 0.003f), 1.5f);
+        Case("paint 0.5 mm", () => solve.Paint(at, 0.06f, 0.0005f), 0.25f);
+        Case("relax", () => { for (int d = 0; d < 20; d++) solve.Relax(at, 0.06f, 0.5f); }, 17.6f);
+        Case("smooth", () => { for (int d = 0; d < 20; d++) solve.Smooth(at, 0.06f, 0.5f); }, 3.7f);
+        output.WriteLine($"wall time {clock.Elapsed.TotalSeconds:F2} s");
+    }
 
     [LocalDataFact(ThisOldThing)]
     [Trait("Plan", "AC-studio-move-skin-8")]

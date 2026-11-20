@@ -206,6 +206,46 @@ internal sealed partial class MeshVolumeSolve
         return m * MathF.Exp((to - m) / m);
     }
 
+    /// <summary>Within this share of <see cref="MirrorMinX"/> of the centre plane a node is on it: a centre seam an author
+    /// or a refit left a hair off zero must not have its points sent alternately left and right.</summary>
+    private const float OnPlaneShare = 1e-3f;
+
+    /// <summary>
+    /// Where the release guard may put a lifted node's X in a mirrored <see cref="MirrorMode.Sides"/> drag, the drag
+    /// having left it at <paramref name="x0"/> and the guard's lift taking it to <paramref name="x1"/>: the mirror's own
+    /// rule (<see cref="MirroredMove"/>). On the centre plane it keeps <paramref name="x0"/> — the two sides' lifts differ
+    /// only in X, which they cancel; off it, <see cref="KeepOffCentre"/> — away from the centre freely, toward it
+    /// closer and closer, never across. A node of a piece with no mirror image (<paramref name="directOnly"/>) takes the
+    /// plain drag, so its lift as it is.
+    /// </summary>
+    internal static float GuardLiftX(float x0, float x1, float margin, bool directOnly)
+    {
+        if (directOnly) return x1;
+        if (MathF.Abs(x0) <= OnPlaneShare * margin) return x0;
+        float side = MathF.Sign(x0);
+        return side * KeepOffCentre(MathF.Abs(x0), side * x1, margin);
+    }
+
+    /// <summary>
+    /// The end of a mirrored Sides drag's guard (neolithe-skin-move-fails): every node the guard lifted has its X put
+    /// through <see cref="GuardLiftX"/>, from where the drag left it. A lift along a skin face tilted toward the centre —
+    /// a cleavage — carried cloth the drag had gathered at the centre across it, and turned the gathered faces over.
+    /// Y and Z keep the lift. Every node changed is already in the operation's undo record (the guard records before it
+    /// lifts), so undo stays exact.
+    /// </summary>
+    private void KeepGuardLiftsOffCentre()
+    {
+        float margin = MirrorMinX;
+        foreach (var (n, x0) in preGuardX)
+        {
+            float x1 = nodeAt[n].X + nodeDelta[n].X;
+            float x = GuardLiftX(x0, x1, margin, moveDirectOnly.Contains(n));
+            if (x == x1) continue;
+            nodeDelta[n] = new Vec3(x - nodeAt[n].X, nodeDelta[n].Y, nodeDelta[n].Z);
+            lastCentreHeld.Add(n);
+        }
+    }
+
     /// <summary>
     /// Place a mirrored drag — <paramref name="offset"/> for a move, <paramref name="transform"/> for a turn or a
     /// stretch — from where it began.
@@ -216,7 +256,8 @@ internal sealed partial class MeshVolumeSolve
     /// other — its own side's motion — and a node on the centre plane the average of the two, which keeps it there.
     /// Only a node's distance from the centre is then passed through <see cref="KeepOffCentre"/>, so cloth carried
     /// toward the centre gathers up at it instead of crossing over or folding. Each side is the exact mirror of the
-    /// other; a node the drag leaves well off the centre follows its side's motion exactly.
+    /// other; a node the drag leaves well off the centre follows its side's motion exactly. The release guard's lifts
+    /// keep the same rule (<see cref="GuardLiftX"/>).
     /// </summary>
     private void MirroredMove(Vector3? offset, Matrix4x4? transform)
     {
@@ -248,9 +289,7 @@ internal sealed partial class MeshVolumeSolve
         else
         {
             float margin = MirrorMinX;
-            // Within this of the centre plane a node is on it: a centre seam an author or a refit left a hair off zero
-            // must not have its points sent alternately left and right.
-            float onPlane = 1e-3f * margin;
+            float onPlane = OnPlaneShare * margin;
             foreach (var (n, w) in moveWeights)
             {
                 var p = Start(n);

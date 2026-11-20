@@ -256,6 +256,7 @@ public partial class MeshVolumeSolveTests
     [InlineData(true)]
     [InlineData(false)]
     [Trait("Plan", "AC-studio-move-skin-2")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-9")]
     public void RelaxAndSmoothPullASkinLumpInWhenOn(bool relax)
     {
         var (model, index) = SkinSheet(21, bump: 0.006f);

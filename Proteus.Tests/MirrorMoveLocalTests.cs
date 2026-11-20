@@ -353,6 +353,8 @@ public class MirrorMoveLocalTests(ITestOutputHelper output)
     [InlineData("default chest - smallclothes/sfw xs.mdl")]
     [Trait("Plan", "AC-mirror-skin-move-9")]
     [Trait("Plan", "EDGE-mirror-skin-move-14")]
+    [Trait("Plan", "AC-neolithe-skin-move-fails-6")]
+    [Trait("Plan", "AC-neolithe-skin-move-fails-8")]
     [Trait("Speed", "Slow")]
     public void Neolithe_body_skin_mirrors(string rel)
     {
