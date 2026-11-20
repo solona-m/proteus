@@ -224,6 +224,31 @@ public class SizeSetMadeOnBootsTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-made-on-skinless-boots-10")]
+    [Trait("Plan", "AC-made-on-skinless-boots-7")]
+    [Trait("Plan", "AC-made-on-skinless-boots-2")]
+    public void Each_file_is_taken_by_the_way_its_own_route_reads() // [EDGE-made-on-skinless-boots-10] [AC-made-on-skinless-boots-7] [AC-made-on-skinless-boots-2]
+    {
+        // As RunEndsPiece asks it, per file: the "Made on" body for that file's route, then the way it is taken.
+        var bibo = Bibo();
+        var request = new SizeSetRefit.Request("", ["bibo"], false, false, [bibo], MadeOn: "Bibo+");
+        SizeSetRefit.EndSourceWay Way(KeepEnds.Route route, bool clothKept = true, bool clothClear = true)
+            => SizeSetRefit.EndSourceWayOf(route, SizeSetRefit.EndMadeOnBody(request, "_sho", "0201", route) != null,
+                                           clothKept, clothClear);
+
+        foreach (var route in new[] { KeepEnds.Route.Skin, KeepEnds.Route.Cloth, KeepEnds.Route.SkinOnly, KeepEnds.Route.Sibling })
+            Assert.Equal(SizeSetRefit.EndSourceWay.Own, Way(route));
+        // Unclear and unplaced readings are never placed on the "Made on" body: only a shoe with no skin at all is.
+        Assert.Equal(SizeSetRefit.EndSourceWay.None, Way(KeepEnds.Route.Unsure));
+        Assert.Equal(SizeSetRefit.EndSourceWay.None, Way(KeepEnds.Route.NoFamily));
+        Assert.Equal(SizeSetRefit.EndSourceWay.MadeOnCloth, Way(KeepEnds.Route.NoSkin));
+        Assert.Equal(SizeSetRefit.EndSourceWay.MadeOnName, Way(KeepEnds.Route.NoSkin, clothClear: false));
+        Assert.Equal(SizeSetRefit.EndSourceWay.MadeOnName, Way(KeepEnds.Route.NoSkin, clothKept: false));
+        // No "Made on": a skinless shoe is left out, as before.
+        Assert.Equal(SizeSetRefit.EndSourceWay.None, SizeSetRefit.EndSourceWayOf(KeepEnds.Route.NoSkin, false, true, true));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-made-on-skinless-boots-11")]
     [Trait("Plan", "AC-made-on-skinless-boots-7")]
     public void Cloth_beats_an_earlier_name_and_reading_stops_at_the_first_read() // [EDGE-made-on-skinless-boots-11] [AC-made-on-skinless-boots-7]

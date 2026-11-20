@@ -182,10 +182,10 @@ public class SizeSetMadeOnBootsLocalTests(ITestOutputHelper output, OopsBootsRun
     public void Oops_ankle_join_stays_within_limits_on_every_body() // [AC-made-on-skinless-boots-10]
     {
         // First measured (build 1489, Made on Bibo+, all three sizes placed by name, cut from Small): at most 1.1 mm over
-        // 244 edges, 0 folded, on every body. The limits are never raised: a size over them is a finding.
+        // 122 edges, 0 of 1,400 triangles folded, on every body. The limits are never raised: a size over them is a finding.
         var made = BootsOf(oops.First).Where(s => s.Status == SizeStatus.Made).ToList();
         Assert.NotEmpty(made);
-        int triangles = ModelPartReader.Read(AuthorModel(made[0].CutFrom!))!.Parts.Sum(p => p.TriangleCount);
+        int triangles = ModelPartReader.Read(AuthorModel(made[0].CutFrom!))!.Parts.Where(p => p.Island < 0).Sum(p => p.TriangleCount);
         foreach (var s in made)
         {
             var lines = Regex.Matches(oops.Log, Regex.Escape($"{Label} {s.Option}: ankle join stretched up to ")

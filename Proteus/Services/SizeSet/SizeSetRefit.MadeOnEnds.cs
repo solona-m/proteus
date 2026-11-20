@@ -137,6 +137,34 @@ internal static partial class SizeSetRefit
                                 $"not placed on {madeOn.Name}: {why}");
     }
 
+    /// <summary>How one of the author's shoe or glove files becomes something its sizes may be cut from.</summary>
+    internal enum EndSourceWay
+    {
+        /// <summary>Read off the piece itself (<see cref="KeepEnds.Find"/>), as always.</summary>
+        Own,
+        /// <summary>A skinless shoe placed on the "Made on" body by its shaft's cloth.</summary>
+        MadeOnCloth,
+        /// <summary>A skinless shoe placed on the "Made on" body by its option name.</summary>
+        MadeOnName,
+        /// <summary>Nothing to cut from: unclear, unread, or a skinless one with no "Made on" body to place it on.</summary>
+        None,
+    }
+
+    /// <summary>
+    /// Which way one of the author's files is taken: its own reading for the routes that read; for one with no skin
+    /// (<paramref name="madeOn"/> — the <see cref="EndMadeOnBody"/> for its route — set), by its shaft's cloth when that
+    /// reading is clear and kept, else by its name; else not at all.
+    /// </summary>
+    /// <param name="madeOn">The "Made on" body for this file's route (<see cref="EndMadeOnBody"/>) is there.</param>
+    /// <param name="clothKept">No collision dropped the piece's cloth readings (<see cref="ClothCollides"/>).</param>
+    /// <param name="clothClear">This file's cloth reading is clear (<see cref="ClothClear"/>).</param>
+    internal static EndSourceWay EndSourceWayOf(KeepEnds.Route route, bool madeOn, bool clothKept, bool clothClear)
+        => route is KeepEnds.Route.Skin or KeepEnds.Route.Cloth or KeepEnds.Route.SkinOnly or KeepEnds.Route.Sibling
+            ? EndSourceWay.Own
+            : route == KeepEnds.Route.NoSkin && madeOn
+                ? clothKept && clothClear ? EndSourceWay.MadeOnCloth : EndSourceWay.MadeOnName
+                : EndSourceWay.None;
+
     /// <summary>
     /// The key one of the author's shoe sizes is kept under for the run: its file — or, placed by name, its file and
     /// option, since the size a name gives hangs on the option, not the file (as <c>Sources.ReadMadeOn</c> places by name
@@ -237,6 +265,7 @@ internal static partial class SizeSetRefit
             var d = plan.Edit.DeltaAt(v);
             return Before(v) + new Vector3(d.X, d.Y, d.Z);
         }
-        return JoinStretch(garment.Parts.Select(p => p.Triangles), held, Before, After);
+        // Each mesh whole, never again as its islands (ModelPartReader gives both).
+        return JoinStretch(garment.Parts.Where(p => p.Island < 0).Select(p => p.Triangles), held, Before, After);
     }
 }

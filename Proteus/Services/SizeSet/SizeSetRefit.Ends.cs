@@ -128,8 +128,10 @@ internal static partial class SizeSetRefit
              : request.Bodies.FirstOrDefault(b => string.Equals(b.Dir, dir, StringComparison.OrdinalIgnoreCase))?.Catalog;
 
         // A shoe with no skin at all is placed on the body chosen under "Made on", when one is (SizeSetRefit.MadeOnEnds.cs):
-        // by where its shaft's cloth sits on that body's legs, else by its option name. Null keeps today's reading.
-        var madeOnBody = EndMadeOnBody(request, piece.Slot, race, KeepEnds.Route.NoSkin);
+        // by where its shaft's cloth sits on that body's legs, else by its option name. Asked per file, by the route it
+        // read: null for every other route, and with no "Made on" body, which keeps today's reading.
+        BodyModIndex.Entry? MadeOnFor(KeepEnds.Route route) => EndMadeOnBody(request, piece.Slot, race, route);
+        BodyModIndex.Entry? madeOnUsed = null;
         var madeOnFits = new Dictionary<string, MadeOnFit>(StringComparer.Ordinal);
         bool clothKept = true;
 
@@ -167,9 +169,9 @@ internal static partial class SizeSetRefit
                                     KeepEnds.Letter(found.Route), found.Pick?.Dir ?? "-", found.Pick?.Option.Label ?? "-");
                     bool yasFile = request.Yas || SupportedBodies.IsYas(bones);
                     (BodyOption Option, float Gap, BodySizeMatch.Ranking Ranking)? cloth = null;
-                    if (found.Route == KeepEnds.Route.NoSkin && madeOnBody != null)
-                        cloth = KeepEnds.ClothSitsOn(reading, MadeOnLegs(madeOnBody, race, yasFile, piece.FollowsChest),
-                                                     madeOnBody.Catalog.PathOf);
+                    if (MadeOnFor(found.Route) is { } body)
+                        cloth = KeepEnds.ClothSitsOn(reading, MadeOnLegs(body, race, yasFile, piece.FollowsChest),
+                                                     body.Catalog.PathOf);
                     read = new EndFile(bytes, garment, bones, reading, found, siblings, cloth, yasFile);
                 }
             }
@@ -186,19 +188,23 @@ internal static partial class SizeSetRefit
         {
             if (ReadFile(option, file) is not { } f) return null;
             var found = f.Found;
-            if (found.Route is KeepEnds.Route.Skin or KeepEnds.Route.Cloth or KeepEnds.Route.SkinOnly or KeepEnds.Route.Sibling)
+            var body = MadeOnFor(found.Route);
+            var way = EndSourceWayOf(found.Route, body != null, clothKept, ClothClear(f.Cloth));
+            if (way == EndSourceWay.None) return null;
+            if (way == EndSourceWay.Own)
             {
                 string fileKey = EndSourceKey(file, option, byName: false);
                 if (endSources.TryGetValue(fileKey, out var had)) return had;
                 return endSources[fileKey] = new EndSource(option, f.Bytes, f.Garment, f.Bones, f.Reading, found,
                                                            found.Route == KeepEnds.Route.Sibling ? f.Siblings[0] : null);
             }
-            if (found.Route != KeepEnds.Route.NoSkin || madeOnBody == null) return null;
-            bool byCloth = clothKept && ClothClear(f.Cloth);
+            var onBody = body!;
+            madeOnUsed = onBody;
+            bool byCloth = way == EndSourceWay.MadeOnCloth;
             string key = EndSourceKey(file, option, byName: !byCloth);
             if (endSources.TryGetValue(key, out var known)) return known;
-            var placed = PlaceEndOnMadeOn(byCloth ? f.Cloth : null, option, madeOnBody, race, f.Yas, piece.FollowsChest,
-                                          on => BodySizeMatch.ClothAgainst(f.Reading.LimbView, madeOnBody.Catalog.PathOf(on)));
+            var placed = PlaceEndOnMadeOn(byCloth ? f.Cloth : null, option, onBody, race, f.Yas, piece.FollowsChest,
+                                          on => BodySizeMatch.ClothAgainst(f.Reading.LimbView, onBody.Catalog.PathOf(on)));
             string shaft = byCloth ? "" : f.Cloth is { } c ? $"shaft unclear ({c.Ranking.Confidence}); " : "shaft unclear; ";
             Note($"{option ?? file}: no skin; {shaft}{placed.Why}");
             if (placed.How == EndMadeOnHow.None)
@@ -206,14 +212,21 @@ internal static partial class SizeSetRefit
                 madeOnFits[key] = placed.Fit;
                 return endSources[key] = null;
             }
-            var pick = new AutoRefitDecisions.Pick(madeOnBody.Dir, placed.On!, placed.Confidence, true);
+            var pick = new AutoRefitDecisions.Pick(onBody.Dir, placed.On!, placed.Confidence, true);
             return endSources[key] = new EndSource(option, f.Bytes, f.Garment, f.Bones, f.Reading,
                                                    new KeepEnds.Found(KeepEnds.Route.Cloth, pick), null, placed);
         }
 
         // Every size of a skinless shoe is read on the "Made on" body before any is placed: when the shaft's cloth puts two
-        // of them on one size, it cannot tell them apart there, and every size is placed by its name instead.
-        if (madeOnBody != null)
+        // of them on one size, it cannot tell them apart there, and every size is placed by its name instead. Only when the
+        // first of the author's sizes that reads at all has no skin: any other shoe is read as it always was, up to the
+        // first size that reads.
+        var firstRead = piece.Options.Select(o =>
+        {
+            ct.ThrowIfCancellationRequested();
+            return ReadFile(o.Option, o.File);
+        }).FirstOrDefault(f => f != null);
+        if (firstRead != null && MadeOnFor(firstRead.Found.Route) is { } madeOnBody)
         {
             var reads = new List<(string? Option, BodyOption? Cloth, BodyOption? ByName)>();
             foreach (var (option, file) in piece.Options)
@@ -243,7 +256,7 @@ internal static partial class SizeSetRefit
         });
         if (primaryAt < 0 || ReadEndSource(piece.Options[primaryAt].Option, piece.Options[primaryAt].File) is not { } src)
         {
-            var (said, code) = EndsUnplaced(piece.Label, anyRead, madeOnBody == null ? null : request.MadeOn, madeOnBody?.Name,
+            var (said, code) = EndsUnplaced(piece.Label, anyRead, madeOnUsed == null ? null : request.MadeOn, madeOnUsed?.Name,
                                             madeOnFits.Values);
             runLog.Note(said, piece, SizeStatus.Skipped, code, piece.Group ?? piece.GroupName);
             return 0;
@@ -481,7 +494,7 @@ internal static partial class SizeSetRefit
                     Out(SizeStatus.Made, null, null, fromLabel, Measures.Of(plan, folded), sourceOption);
                     if (from.MadeOn is { } placed)
                         foreach (string warning in EndMadeOnWarnings(piece.Label, sourceOption, placed,
-                                                                     madeOnBody?.Name ?? request.MadeOn ?? ""))
+                                                                     madeOnUsed?.Name ?? request.MadeOn ?? ""))
                             AddWarningOnce(runLog, warning);
                 }
                 else
