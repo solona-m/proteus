@@ -725,6 +725,26 @@ public partial class MeshVolumeSolveTests
         Assert.True(foldedNow.Count == 0, $"{drag}: the guard folded {foldedNow.Count} triangle(s) the drag had not");
         Assert.True(SkinPoke.MadeWorse(model, after) <= SkinPoke.MadeWorse(model, during), $"{drag}: the guard pushed skin through");
         Assert.True(solve.RidersLeftUnder <= solve.LastCentreHeld.Count, $"{drag}: {solve.RidersLeftUnder} riders under their floor");
+        // A lift along a face tilted toward the centre gives up height with its X: the riders held are counted.
+        if (drag == "translate")
+            Assert.True(solve.RidersLeftUnder > 0, $"{drag}: {solve.LastCentreHeld.Count} held, none counted under its floor");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-2")]
+    public void Centred_drag_that_sinks_riders_holds_nothing_off_the_centre()
+    {
+        // The whole skin of a centred sheet, its own mirror image: a Centred drag. Cloth 15 mm up follows the skin only
+        // 84 %, so a 120 mm move sinks it and the guard lifts it — but only Sides holds lifts off the centre.
+        var l = Layered(11, 0.015f, centred: true);
+        var all = All(l.SkinAt);
+        var solve = SkinSolve(l.Model);
+        solve.BeginMove(all, false, 0f, mirror: Mirrored(Kind.Translate, l.Model.Positions, all));
+        Assert.Equal(Mode.Centred, solve.DragMirror?.Mode);
+        solve.MoveTo(new Vector3(0f, 0.12f, 0f));
+        Assert.True(solve.EndMove());
+        Assert.True(solve.LastBoundLifted.Count + solve.LastFaceLifted.Count > 0, $"nothing lifted: {solve.LastGuard}");
+        Assert.Empty(solve.LastCentreHeld);
     }
 
     [Fact]

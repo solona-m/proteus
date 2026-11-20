@@ -92,8 +92,42 @@ public partial class MeshVolumeSolveTests
         float now = HeightOver(solve, after, l.ClothAt[10, 10], l.SkinAt[10, 10]);
         Assert.True(At(after, l.SkinAt[10, 10]).Y > 0.0018f, "the stroke moved the skin");
         Assert.True(now >= tightened - 1e-5f, $"{now * 1000f:F3} mm: under where the stroke found it");
-        Assert.True(now < 0.0009f, $"{now * 1000f:F3} mm: the stroke loosened the cloth the user tightened back toward 1 mm");
+        Assert.True(now <= 0.00045f, $"{now * 1000f:F3} mm: the stroke loosened the cloth the user tightened");
         Assert.Equal(0, Folded(l.Model, after));
+    }
+
+    /// <summary>
+    /// A stroke over skin an earlier move flattened — a skin vertex dragged onto its neighbour, so the triangles between
+    /// have no face and their corners' turned way out may cancel — measures what it can and leaves the rest to the face
+    /// check: no exception, nothing turned over that the stroke did not turn.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-15")]
+    public void A_stroke_over_flattened_skin_neither_throws_nor_folds()
+    {
+        var l = Layered(11, 0.003f);
+        var solve = SkinSolve(l.Model);
+        int from = l.SkinAt[5, 6], onto = l.SkinAt[5, 5];
+        Assert.True(solve.BeginMove([from], adjacent: false, falloffRadius: 0f) > 0);
+        solve.MoveTo(At(l.Model.Positions, onto) - At(l.Model.Positions, from));
+        Assert.True(solve.EndMove());
+        var flat = solve.Positions().ToArray();
+
+        solve.Paint(At(l.Model.Positions, onto), 0.03f, 0.002f);
+        solve.EndStroke();
+        var after = solve.Positions();
+        Assert.True((At(after, onto) - At(flat, onto)).Length() > 0.001f, "the stroke moved the skin");
+        // Only triangles that were already flat, or already turned, may read as turned now.
+        int turnedByStroke = 0;
+        foreach (var part in l.Model.Parts.Where(p => p.Island < 0))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
+                var was = Vector3.Cross(At(flat, b) - At(flat, a), At(flat, c) - At(flat, a));
+                var now = Vector3.Cross(At(after, b) - At(after, a), At(after, c) - At(after, a));
+                if (was.LengthSquared() > 1e-14f && Vector3.Dot(was, now) <= 0f) turnedByStroke++;
+            }
+        Assert.Equal(0, turnedByStroke);
     }
 
     [Fact]
