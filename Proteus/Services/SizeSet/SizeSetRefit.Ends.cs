@@ -13,7 +13,8 @@ namespace Proteus.Services;
 /// exactly, and the leg or arm refitted onto each size — by the legs table for a shoe ("Rue WC", "YAB SC"), one option per
 /// body for gloves in their own group, since every chest size of a body has the same arms. A shoe or glove sized in the
 /// same group as the outfit's chest or legs joins the options that piece made, so one choice dresses the whole outfit.
-/// One that reaches no leg or arm has only its skin redrawn, where the new body draws skin another way.
+/// One that reaches no leg or arm has only its skin redrawn, where the new body draws skin another way. A shoe with no
+/// skin at all is read only with "Made on" set: its sizes placed on that body's legs (<c>SizeSetRefit.MadeOnEnds.cs</c>).
 /// </summary>
 internal static partial class SizeSetRefit
 {
@@ -55,11 +56,22 @@ internal static partial class SizeSetRefit
     }
 
     /// <summary>One of the author's sizes of a shoe or glove, read: what its sizes may be cut from.</summary>
+    /// <param name="MadeOn">How a skinless shoe's size was placed on the "Made on" body (<c>SizeSetRefit.MadeOnEnds.cs</c>);
+    /// null for one read off the shoe itself.</param>
     private sealed record EndSource(string? Option, byte[] Bytes, ModelParts Garment, HashSet<string> Bones,
-                                    KeepEnds.Reading Reading, KeepEnds.Found Found, SiblingPiece.Candidate? Sibling)
+                                    KeepEnds.Reading Reading, KeepEnds.Found Found, SiblingPiece.Candidate? Sibling,
+                                    EndMadeOnRead? MadeOn = null)
     {
         public bool SkinOnly => Found.Route == KeepEnds.Route.SkinOnly;
     }
+
+    /// <summary>One of the author's shoe or glove files, read once a run whichever options give it.</summary>
+    /// <param name="Cloth">For a skinless shoe with "Made on" set, how its shaft's cloth sits on that body's legs
+    /// (<see cref="KeepEnds.ClothSitsOn"/>); else null.</param>
+    /// <param name="Yas">The file is rigged for YAS, or the run asks for YAS sizes.</param>
+    private sealed record EndFile(byte[] Bytes, ModelParts Garment, HashSet<string> Bones, KeepEnds.Reading Reading,
+                                  KeepEnds.Found Found, IReadOnlyList<SiblingPiece.Candidate> Siblings,
+                                  (BodyOption Option, float Gap, BodySizeMatch.Ranking Ranking)? Cloth, bool Yas);
 
     private static int RunEndsPiece(Request request, Piece piece, UVRemapService? uvRemap, IPluginLog log,
                                     Action<string> progress, RunLog runLog,
@@ -115,15 +127,21 @@ internal static partial class SizeSetRefit
             => dir == VanillaBodyCatalog.Key ? game
              : request.Bodies.FirstOrDefault(b => string.Equals(b.Dir, dir, StringComparison.OrdinalIgnoreCase))?.Catalog;
 
-        // Each of the author's sizes read once, by file: the first that reads sizes an end that follows nothing, and one
+        // A shoe with no skin at all is placed on the body chosen under "Made on", when one is (SizeSetRefit.MadeOnEnds.cs):
+        // by where its shaft's cloth sits on that body's legs, else by its option name. Null keeps today's reading.
+        var madeOnBody = EndMadeOnBody(request, piece.Slot, race, KeepEnds.Route.NoSkin);
+        var madeOnFits = new Dictionary<string, MadeOnFit>(StringComparer.Ordinal);
+        bool clothKept = true;
+
+        // Each of the author's files read once: the first size that reads sizes an end that follows nothing, and one
         // that follows is cut, option by option, from the size its lead piece there was.
         bool anyRead = false;
-        var endSources = new Dictionary<string, EndSource?>(StringComparer.Ordinal);
-        EndSource? ReadEndSource(string? option, string file)
+        var fileReads = new Dictionary<string, EndFile?>(StringComparer.Ordinal);
+        EndFile? ReadFile(string? option, string file)
         {
             string fileKey = RefitCore.Normal(file);
-            if (endSources.TryGetValue(fileKey, out var known)) return known;
-            EndSource? read = null;
+            if (fileReads.TryGetValue(fileKey, out var known)) return known;
+            EndFile? read = null;
             try
             {
                 string path = BodySizeCatalog.ResolveCaseInsensitive(root, file);
@@ -147,30 +165,87 @@ internal static partial class SizeSetRefit
                                         found.Pick.Confidence);
                     log.Information("[Proteus] size set: {0} from {1}: route {2}, {3} / {4}", piece.Label, option ?? file,
                                     KeepEnds.Letter(found.Route), found.Pick?.Dir ?? "-", found.Pick?.Option.Label ?? "-");
-                    if (found.Route is KeepEnds.Route.Skin or KeepEnds.Route.Cloth or KeepEnds.Route.SkinOnly
-                                       or KeepEnds.Route.Sibling)
-                        read = new EndSource(option, bytes, garment, bones, reading, found,
-                                             found.Route == KeepEnds.Route.Sibling ? siblings[0] : null);
+                    bool yasFile = request.Yas || SupportedBodies.IsYas(bones);
+                    (BodyOption Option, float Gap, BodySizeMatch.Ranking Ranking)? cloth = null;
+                    if (found.Route == KeepEnds.Route.NoSkin && madeOnBody != null)
+                        cloth = KeepEnds.ClothSitsOn(reading, MadeOnLegs(madeOnBody, race, yasFile, piece.FollowsChest),
+                                                     madeOnBody.Catalog.PathOf);
+                    read = new EndFile(bytes, garment, bones, reading, found, siblings, cloth, yasFile);
                 }
             }
             catch (Exception e) when (e is not OperationCanceledException)
             {
                 Note($"{option ?? file} could not be read: {e.Message}");
             }
-            return endSources[fileKey] = read;
+            return fileReads[fileKey] = read;
         }
 
-        EndSource? primary = null;
-        foreach (var (option, file) in piece.Options)
+        // What a size may be cut from, kept by file — or by file and option for a skinless shoe placed by its name.
+        var endSources = new Dictionary<string, EndSource?>(StringComparer.Ordinal);
+        EndSource? ReadEndSource(string? option, string file)
+        {
+            if (ReadFile(option, file) is not { } f) return null;
+            var found = f.Found;
+            if (found.Route is KeepEnds.Route.Skin or KeepEnds.Route.Cloth or KeepEnds.Route.SkinOnly or KeepEnds.Route.Sibling)
+            {
+                string fileKey = EndSourceKey(file, option, byName: false);
+                if (endSources.TryGetValue(fileKey, out var had)) return had;
+                return endSources[fileKey] = new EndSource(option, f.Bytes, f.Garment, f.Bones, f.Reading, found,
+                                                           found.Route == KeepEnds.Route.Sibling ? f.Siblings[0] : null);
+            }
+            if (found.Route != KeepEnds.Route.NoSkin || madeOnBody == null) return null;
+            bool byCloth = clothKept && ClothClear(f.Cloth);
+            string key = EndSourceKey(file, option, byName: !byCloth);
+            if (endSources.TryGetValue(key, out var known)) return known;
+            var placed = PlaceEndOnMadeOn(byCloth ? f.Cloth : null, option, madeOnBody, race, f.Yas, piece.FollowsChest,
+                                          on => BodySizeMatch.ClothAgainst(f.Reading.LimbView, madeOnBody.Catalog.PathOf(on)));
+            string shaft = byCloth ? "" : f.Cloth is { } c ? $"shaft unclear ({c.Ranking.Confidence}); " : "shaft unclear; ";
+            Note($"{option ?? file}: no skin; {shaft}{placed.Why}");
+            if (placed.How == EndMadeOnHow.None)
+            {
+                madeOnFits[key] = placed.Fit;
+                return endSources[key] = null;
+            }
+            var pick = new AutoRefitDecisions.Pick(madeOnBody.Dir, placed.On!, placed.Confidence, true);
+            return endSources[key] = new EndSource(option, f.Bytes, f.Garment, f.Bones, f.Reading,
+                                                   new KeepEnds.Found(KeepEnds.Route.Cloth, pick), null, placed);
+        }
+
+        // Every size of a skinless shoe is read on the "Made on" body before any is placed: when the shaft's cloth puts two
+        // of them on one size, it cannot tell them apart there, and every size is placed by its name instead.
+        if (madeOnBody != null)
+        {
+            var reads = new List<(string? Option, BodyOption? Cloth, BodyOption? ByName)>();
+            foreach (var (option, file) in piece.Options)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (ReadFile(option, file) is not { Found.Route: KeepEnds.Route.NoSkin } f) continue;
+                var table = SupportedBodies.MadeOnTable(madeOnBody, piece.FollowsChest ? "_top" : "_dwn", race, f.Yas);
+                reads.Add((option, ClothClear(f.Cloth) ? f.Cloth!.Value.Option : null,
+                           TrustOn(option, table, madeOnBody.Catalog, "_dwn", race, piece.FollowsChest).Trusted?.On));
+            }
+            if (ClothCollides(reads, out string collides))
+            {
+                clothKept = false;
+                Note(collides);
+            }
+        }
+
+        int primaryAt = PrimaryOf(piece.Options.Count, i =>
         {
             ct.ThrowIfCancellationRequested();
-            if ((primary = ReadEndSource(option, file)) != null) break;
-        }
-        if (primary is not { } src)
+            return ReadEndSource(piece.Options[i].Option, piece.Options[i].File) switch
+            {
+                null => EndReadKind.None,
+                { MadeOn.How: EndMadeOnHow.Name } => EndReadKind.Name,
+                _ => EndReadKind.Read,
+            };
+        });
+        if (primaryAt < 0 || ReadEndSource(piece.Options[primaryAt].Option, piece.Options[primaryAt].File) is not { } src)
         {
-            runLog.Note(string.Format(anyRead ? Strings.SizeSet.UnreadableFmt : Strings.SizeSet.EndsUnreadableFmt,
-                                      piece.Label), piece, SizeStatus.Skipped,
-                        anyRead ? Codes.Unreadable : Codes.EndsUnreadable, piece.Group ?? piece.GroupName);
+            var (said, code) = EndsUnplaced(piece.Label, anyRead, madeOnBody == null ? null : request.MadeOn, madeOnBody?.Name,
+                                            madeOnFits.Values);
+            runLog.Note(said, piece, SizeStatus.Skipped, code, piece.Group ?? piece.GroupName);
             return 0;
         }
 
@@ -187,6 +262,11 @@ internal static partial class SizeSetRefit
         var authorSizes = !skinOnly && KeepEnds.ComparesAuthorSizes(piece.Slot) ? AuthorLimbSizes(root, piece, group.Ours) : [];
 
         bool yas = request.Yas || SupportedBodies.IsYas(src.Bones);
+        // A skinless shoe placed on the "Made on" body: each of the author's sizes placed there is that size of the body,
+        // never remade (as a skinless chest or legs piece's are, KAN-6).
+        var madeOnOwn = new List<(string? Option, TrustedSize? Trusted)>();
+        if (src.MadeOn != null)
+            madeOnOwn.AddRange(piece.Options.Select(o => (o.Option, ReadEndSource(o.Option, o.File)?.MadeOn?.Own)));
 
         foreach (string key in request.Keys)
         {
@@ -333,7 +413,8 @@ internal static partial class SizeSetRefit
                     Out(SizeStatus.Skipped, Codes.MadeOnIt, "the same shape as the size it was made on");
                     continue;
                 }
-                if (AuthorHas(authorSizes, targetCat, to!, limb, race) is { } theirs)
+                if ((AuthorHas(authorSizes, targetCat, to!, limb, race)
+                     ?? (madeOnOwn.Count > 0 ? TrustedOwn(madeOnOwn, key, to!.Rel) : null)) is { } theirs)
                 {
                     log.Information("[Proteus] size set: {0}: {1} is the author's own \"{2}\"", piece.Label, option, theirs);
                     Out(SizeStatus.Skipped, Codes.AuthorsOwn, $"the author's own \"{theirs}\"");
@@ -381,12 +462,28 @@ internal static partial class SizeSetRefit
                 // Stopped while this size was made: it is not saved — Stop keeps what was saved before it.
                 ct.ThrowIfCancellationRequested();
                 int folded = CrossSexRefit.ClothFolded(from.Bytes, plan);
+                if (from.MadeOn != null)
+                {
+                    // A skinless boot's ankle is all cloth, which the seam above never sees: measured here, inside the pass.
+                    var (joinEdges, joinWorst) = JoinStretch(from.Garment, from.Reading.Ends, plan);
+                    log.Information("[Proteus] size set: {0} {1}: ankle join stretched up to {2:F1} mm over {3} edges, "
+                                  + "{4} triangles folded", piece.Label, option, joinWorst * 1000f, joinEdges, folded);
+                    if (joinWorst > KeepEnds.SeamWarn)
+                        log.Warning("[Proteus] size set: {0} {1}: the ankle join stretched by {2:F1} mm — look at it in game",
+                                    piece.Label, option, joinWorst * 1000f);
+                }
                 if (group.Save(target.Dir, fromLabel,
                                [new BodyRetargetWriter.Refit(option, plan.Model, to!.Label,
                                                              outfit != null ? OutfitPartners.LayersOf(root, partner!) : null,
                                                              plan.Materials)],
                                sourceOption, notes))
+                {
                     Out(SizeStatus.Made, null, null, fromLabel, Measures.Of(plan, folded), sourceOption);
+                    if (from.MadeOn is { } placed)
+                        foreach (string warning in EndMadeOnWarnings(piece.Label, sourceOption, placed,
+                                                                     madeOnBody?.Name ?? request.MadeOn ?? ""))
+                            AddWarningOnce(runLog, warning);
+                }
                 else
                     Out(SizeStatus.Failed, Codes.SaveFailed, notes[^1]);
             }

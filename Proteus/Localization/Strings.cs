@@ -597,7 +597,8 @@ public sealed class SizeSetStrings
         "{0}, \"{1}\": it has no skin of its own to read a body off, and its cloth sits on no body closely, so it was refit "
       + "as made on {2}, the body this outfit's legs (\"{3}\") were made on.");
 
-    /// <summary>{0} is the piece, {1} the men's option, {2} millimetres, {3} the body.</summary>
+    /// <summary>{0} is the piece, {1} the option: the men's option, or the author's size a skinless shoe's sizes were cut
+    /// from (<c>SizeSetRefit.MadeOnEnds.cs</c>); {2} millimetres, {3} the body.</summary>
     public readonly string EndClothGapFmt = ProteusLoc.Localize("SizeSet.EndClothGap.Fmt",
         "{0}, \"{1}\": its cloth sits about {2:F0} mm off {3}'s leg or arm on average, so the body it was read on may "
       + "not be the one it was made on.");
