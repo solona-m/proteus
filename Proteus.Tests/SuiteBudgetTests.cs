@@ -73,8 +73,6 @@ public class SuiteBudgetTests
     /// <summary>Failing tests stay in the release run so the failure stays visible. Drop an entry once it is fixed.</summary>
     internal static readonly string[] KnownFailures =
     {
-        "MirrorMoveLocalTests.Neolithe_body_skin_mirrors",
-        "SkinMoveLocalTests.ThisOldThingRueAndNeolitheTopsSculpt",
     };
 
     /// <summary>Backstop: a test class named like a Sensitive Areas writer or a rule test is never Diagnostic.</summary>

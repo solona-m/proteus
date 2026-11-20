@@ -172,4 +172,40 @@ public class MirrorMotionTests
             if (a - d * 1.2f < b - d) Assert.True(ka < kb, $"{a},{b} by {d}: {ka} not inside {kb}");
         }
     }
+
+    /// <summary>
+    /// The release guard's lift in a mirrored Sides drag keeps the mirror's centre rule (neolithe-skin-move-fails): a node
+    /// the drag left on the centre plane keeps its X; one off it may be lifted away from the centre freely, toward it only
+    /// as <see cref="MeshVolumeSolve.KeepOffCentre"/> allows, never across. A piece with no mirror image (direct only)
+    /// takes its lift as it is, as it takes the drag.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-3")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-4")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-5")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-6")]
+    public void GuardLiftX_follows_the_mirrors_centre_rule()
+    {
+        const float margin = 0.005f;
+        // The Neolithe piercing corner: on the plane, a 14.5 µm lift across it.
+        Assert.Equal(-4.7e-9f, MeshVolumeSolve.GuardLiftX(-4.7e-9f, 1.45e-5f, margin, directOnly: false));
+        Assert.Equal(0f, MeshVolumeSolve.GuardLiftX(0f, 0.001f, margin, directOnly: false));
+        // Away from the centre: the lift as it is, either side.
+        Assert.Equal(0.006f, MeshVolumeSolve.GuardLiftX(0.004f, 0.006f, margin, directOnly: false));
+        Assert.Equal(-0.006f, MeshVolumeSolve.GuardLiftX(-0.004f, -0.006f, margin, directOnly: false));
+        // Toward and past the centre: gathered, never across.
+        float right = MeshVolumeSolve.GuardLiftX(0.004f, -0.002f, margin, directOnly: false);
+        Assert.True(right is > 0f and < 0.004f, $"{right}");
+        float left = MeshVolumeSolve.GuardLiftX(-0.004f, 0.002f, margin, directOnly: false);
+        Assert.Equal(-right, left);
+        // Continuous at the knee, where the lift first comes within the margin.
+        float m = MathF.Min(0.004f, margin);
+        Assert.True(MathF.Abs(MeshVolumeSolve.GuardLiftX(0.004f, m + 1e-7f, margin, false)
+                              - MeshVolumeSolve.GuardLiftX(0.004f, m - 1e-7f, margin, false)) < 1e-6f);
+        // Two nodes in order, lifted the same way, stay in order.
+        Assert.True(MeshVolumeSolve.GuardLiftX(0.002f, -0.001f, margin, false) < MeshVolumeSolve.GuardLiftX(0.003f, 0f, margin, false));
+        // Direct only: the lift as it is, in every case above.
+        foreach (var (x0, x1) in new[] { (-4.7e-9f, 1.45e-5f), (0f, 0.001f), (0.004f, 0.006f), (0.004f, -0.002f), (-0.004f, 0.002f) })
+            Assert.Equal(x1, MeshVolumeSolve.GuardLiftX(x0, x1, margin, directOnly: true));
+    }
 }

@@ -20,13 +20,13 @@ public partial class MeshVolumeSolveTests
     /// as split normals along a seam do: vertices tilted ±40° about Z in a checkerboard. Along such a normal the cloth
     /// measures cos 40° × 1 mm, under the floor — the old check's misfire on a translation.
     /// </summary>
-    private static Layers SplitNormalLayers(float gap = 0.001f)
+    private static Layers SplitNormalLayers(float gap = 0.001f, int size = 11)
     {
-        var l = Layered(11, gap, centred: true);
+        var l = Layered(size, gap, centred: true);
         var nrm = l.Model.Normals.ToArray();
         float s = MathF.Sin(0.7f), c = MathF.Cos(0.7f);
-        for (int i = 0; i < 11; i++)
-        for (int j = 0; j < 11; j++)
+        for (int i = 0; i < size; i++)
+        for (int j = 0; j < size; j++)
         {
             int v = l.SkinAt[i, j];
             float sign = (i + j) % 2 == 0 ? 1f : -1f;
@@ -53,6 +53,7 @@ public partial class MeshVolumeSolveTests
     [Trait("Plan", "EDGE-issue-sweep-c-41")]
     [InlineData("move")]
     [InlineData("rotate")]
+    [Trait("Plan", "AC-neolithe-skin-move-fails-7")]
     public void AllMoveRotateWithSkinAreRigid(string op)
     {
         var l = SplitNormalLayers();
@@ -76,6 +77,7 @@ public partial class MeshVolumeSolveTests
 
     [Fact]
     [Trait("Plan", "EDGE-issue-sweep-c-42")]
+    [Trait("Plan", "AC-neolithe-skin-move-fails-7")]
     public void BoundCheckSignFixedAtStartSurvivesAHalfTurn()
     {
         // Turned over completely, skin and cloth together: the face's way out turns with them, nothing is lifted.
@@ -92,6 +94,8 @@ public partial class MeshVolumeSolveTests
 
     [Fact]
     [Trait("Plan", "AC-issue-sweep-c-3")]
+    [Trait("Plan", "AC-neolithe-skin-move-fails-7")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-1")]
     public void SkinPartMoveCarriesItsRidersNoFurtherThanTheDrag()
     {
         // Whole parts: only the skin row moved; its riders go with it, never further.
@@ -109,6 +113,7 @@ public partial class MeshVolumeSolveTests
     [Fact]
     [Trait("Plan", "AC-issue-sweep-c-3")]
     [Trait("Plan", "EDGE-issue-sweep-c-43")]
+    [Trait("Plan", "AC-neolithe-skin-move-fails-7")]
     public void WholePartsSkinMoveWithFalloffNeverExceedsTheDrag()
     {
         // Whole parts with the Studio's defaults: adjacent on, a 50 mm falloff, so cloth near the moved skin takes a share
@@ -130,6 +135,7 @@ public partial class MeshVolumeSolveTests
     [Fact]
     [Trait("Plan", "EDGE-issue-sweep-c-6")]
     [Trait("Plan", "EDGE-issue-sweep-c-8")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-1")]
     public void AMoveThatPokesSkinThroughStillLifts()
     {
         // Cloth 1 mm up with a vertex over every other skin vertex, each riding the skin straight under it; the skin
@@ -150,13 +156,81 @@ public partial class MeshVolumeSolveTests
 
     [Fact]
     [Trait("Plan", "EDGE-issue-sweep-c-9")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-11")]
     public void TransferGuardKeepsTodaysFloor()
     {
-        // A size transfer's guard is judged against the author's model, as before (relativeToStart: false).
+        // A size transfer's guard is judged against the author's model, as before (RiderGuard.Authored).
         var src = System.IO.File.ReadAllText(System.IO.Path.Combine(RepoRoot(), "Proteus", "Services", "MeshVolumeSolve.SkinMoves.cs"));
-        Assert.Contains("try { KeepRidersAboveSkin(start, relativeToStart: false); }", src);
+        Assert.Contains("try { KeepRidersAboveSkin(start, RiderGuard.Authored); }", src);
         Assert.Contains("if (KeepAboveBoundSkin(n, nodeDelta[n], out var kept))", src);
-        Assert.Contains("float since = relativeToStart ? OutsideAtStart(s, ca, cb, cc, face, start) : float.NegativeInfinity;", src);
+        Assert.Contains("float since = sinceStart ? OutsideAtStart(s, ca, cb, cc, face, start) : float.NegativeInfinity;", src);
+        Assert.Contains("bool sinceStart = rule != RiderGuard.Authored;", src);
+    }
+
+    /// <summary>
+    /// Which rule each operation's release guard takes (neolithe-skin-move-fails): a stroke along the skin's turned way
+    /// out, a move and a grab along the bound face (#86), the move alone holding the mirror's centre. The behaviour is
+    /// pinned by the stroke, grab and mirror tests; this records the choice where it is made.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-neolithe-skin-move-fails-1")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-10")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-11")]
+    public void GuardRulePerOperation()
+    {
+        var moves = System.IO.File.ReadAllText(System.IO.Path.Combine(RepoRoot(), "Proteus", "Services", "MeshVolumeSolve.SkinMoves.cs"));
+        int at = moves.IndexOf("private void SettleSkinStroke", StringComparison.Ordinal);
+        int end = moves.IndexOf("    private ", at + 10, StringComparison.Ordinal);
+        Assert.Contains("KeepRidersAboveSkin(start, RiderGuard.SinceBlended);", moves[at..end]);
+        var solve = System.IO.File.ReadAllText(System.IO.Path.Combine(RepoRoot(), "Proteus", "Services", "MeshVolumeSolve.cs"));
+        string move = "KeepRidersAboveSkin(touched!, RiderGuard.SinceFace, holdCentre: moveMode == MirrorMode.Sides);";
+        string grab = "KeepRidersAboveSkin(touched!, RiderGuard.SinceFace);";
+        Assert.Equal(1, Occurrences(solve, move));
+        Assert.Equal(1, Occurrences(solve, grab));
+        static int Occurrences(string text, string what)
+        {
+            int count = 0;
+            for (int i = text.IndexOf(what, StringComparison.Ordinal); i >= 0; i = text.IndexOf(what, i + 1, StringComparison.Ordinal)) count++;
+            return count;
+        }
+    }
+
+    /// <summary>
+    /// A grab keeps #86's rule (neolithe-skin-move-fails): on skin whose normals disagree with its faces, a grab wide enough
+    /// to carry the whole middle of the sheet rigidly lifts no rider there, and the cloth goes exactly as far as the drag.
+    /// Under the author-relative rule the split normals would lift every rider about 0.23 mm.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-neolithe-skin-move-fails-7")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-10")]
+    public void A_nearly_rigid_grab_with_skin_lifts_no_interior_rider()
+    {
+        var l = SplitNormalLayers(size: 31);
+        // The split normals are there: ±40° about Z, alternating.
+        foreach (var (i, j) in new[] { (10, 10), (10, 11), (15, 15) })
+        {
+            var n = At(l.Model.Normals, l.SkinAt[i, j]);
+            Assert.True(MathF.Abs(MathF.Abs(n.X) - MathF.Sin(0.7f)) < 1e-5f, $"skin [{i},{j}] normal {n}");
+        }
+        var solve = SkinSolve(l.Model);
+        var drag = new Vector3(0.003f, 0.015f, -0.004f);
+        var centre = At(l.Model.Positions, l.SkinAt[15, 15]);
+        Assert.True(solve.BeginGrab(centre, 10f) > 0);
+        solve.GrabTo(drag);
+        Assert.True(solve.EndGrab());
+
+        var after = solve.Positions();
+        var nodeOf = solve.FollowInputs.NodeOf;
+        var interior = new List<int>();
+        for (int i = 4; i <= 26; i++)
+        for (int j = 4; j <= 26; j++) { interior.Add(l.SkinAt[i, j]); interior.Add(l.ClothAt[i, j]); }
+        // Precondition: the grab carried the middle rigidly.
+        Assert.All(interior, v => Assert.True((Moved(l.Model, after, v) - drag).Length() <= 0.01f * drag.Length(),
+                                              $"vertex {v} moved {Moved(l.Model, after, v)}, not the drag"));
+        Assert.DoesNotContain(interior, v => solve.LastBoundLifted.Contains(nodeOf[v]) || solve.LastFaceLifted.Contains(nodeOf[v]));
+        for (int i = 4; i <= 26; i++)
+        for (int j = 4; j <= 26; j++)
+            Assert.True((Moved(l.Model, after, l.ClothAt[i, j]) - drag).Length() <= 1e-4f, $"cloth [{i},{j}] off the drag");
     }
 
     [Fact]
@@ -181,6 +255,8 @@ public partial class MeshVolumeSolveTests
     [Fact]
     [Trait("Plan", "EDGE-issue-sweep-c-6")]
     [Trait("Plan", "EDGE-issue-sweep-c-41")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-1")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-7")]
     public void A_skin_move_that_sinks_a_loose_rider_lifts_it_to_its_floor()
     {
         // Cloth 15 mm up follows the skin only 84 % (FollowWeight): a 120 mm move of the skin sinks it 19 mm, through the
@@ -197,10 +273,12 @@ public partial class MeshVolumeSolveTests
         Assert.True(At(after, cloth).Y - At(after, l.SkinAt[5, 5]).Y >= 0.001f - 1e-5f,
                     $"{(At(after, cloth).Y - At(after, l.SkinAt[5, 5]).Y) * 1000f:F2} mm above the skin");
         Assert.Equal(0, Folded(l.Model, after));
+        Assert.Equal(0, solve.RidersLeftUnder);   // no centre rule here: every rider it lifted is at its floor
     }
 
     [Fact]
     [Trait("Plan", "EDGE-issue-sweep-c-49")]
+    [Trait("Plan", "AC-neolithe-skin-move-fails-7")]
     public void AllScaleWithSkinLiftsNoMoreThanItsHeightChange()
     {
         // A uniform scale is not rigid: heights grow with it. Cloth 3 mm up, scaled 1.2 about the middle with the skin:
@@ -217,6 +295,7 @@ public partial class MeshVolumeSolveTests
 
     [Fact]
     [Trait("Plan", "EDGE-issue-sweep-c-52")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-15")]
     public void DegenerateBoundTriangleSkipsBoundCheckAndRigidMoveLiftsNothing()
     {
         // Bind never binds to a triangle with no face, so the degenerate case is one an earlier operation made: a skin

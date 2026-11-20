@@ -128,6 +128,7 @@ public partial class MeshVolumeSolveTests
 
     [Fact]
     [Trait("Plan", "AC-mirror-skin-move-2")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-2")]
     public void WholeSkinAcrossTheCentreStaysCentred()
     {
         var (model, skin, cloth) = SkinUnderCloth();
@@ -145,6 +146,7 @@ public partial class MeshVolumeSolveTests
         foreach (int v in Cells(cloth, 3, 17, 3, 17))
             AssertNear(At(model.Positions, v) + new Vector3(0f, 0.004f, 0f), At(after, v), 1e-4f, "cloth riding the skin");
         Assert.True(solve.EndMove());
+        Assert.Empty(solve.LastCentreHeld);   // a centred drag holds nothing off the centre: only Sides does
     }
 
     // ── each kind matches its own ───────────────────────────────────────────
@@ -383,6 +385,7 @@ public partial class MeshVolumeSolveTests
 
     [Fact]
     [Trait("Plan", "EDGE-mirror-skin-move-12")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-14")]
     public void ATapOnMirroredSkinLeavesNoEdit()
     {
         var (model, skin, _) = SkinUnderCloth();
@@ -631,5 +634,121 @@ public partial class MeshVolumeSolveTests
             }
             AssertNoFolds(model, model.Positions, after, kind.ToString());
         }
+    }
+
+    // ── the release guard keeps the mirror's centre (neolithe-skin-move-fails) ──
+
+    /// <summary>
+    /// A V valley across the centre — skin and the cloth 1 mm over it both <c>k·|x|</c> high, as a cleavage is — so every
+    /// skin face off the centre tilts toward it, and a lift along one carries the cloth sideways. A cloth column lies on
+    /// the centre plane, and the triangulation is its own mirror.
+    /// </summary>
+    private static (ModelParts Model, int[,] Skin, int[,] Cloth) CleavageUnderCloth(float k = 0.4f)
+    {
+        var mesh = new MirrorMesh();
+        var xs = Steps(-0.1f, 21);
+        var skin = mesh.Grid(xs, Steps(0f, 21), y: 0f, material: SkinMaterial, height: (i, _) => k * MathF.Abs(xs[i]));
+        var cloth = mesh.Grid(xs, Steps(0f, 21), y: 0.001f, height: (i, _) => k * MathF.Abs(xs[i]));
+        return (mesh.Build(), skin, cloth);
+    }
+
+    /// <summary>The triangles (by their first index's offset in the part list) turned over against the author's.</summary>
+    private static HashSet<(int Part, int Tri)> FoldedSet(ModelParts model, float[] after)
+    {
+        var folded = new HashSet<(int, int)>();
+        for (int p = 0; p < model.Parts.Count; p++)
+        {
+            var t = model.Parts[p].Triangles;
+            for (int i = 0; i + 2 < t.Length; i += 3)
+            {
+                var was = Vector3.Cross(At(model.Positions, t[i + 1]) - At(model.Positions, t[i]), At(model.Positions, t[i + 2]) - At(model.Positions, t[i]));
+                var now = Vector3.Cross(At(after, t[i + 1]) - At(after, t[i]), At(after, t[i + 2]) - At(after, t[i]));
+                if (was.LengthSquared() > 1e-16f && Vector3.Dot(was, now) <= 0f) folded.Add((p, i));
+            }
+        }
+        return folded;
+    }
+
+    /// <summary>The two drags that carry cloth into the valley's centre: a Translate of a skin patch toward it, and a
+    /// Scale that pulls the patch in and down. With the falloff, as the Studio's defaults are.</summary>
+    private static MeshVolumeSolve DragIntoTheCleavage(ModelParts model, int[,] skin, string drag, bool mirror = true)
+    {
+        var solve = SkinSolve(model);
+        int[] seeds = drag == "translate" ? Cells(skin, 11, 15, 8, 12) : Cells(skin, 12, 18, 6, 14);
+        var pivot = BoundsCentre(model.Positions, seeds);
+        var kind = drag == "translate" ? Kind.Translate : Kind.Scale;
+        bool adjacent = drag != "translate";
+        Assert.True(solve.BeginMove(seeds, adjacent, adjacent ? 0.03f : 0f, mirror: mirror ? new MoveMirror(kind, pivot) : null) > 0);
+        if (drag == "translate") solve.MoveTo(new Vector3(-0.04f, 0f, 0f));
+        else solve.TransformTo(PartScaleDrag.Build(pivot, new Vector3(1.3f, 0.9f, 1f)));
+        return solve;
+    }
+
+    /// <summary>
+    /// The Neolithe SFW XS fold (neolithe-skin-move-fails): a mirrored drag gathers cloth onto the centre plane, and the
+    /// release guard's lift along a tilted skin face carried it across — on test tip, 15 nodes (translate) and 11 (scale)
+    /// crossed, up to 0.82 mm. The guard now holds each lift on its own side of the centre, as the drag itself does.
+    /// </summary>
+    [Theory]
+    [Trait("Plan", "AC-neolithe-skin-move-fails-5")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-3")]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-7")]
+    [InlineData("translate")]
+    [InlineData("scale")]
+    public void Mirrored_skin_drag_guard_never_carries_cloth_across_the_centre(string drag)
+    {
+        var (model, skin, _) = CleavageUnderCloth();
+        var solve = DragIntoTheCleavage(model, skin, drag);
+        Assert.Equal(Mode.Sides, solve.DragMirror?.Mode);
+        var during = solve.Positions().ToArray();
+        Assert.True(solve.EndMove());
+        var after = solve.Positions();
+
+        var nodeOf = solve.FollowInputs.NodeOf;
+        float margin = solve.MirrorMinX, onPlane = 1e-3f * margin;
+        Assert.NotEmpty(solve.LastCentreHeld);
+        Assert.Contains(Enumerable.Range(0, during.Length / 3),
+                        v => solve.LastCentreHeld.Contains(nodeOf[v]) && MathF.Abs(during[v * 3]) <= margin);
+        var lifted = new HashSet<int>(solve.LastBoundLifted);
+        lifted.UnionWith(solve.LastFaceLifted);
+        for (int v = 0; v < during.Length / 3; v++)
+        {
+            if (!lifted.Contains(nodeOf[v])) continue;
+            float x0 = during[v * 3], x1 = after[v * 3];
+            if (MathF.Abs(x0) <= onPlane)
+                Assert.True(MathF.Abs(x1 - x0) <= onPlane, $"{drag}: vertex {v} on the centre plane went sideways {(x1 - x0) * 1e6f:F2} µm");
+            else
+                Assert.True(MathF.Sign(x1) == MathF.Sign(x0), $"{drag}: vertex {v} crossed the centre ({x0 * 1000f:F4} → {x1 * 1000f:F4} mm)");
+        }
+        var foldedNow = FoldedSet(model, after);
+        foldedNow.ExceptWith(FoldedSet(model, during));
+        Assert.True(foldedNow.Count == 0, $"{drag}: the guard folded {foldedNow.Count} triangle(s) the drag had not");
+        Assert.True(SkinPoke.MadeWorse(model, after) <= SkinPoke.MadeWorse(model, during), $"{drag}: the guard pushed skin through");
+        Assert.True(solve.RidersLeftUnder <= solve.LastCentreHeld.Count, $"{drag}: {solve.RidersLeftUnder} riders under their floor");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-neolithe-skin-move-fails-1")]
+    public void Unmirrored_drag_into_the_cleavage_holds_nothing_off_the_centre()
+    {
+        var (model, skin, _) = CleavageUnderCloth();
+        var solve = DragIntoTheCleavage(model, skin, "translate", mirror: false);
+        Assert.True(solve.EndMove());
+        Assert.NotEmpty(solve.LastBoundLifted);
+        Assert.Empty(solve.LastCentreHeld);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-neolithe-skin-move-fails-8")]
+    public void One_undo_takes_back_a_clamped_mirrored_skin_drag()
+    {
+        var (model, skin, _) = CleavageUnderCloth();
+        var solve = DragIntoTheCleavage(model, skin, "translate");
+        Assert.True(solve.EndMove());
+        Assert.NotEmpty(solve.LastCentreHeld);
+        solve.Undo();
+        var back = solve.Positions();
+        for (int v = 0; v < model.Positions.Length / 3; v++) AssertNear(At(model.Positions, v), At(back, v), 1e-6f, $"vertex {v}");
+        Assert.False(solve.CanUndo);
     }
 }

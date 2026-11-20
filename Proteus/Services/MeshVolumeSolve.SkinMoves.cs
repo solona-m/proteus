@@ -184,7 +184,32 @@ internal sealed partial class MeshVolumeSolve
             if (RidesSkin(n)) ride[n] = was;
         if (ride.Count > 0) UnfoldStroke(ride, allowCollapse);
 
-        KeepRidersAboveSkin(start, relativeToStart: true);
+        // A stroke reshapes the skin rather than carrying it: a rider rides its skin's blended motion, so its height along
+        // the bound triangle's own face barely changes and #86's face measure almost never fires, while a cloth face
+        // spanning riders on different skin triangles cuts into the bulge as a chord (the Neolithe L sculpt). Measured
+        // along the skin's turned way out at both ends instead, and against where the stroke found the cloth, it lifts
+        // what the stroke really sank, never runs away on split normals (the RebelGirl top: 0.96 mm worst for a 3 mm
+        // stroke, where the author-relative rule threw cloth 18 mm), and never loosens cloth the user tightened. The
+        // per-dab hold of Relax and Smooth (KeepAboveSkin) is separate and unchanged.
+        KeepRidersAboveSkin(start, RiderGuard.SinceBlended);
+    }
+
+    /// <summary>
+    /// How the guard measures a rider against the skin it rides (<see cref="KeepRidersAboveSkin"/>).
+    /// </summary>
+    private enum RiderGuard
+    {
+        /// <summary>Against the author's floor, along the skin's turned way out (<see cref="KeepAboveBoundSkin"/>) —
+        /// a size transfer's import.</summary>
+        Authored,
+
+        /// <summary>Against where the operation found the rider, along its bound triangle's own face, which turns with
+        /// the skin exactly under a rigid move (#86) — a move, turn or grab.</summary>
+        SinceFace,
+
+        /// <summary>Against where the operation found the rider, along the skin's turned way out at both ends — a brush
+        /// stroke, which reshapes the skin rather than carrying it.</summary>
+        SinceBlended,
     }
 
     /// <summary>
@@ -193,14 +218,33 @@ internal sealed partial class MeshVolumeSolve
     /// </summary>
     private (Vec3 Point, Vec3 Normal) SkinUnder(int n, bool now)
     {
+        if (now) return BlendedUnder(n, hereFn);
         var corners = follow!.CornersOf(n);
         float px = 0f, py = 0f, pz = 0f, nx = 0f, ny = 0f, nz = 0f;
         foreach (var (s, w) in corners)
         {
-            var at = now ? Here(s) : nodeAt[s];
+            var at = nodeAt[s];
             px += at.X * w; py += at.Y * w; pz += at.Z * w;
+            var way = ToVector(nodeNormal[s]);
+            nx += way.X * w; ny += way.Y * w; nz += way.Z * w;
+        }
+        return (new Vec3(px, py, pz), Unit(new Vec3(nx, ny, nz)));
+    }
+
+    /// <summary>
+    /// <see cref="SkinUnder"/> with the skin where <paramref name="at"/> puts it: the bound point, and the skin's way out
+    /// there with each corner's normal turned as far as its faces have from the author's (<see cref="SkinOut"/>).
+    /// </summary>
+    private (Vec3 Point, Vec3 Normal) BlendedUnder(int n, Func<int, Vec3> at)
+    {
+        var corners = follow!.CornersOf(n);
+        float px = 0f, py = 0f, pz = 0f, nx = 0f, ny = 0f, nz = 0f;
+        foreach (var (s, w) in corners)
+        {
+            var p = at(s);
+            px += p.X * w; py += p.Y * w; pz += p.Z * w;
             // Each corner's way out as its own faces have turned — a binding to one corner has no triangle to turn by.
-            var way = now ? SkinOutNow(s) : ToVector(nodeNormal[s]);
+            var way = SkinOut(s, at);
             nx += way.X * w; ny += way.Y * w; nz += way.Z * w;
         }
         return (new Vec3(px, py, pz), Unit(new Vec3(nx, ny, nz)));
@@ -209,7 +253,8 @@ internal sealed partial class MeshVolumeSolve
     /// <summary>
     /// A rider's floor during a skin-moving relax or smooth: <see cref="SkinFloorGap"/> above the skin it is bound to
     /// as that skin now stands, or its authored clearance where the author had it closer. Unbound cloth keeps the
-    /// authored skin's floor — see <see cref="KeepAboveSkin"/>.
+    /// authored skin's floor — see <see cref="KeepAboveSkin"/>. Also the release guard's <see cref="RiderGuard.Authored"/>
+    /// rule (a size transfer).
     /// </summary>
     private bool KeepAboveBoundSkin(int n, Vec3 delta, out Vec3 kept)
     {
@@ -259,25 +304,70 @@ internal sealed partial class MeshVolumeSolve
     }
 
     /// <summary>
-    /// <see cref="KeepAboveBoundSkin"/> for a move, turn or grab (#86): the rider is lifted only as far as this operation
-    /// took it below its floor — <see cref="SkinFloorGap"/>, its authored clearance where the author had it closer, or
-    /// the clearance the operation found it at — measured along its bound triangle's face at the operation's start and
-    /// now. Skin and cloth carried together, turned or not, keep their height to the float, and nothing is lifted.
-    /// A rider whose triangle has no face (welded, or too small) is left to the face check.
+    /// A rider's height now, its floor, and the way to lift it, by <paramref name="rule"/>; false where the rule cannot
+    /// measure it (no face, no way out). The floor is <see cref="SkinFloorGap"/>, or the authored clearance where the author
+    /// had it closer, and for the start-relative rules also the clearance the operation found it at
+    /// (<paramref name="atStart"/>). One measure for the lift and for <see cref="RidersLeftUnder"/>.
     /// </summary>
-    private bool KeepAboveBoundSkinSince(int n, Dictionary<int, Was> start, out Vec3 kept)
+    private bool RiderFloor(int n, RiderGuard rule, Func<int, Vec3> atStart, out float hNow, out float floor, out Vector3 way)
+    {
+        hNow = 0f;
+        floor = MathF.Min(SkinFloorGap, follow!.AuthoredHeight(n));
+        way = Vector3.Zero;
+        switch (rule)
+        {
+            case RiderGuard.Authored:
+            {
+                var (q, nrm) = BlendedUnder(n, hereFn);
+                if (nrm == default) return false;
+                var p = Here(n);
+                hNow = (p.X - q.X) * nrm.X + (p.Y - q.Y) * nrm.Y + (p.Z - q.Z) * nrm.Z;
+                way = ToVector(nrm);
+                return true;
+            }
+            case RiderGuard.SinceFace:
+            {
+                var t = follow.TriangleOf(n);
+                if (!t.IsSet) return false;
+                // The face's way out, as the author had it: the winding that agrees with the skin normals it is bound to.
+                var authoredFace = Vector3.Cross(ToVector(nodeAt[t.B]) - ToVector(nodeAt[t.A]), ToVector(nodeAt[t.C]) - ToVector(nodeAt[t.A]));
+                var blended = ToVector(SkinUnder(n, now: false).Normal);
+                float sign = Vector3.Dot(authoredFace, blended) < 0f ? -1f : 1f;
+                if (!RiderFaceHeight(t, atStart(n), atStart, sign, out float hStart, out _)) return false;
+                if (!RiderFaceHeight(t, Here(n), hereFn, sign, out hNow, out way)) return false;
+                floor = MathF.Min(floor, hStart);
+                return true;
+            }
+            default:
+            {
+                // Both heights along the skin's own turned way out, so whatever separates that axis from the one the
+                // authored clearance was taken along can only lower the floor (through hStart), never lift.
+                var (qs, ns) = BlendedUnder(n, atStart);
+                var (qn, nn) = BlendedUnder(n, hereFn);
+                if (ns == default || nn == default) return false;
+                var ps = atStart(n);
+                var pn = Here(n);
+                float hStart = (ps.X - qs.X) * ns.X + (ps.Y - qs.Y) * ns.Y + (ps.Z - qs.Z) * ns.Z;
+                hNow = (pn.X - qn.X) * nn.X + (pn.Y - qn.Y) * nn.Y + (pn.Z - qn.Z) * nn.Z;
+                way = ToVector(nn);
+                floor = MathF.Min(floor, hStart);
+                return true;
+            }
+        }
+    }
+
+    /// <summary>
+    /// <see cref="KeepAboveBoundSkin"/> for a move, turn, grab or stroke: the rider is lifted only as far as this
+    /// operation took it below its floor (<see cref="RiderFloor"/>), measured at the operation's start and now —
+    /// along its bound triangle's face for a move, turn or grab (<see cref="RiderGuard.SinceFace"/>, #86: skin and cloth
+    /// carried together, turned or not, keep their height to the float, and nothing is lifted), along the skin's turned
+    /// way out for a stroke (<see cref="RiderGuard.SinceBlended"/>). A rider the rule cannot measure is left to the face
+    /// check.
+    /// </summary>
+    private bool KeepAboveBoundSkinSince(int n, RiderGuard rule, Func<int, Vec3> atStart, out Vec3 kept)
     {
         kept = nodeDelta[n];
-        var t = follow!.TriangleOf(n);
-        if (!t.IsSet) return false;
-        // The face's way out, as the author had it: the winding that agrees with the skin normals it is bound to.
-        var authoredFace = Vector3.Cross(ToVector(nodeAt[t.B]) - ToVector(nodeAt[t.A]), ToVector(nodeAt[t.C]) - ToVector(nodeAt[t.A]));
-        var blended = ToVector(SkinUnder(n, now: false).Normal);
-        float sign = Vector3.Dot(authoredFace, blended) < 0f ? -1f : 1f;
-
-        if (!RiderFaceHeight(t, HereAt(n, start), s => HereAt(s, start), sign, out float hStart, out _)) return false;
-        if (!RiderFaceHeight(t, Here(n), Here, sign, out float hNow, out var way)) return false;
-        float floor = MathF.Min(MathF.Min(SkinFloorGap, follow.AuthoredHeight(n)), hStart);
+        if (!RiderFloor(n, rule, atStart, out float hNow, out float floor, out var way)) return false;
         // A rigid move gives the same height to the float; a micrometre is no poke.
         if (hNow >= floor - RigidSlack) return false;
         float lift = floor - hNow;
@@ -318,14 +408,19 @@ internal sealed partial class MeshVolumeSolve
     /// </summary>
     /// <param name="start">The operation's undo record: whatever the guard moves is recorded in it first, so undo stays
     /// exact.</param>
-    /// <param name="relativeToStart">Judge "made worse" against where the operation found the cloth and skin, with
-    /// measures a rigid move cannot change (#86): a move, turn or grab that carries skin and cloth together lifts
-    /// nothing. Off — a size transfer's import — today's rule against the author's model.</param>
-    private void KeepRidersAboveSkin(Dictionary<int, Was> start, bool relativeToStart)
+    /// <param name="rule">How a rider is measured (<see cref="RiderGuard"/>): against where the operation found the cloth
+    /// and skin — along the bound face for a move, turn or grab (#86: carrying skin and cloth together lifts nothing),
+    /// along the skin's turned way out for a stroke — or, for a size transfer's import, against the author's model.</param>
+    /// <param name="holdCentre">A mirrored drag in <see cref="MirrorMode.Sides"/>: every lift keeps the mirror's centre
+    /// rule (<see cref="KeepGuardLiftsOffCentre"/>). Passed only by the end of a move, where the mirror is still set.</param>
+    private void KeepRidersAboveSkin(Dictionary<int, Was> start, RiderGuard rule, bool holdCentre = false)
     {
         LastGuard = default;
         lastBoundLifted.Clear();
         lastFaceLifted.Clear();
+        lastCentreHeld.Clear();
+        preGuardX.Clear();
+        RidersLeftUnder = 0;
         if (!opSkin) return;
         var movedSkin = new List<int>();
         foreach (var (n, was) in start)
@@ -335,13 +430,16 @@ internal sealed partial class MeshVolumeSolve
         // Riders of the skin this operation moved — not every bound cloth point it recorded: cloth the user deflated
         // onto still skin is theirs.
         var moved = new HashSet<int>(movedSkin);
+        var atStart = rule == RiderGuard.Authored ? hereFn : (Func<int, Vec3>)(s => HereAt(s, start));
+        var judgedRiders = new List<int>();
         foreach (var (n, _) in start)
         {
             if (skin[n] || locked[n] || follow!.BindWeight(n) <= 0f) continue;
             if (!follow.CornersOf(n).Any(c => moved.Contains(c.Skin))) continue;
-            if (relativeToStart)
+            judgedRiders.Add(n);
+            if (rule != RiderGuard.Authored)
             {
-                if (KeepAboveBoundSkinSince(n, start, out var raised))
+                if (KeepAboveBoundSkinSince(n, rule, atStart, out var raised))
                 {
                     NoteGuardLift(n, nodeDelta[n], raised, bound: true);
                     nodeDelta[n] = raised;
@@ -365,10 +463,29 @@ internal sealed partial class MeshVolumeSolve
         var opMoved = new HashSet<int>();
         foreach (var (n, was) in start)
             if (nodeDelta[n] != was.Delta) opMoved.Add(n);
-        while (pass < FacePasses && LiftFacesOverSkin(start, judged, moving, opMoved, lift: true, relativeToStart) > 0) pass++;
+        bool sinceStart = rule != RiderGuard.Authored;
+        while (pass < FacePasses && LiftFacesOverSkin(start, judged, moving, opMoved, lift: true, sinceStart) > 0) pass++;
+        if (holdCentre) KeepGuardLiftsOffCentre();
         // What is left, measured again after the last lift: logged by the caller, not chased.
-        SkinStillOutside = LiftFacesOverSkin(start, judged, moving, opMoved, lift: false, relativeToStart);
+        RidersLeftUnder = CountRidersLeftUnder(judgedRiders, rule, atStart);
+        SkinStillOutside = LiftFacesOverSkin(start, judged, moving, opMoved, lift: false, sinceStart);
         GuardVersion++;
+    }
+
+    /// <summary>
+    /// How many of the riders the bound pass judged, and the guard then moved (either check), still stand under their
+    /// floor by <paramref name="rule"/> — what the centre rule gave back (<see cref="KeepGuardLiftsOffCentre"/>), or a
+    /// later face lift turned away. Within <see cref="RigidSlack"/> is at the floor.
+    /// </summary>
+    private int CountRidersLeftUnder(List<int> judgedRiders, RiderGuard rule, Func<int, Vec3> atStart)
+    {
+        int under = 0;
+        foreach (int n in judgedRiders)
+        {
+            if (!lastBoundLifted.Contains(n) && !lastFaceLifted.Contains(n)) continue;
+            if (RiderFloor(n, rule, atStart, out float hNow, out float floor, out _) && hNow < floor - RigidSlack) under++;
+        }
+        return under;
     }
 
     /// <summary>The moved skin, and every skin node within <see cref="SkinThroughCloth.Reach"/> of the box around what
@@ -418,7 +535,20 @@ internal sealed partial class MeshVolumeSolve
     /// <summary>The last run of the guard's lifts; see <see cref="GuardLifts"/>.</summary>
     public GuardLifts LastGuard { get; private set; }
 
-    private readonly HashSet<int> lastBoundLifted = [], lastFaceLifted = [];
+    private readonly HashSet<int> lastBoundLifted = [], lastFaceLifted = [], lastCentreHeld = [];
+
+    /// <summary>Each lifted node's X before the guard's first lift of it this run — what the centre rule measures from.</summary>
+    private readonly Dictionary<int, float> preGuardX = [];
+
+    /// <summary>The nodes whose lift the last run of the guard held off the centre (<see cref="KeepGuardLiftsOffCentre"/>)
+    /// — for the tests.</summary>
+    internal IReadOnlySet<int> LastCentreHeld => lastCentreHeld;
+
+    /// <summary>
+    /// Riders the last run of the guard moved that still stand under their floor — what the mirror's centre rule gave
+    /// back, for the log and the tests. Face-check leftovers are <see cref="SkinStillOutside"/>.
+    /// </summary>
+    public int RidersLeftUnder { get; private set; }
 
     /// <summary>The nodes the last run of the guard lifted with the bound-skin check — for the tests (#86).</summary>
     internal IReadOnlySet<int> LastBoundLifted => lastBoundLifted;
@@ -431,6 +561,7 @@ internal sealed partial class MeshVolumeSolve
         var d = new Vector3(to.X - from.X, to.Y - from.Y, to.Z - from.Z);
         float mm = d.Length() * 1000f;
         if (mm <= 0f) return;
+        preGuardX.TryAdd(n, nodeAt[n].X + from.X);
         (bound ? lastBoundLifted : lastFaceLifted).Add(n);
         var g = LastGuard;
         // Inward: against the authored normal of the skin it is bound to, or its own for an unbound face corner.
@@ -455,10 +586,10 @@ internal sealed partial class MeshVolumeSolve
     /// <param name="moving">The skin this operation moved. Still skin is judged only against a face this operation
     /// moved: cloth placed by an earlier stroke is the user's, however it lies.</param>
     /// <param name="opMoved">Every node the operation moved, before the guard lifted any.</param>
-    /// <param name="relativeToStart">A slight clip the author left is theirs to keep but not to grow, and one an earlier
+    /// <param name="sinceStart">A slight clip the author left is theirs to keep but not to grow, and one an earlier
     /// operation left is not this one's to grow either: the excess is measured over the larger of the two (#86).</param>
     private int LiftFacesOverSkin(Dictionary<int, Was> start, List<int> judged, HashSet<int> moving, HashSet<int> opMoved,
-                                  bool lift, bool relativeToStart = false)
+                                  bool lift, bool sinceStart = false)
     {
         const float reach = SkinThroughCloth.Reach, tolerance = SkinThroughCloth.Tolerance;
 
@@ -564,7 +695,7 @@ internal sealed partial class MeshVolumeSolve
             if (authored > DeepClip) continue;
             // Where the operation found them: the same skin point and face at their start, the face oriented as it is now
             // through its winding — so a turn of skin and cloth together measures exactly what it found.
-            float since = relativeToStart ? OutsideAtStart(s, ca, cb, cc, face, start) : float.NegativeInfinity;
+            float since = sinceStart ? OutsideAtStart(s, ca, cb, cc, face, start) : float.NegativeInfinity;
             float excess = by - MathF.Max(MathF.Max(authored, since), 0f) - tolerance;
             if (excess <= 0f) continue;
             if (!lift) { outside++; continue; }
@@ -606,7 +737,10 @@ internal sealed partial class MeshVolumeSolve
     /// Skin node <paramref name="s"/>'s authored normal, turned as far as the skin faces around it have turned — the
     /// way out of the skin as it now stands, after a sculpt or a turn of the Move tools.
     /// </summary>
-    private Vector3 SkinOutNow(int s)
+    private Vector3 SkinOutNow(int s) => SkinOut(s, hereFn);
+
+    /// <summary><see cref="SkinOutNow"/> with the skin where <paramref name="at"/> puts it.</summary>
+    private Vector3 SkinOut(int s, Func<int, Vec3> at)
     {
         if (skinFacesOf == null)
         {
@@ -623,7 +757,7 @@ internal sealed partial class MeshVolumeSolve
         foreach (int t in faces)
         {
             var a = Unit(MeshMath.TriNormal(nodeAt[nodeTris[t]], nodeAt[nodeTris[t + 1]], nodeAt[nodeTris[t + 2]]));
-            var c = Unit(MeshMath.TriNormal(Here(nodeTris[t]), Here(nodeTris[t + 1]), Here(nodeTris[t + 2])));
+            var c = Unit(MeshMath.TriNormal(at(nodeTris[t]), at(nodeTris[t + 1]), at(nodeTris[t + 2])));
             ax += a.X; ay += a.Y; az += a.Z;
             cx += c.X; cy += c.Y; cz += c.Z;
         }
@@ -685,7 +819,7 @@ internal sealed partial class MeshVolumeSolve
         opSkin = true;
         Seams();
         // Today's rule against the author's model, deliberately: a transfer is judged by the author's clearances (#86).
-        try { KeepRidersAboveSkin(start, relativeToStart: false); }
+        try { KeepRidersAboveSkin(start, RiderGuard.Authored); }
         finally { opSkin = false; }
         Settle(null);
     }
