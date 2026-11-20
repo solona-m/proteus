@@ -25,7 +25,9 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
 {
     private const string LumberjackPin = "1FE367DFEFEB9D1277223A57D2AD7AB637FF1EB515EAC99B7B0BD8271578C214";
     private const string SheerTopPin = "066EE8258755CEF2E21223A47AF1B9D90160978CF2464DC2C6DA14659DBE8351";
-    private const string StormblessedLegsPin = "3B2B3ADD084CBB2295D78499DCE8769656B8FCF49260C2C4190BC359ED846DA0";
+    private const string StormblessedLegsPin = "C6127850AE23D53BD9B4EA8B839B13293028630D578BBD19CA0E8B655E065A17";
+    /// <summary>featureless-bulge: the pin before the bulge, which Stormblessed's legs still make with it switched off.</summary>
+    private const string StormblessedLegsNoBulgePin = "3B2B3ADD084CBB2295D78499DCE8769656B8FCF49260C2C4190BC359ED846DA0";
     private const string HeelsSizeSetPin = "E53697A7A3235D1FB3EF57DF52FCA160BF6C3BAF193C8E49507F252B6A42F955";
 
     // cross-sex-wrist-band (EDGE-16, AC-10): Halone's Chosen's glove made a men's through EndInputs, as Studio and the CLI build it
@@ -80,6 +82,7 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
                    CrossSexRefitLocalTests.Bibo, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-mens-ends-crotch-9")]
     [Trait("Plan", "EDGE-mens-ends-crotch-26")]
+    [Trait("Suite", "Diagnostic")]
     public void Lumberjack_made_womens_is_unchanged() // [AC-mens-ends-crotch-9] [EDGE-mens-ends-crotch-26]
         => Check("lumberjack", LumberjackPin,
                  Hash(CrossSexRefitJob.Run(Inputs(CrossSexRefitLocalTests.LumberjackShirt, 201, CrossSexRefitLocalTests.Tbse,
@@ -88,6 +91,7 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, CrossSexRefitLocalTests.SheerTop, CrossSexRefitLocalTests.Bibo,
                    CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-mens-ends-crotch-9")]
+    [Trait("Suite", "Diagnostic")]
     public void Sheer_top_made_mens_is_unchanged() // [AC-mens-ends-crotch-9]
         => Check("sheer top", SheerTopPin,
                  Hash(CrossSexRefitJob.Run(Inputs(CrossSexRefitLocalTests.SheerTop, 101, CrossSexRefitLocalTests.Bibo,
@@ -97,6 +101,7 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, CrossSexNudeLegsLocalTests.StormblessedLegs, CrossSexNudeLegsLocalTests.LavaBod,
                    CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-mens-ends-crotch-9")]
+    [Trait("Suite", "Diagnostic")]
     public void Stormblessed_legs_made_mens_are_unchanged() // [AC-mens-ends-crotch-9]
     {
         var log = Substitute.For<IPluginLog>();
@@ -105,11 +110,26 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
         Check("stormblessed legs", StormblessedLegsPin, Hash(CrossSexRefitJob.Run(inputs)));
     }
 
+    /// <summary>featureless-bulge: with the bulge switched off, Stormblessed's legs come out as they did before it.</summary>
+    [LocalDataFact(LocalData.GameData, CrossSexNudeLegsLocalTests.StormblessedLegs, CrossSexNudeLegsLocalTests.LavaBod,
+                   CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-featureless-bulge-7")]
+    [Trait("Plan", "EDGE-featureless-bulge-24")]
+    public void Stormblessed_legs_without_the_bulge_keep_todays_pin()
+    {
+        var log = Substitute.For<IPluginLog>();
+        var inputs = CrossSexNudeLegsLocalTests.JobInputs(CrossSexNudeLegsLocalTests.StormblessedLegs,
+                                                          CrossSexNudeLegsLocalTests.LavaBod, 1, log);
+        Check("stormblessed legs, no bulge", StormblessedLegsNoBulgePin,
+              BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoBulge: true), () => Hash(CrossSexRefitJob.Run(inputs))));
+    }
+
     /// <summary>A same-sex size set with shoes on: every file it writes and its report, timings and the worst push aside
     /// (the worst push is measured differently by AC-10, on purpose).</summary>
     [LocalDataFact(LocalData.ImcToggleMod, SizeSetBatchData.Bibo, SizeSetBatchData.Rue, LocalData.GameData, LocalData.UvMaps)]
     [Trait("Plan", "AC-mens-ends-crotch-9")]
     [Trait("Plan", "EDGE-mens-ends-crotch-26")]
+    [Trait("Suite", "Diagnostic")]
     public void A_same_sex_size_set_with_shoes_is_unchanged() // [AC-mens-ends-crotch-9] [EDGE-mens-ends-crotch-26]
     {
         string copy = SizeSetBatchData.CopyOf(LocalData.ImcToggleMod);
@@ -166,6 +186,7 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
     [InlineData("tbse-x")]
     [Trait("Plan", "EDGE-cross-sex-wrist-band-16")]
     [Trait("Plan", "AC-cross-sex-wrist-band-10")]
+    [Trait("Suite", "Diagnostic")]
     public void Halones_glove_made_mens_is_unchanged(string key) // [EDGE-cross-sex-wrist-band-16] [AC-cross-sex-wrist-band-10]
     {
         const string gamePath = "chara/equipment/e0613/model/c0201e0613_glv.mdl";

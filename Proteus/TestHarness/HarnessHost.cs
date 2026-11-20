@@ -195,7 +195,9 @@ internal sealed class HarnessHost : IDisposable
             log.Information("[Proteus] test harness put back as it stopped: {0}{1}",
                             string.Join(", ", r.Gear.Concat(r.Holds).Select(e => $"{e.Name} {e.Result}{(e.Code is { } code ? $" ({code})" : "")}")
                                                 .Concat(r.Studio.Select(s => $"Studio {s.Mod} files {s.Files}, panel {s.Panel}{(s.Code is { } code ? $" ({code})" : "")}"))),
-                            r.Binding is { } b ? $"; binding: glamourer {b.Glamourer}, live {b.Live}, {b.Permanent.Count} permanent" : "");
+                            (r.Binding is { } b ? $"; binding: glamourer {b.Glamourer}, live {b.Live}, {b.Permanent.Count} permanent" : "")
+                            + (r.AutoRefitPreference != "none" ? $"; auto refit preference {r.AutoRefitPreference}" : "")
+                            + (r.JobBackedMods.Count > 0 ? "; restore by job: " + string.Join(", ", r.JobBackedMods.Select(m => $"{m.Name} ({m.Code})")) : ""));
         }
         catch (Exception e) { log.Warning(e, "[Proteus] test harness: putting back as it stopped failed"); }
     }

@@ -303,6 +303,7 @@ public class Gen2LayoutRefitLocalTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, Bibo, Rue, AbBody, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-gen2-legs-refit-20")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void The_game_s_body_pieces_onto_body_mods_census()
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));

@@ -78,6 +78,7 @@ internal sealed partial class BodyRetargetPanel
         var targetRels = inputs.PrimaryTargets.Select(t => t.Rel).ToList();
         bool push = clearBody;
         bool piercings = RetargetInputs.CarryPiercings(RetargetInputs.EffectiveReplaceSkin(replaceSkin, true), carryPiercings);
+        bool pubes = RetargetInputs.CarryPubes(RetargetInputs.EffectiveReplaceSkin(replaceSkin, true), carryPubes);
         var held = ctx.Held.ToList();
         var uv = uvRemap;
         planTask = Task.Run(() =>
@@ -85,7 +86,8 @@ internal sealed partial class BodyRetargetPanel
             try
             {
                 var job = CrossSexRefitJob.EndInputs(drawn, gamePath, to, madeFor, limbFrom, onto, targetRels, wearer, uv,
-                                                     log, push, piercings, held, baked, out string? refusal);
+                                                     log, push, piercings, held, baked, out string? refusal,
+                                                     carryPubes: pubes);
                 if (job == null) return new PlanResult(key, null, refusal ?? "");
                 var made = CrossSexRefitJob.ForStudio(job, targetRels.Count, log);
                 if (made.Planned == null) return new PlanResult(key, null, made.Error);

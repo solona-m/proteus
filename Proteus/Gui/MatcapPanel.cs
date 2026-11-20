@@ -67,6 +67,20 @@ internal sealed class MatcapPanel
         public string? PreviewDrawnNote;
         /// <summary>A preview is on the character.</summary>
         public bool PreviewShown;
+        /// <summary>The colour row picked (0: the whole part). <see cref="Ticked"/> is then the parts Apply covers.</summary>
+        public int Row;
+        /// <summary>With a row picked and nothing ticked: the material whose every part Apply covers (shown, not ticked).</summary>
+        public string? RowPoolMaterial;
+        /// <summary>The open model is the game's own gear.</summary>
+        public bool GamePiece;
+        /// <summary>The row's material has Colors-window colours or a design binding the cut won't follow.</summary>
+        public bool RowFollowWarn;
+        /// <summary>The last row Apply found holes inside the row's triangles (they show the matcap).</summary>
+        public bool RowHoles;
+        /// <summary>The built preview or the last row Apply moved a glass part's cut copy to character.shpk, and how many
+        /// of the open model's triangles draw from it.</summary>
+        public bool RowGlass;
+        public int RowGlassTriangles;
     }
 
     /// <summary>Where the matcap is picked from.</summary>
@@ -317,8 +331,17 @@ internal sealed class MatcapPanel
             else ImGui.TextDisabled(s.HornColourNote);
             ImGui.PopTextWrapPos();
         }
-        ImGui.TextDisabled(string.Format(s.TickedFmt, ctx.Ticked.Count));
+        if (ctx.RowPoolMaterial is { } poolMaterial) ImGui.TextDisabled(string.Format(s.RowAllFmt, MatcapWriter.StemOf(poolMaterial)));
+        else ImGui.TextDisabled(string.Format(s.TickedFmt, ctx.Ticked.Count));
         ImGui.TextDisabled(string.Format(s.RoomFmt, Math.Max(0, ctx.MaterialRoom)));
+        if (ctx.Row > 0 && MatcapPlan.KindOfApply(ctx.Ticked) == MatcapPlan.ApplyKind.New)
+        {
+            ImGui.PushTextWrapPos(0f);
+            if (ctx.RowFollowWarn) ImGui.TextColored(ProteusStyle.Warn, s.RowFollowWarn);
+            if (ctx.RowHoles) ImGui.TextColored(ProteusStyle.Warn, s.RowHolesWarn);
+            if (ctx.RowGlass) ImGui.TextColored(ProteusStyle.Warn, string.Format(s.RowGlassWarnFmt, s.UndoLabel, ctx.RowGlassTriangles));
+            ImGui.PopTextWrapPos();
+        }
         // Apply on parts that have a matcap changes those matcaps wherever they are used: say so before it is pressed.
         if (MatcapPlan.KindOfApply(ctx.Ticked) == MatcapPlan.ApplyKind.Change)
         {
@@ -334,7 +357,7 @@ internal sealed class MatcapPanel
             ImGui.PopTextWrapPos();
         }
 
-        var why = MatcapPanelModel.ApplyDisabledReason(ctx.Penumbra, ctx.Ticked, choice, ctx.MaterialRoom, ctx.Record);
+        var why = MatcapPanelModel.ApplyDisabledReason(ctx.Penumbra, ctx.Ticked, choice, ctx.MaterialRoom, ctx.Record, ctx.Row, ctx.GamePiece);
         using (ImRaii.Disabled(why != null || ctx.Busy))
             if (ImGui.Button(s.Apply, new Vector2(-1f, 0f)) && choice != null)
             {

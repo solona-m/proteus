@@ -53,6 +53,7 @@ public class ScionAdventurerRefitTests(ITestOutputHelper output)
                           .Select(p => p.Material).Distinct().ToList();
 
     [LocalDataFact(LocalData.GameData, Rue)]
+    [Trait("Suite", "Diagnostic")]
     public void Kept_skin_is_drawn_with_Rues_material_and_layout()
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));

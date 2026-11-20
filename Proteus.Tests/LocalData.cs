@@ -28,6 +28,14 @@ internal static class LocalData
     internal const string ModPacks = "PROTEUS_MODPACKS";
     internal const string Game = "PROTEUS_GAME";
 
+    /// <summary><c>PROTEUS_BULGE_REF</c>: the user's own copy of <c>lava_bulge.mdl</c>, the file the plugin embeds — only
+    /// read, to prove the embedded copy is it byte for byte.</summary>
+    internal const string BulgeReference = "PROTEUS_BULGE_REF";
+
+    /// <summary><c>PROTEUS_TBSE_BULGE_REF</c>: the owner's TBSE bulge as she exported it (an FBX, one mesh "bulge 0.3") —
+    /// only read, to generate and verify the embedded <c>tbse_bulge.json</c>.</summary>
+    internal const string TbseBulgeReference = "PROTEUS_TBSE_BULGE_REF";
+
     /// <summary>The game's data, under <see cref="Game"/>: what Lumina opens.</summary>
     internal const string GameData = Game + ":game/sqpack";
 
@@ -75,6 +83,27 @@ internal static class LocalData
     /// <summary>"clia skin - by solona", installed: default data supplying <c>chara/bibo_mid_base|mask|norm.tex</c> and
     /// the c0201 bibo material — the mod the design-restore sweep held off on 2026-11-07, leaving the body invisible.</summary>
     internal const string CliaMod = Mods + ":clia skin - by solona";
+
+    /// <summary>Applenzo's "[Holo] Sarelle Outfit V1.4.1op", installed: a dress split at the waist between an e0628 top
+    /// and legs (<c>mt_c0201e0628_top_dress.mtrl</c> in both), double-sided, the two edges coincident and weighted alike;
+    /// tops on Tre, YAB, Rue, LavaBod, legs on Bibo+, YAB, Rue — three waists (main, Rue, Gen 3). Only ever read.</summary>
+    internal const string SarelleMod = Mods + ":[Holo] Sarelle Outfit V1.4.1op";
+
+    /// <summary>"[YAS] Tre" 5.5.3 (8xB), installed: the body Sarelle's tops are made on. Only ever read.</summary>
+    internal const string TreMod = Mods + ":hs-[YAS] Tre-5.5.3-8xB";
+
+    /// <summary>"Bibo+", installed: the body Sarelle's "bibo l" legs read as made on (Type A - Large). Only ever read.</summary>
+    internal const string BiboPlusMod = Mods + ":Bibo+";
+
+    /// <summary>"Rue+" 2.2.7 (y0f), installed: the body of Sarelle's Rue waist. Only ever read.</summary>
+    internal const string RueMod = Mods + ":hs-Rue+-2.2.7-y0f";
+
+    /// <summary>"charmed - by solona", installed: the Enaretos bracelet (a0153 wrs). A Single group "Enaretos Bracelet" /
+    /// "Everything" ships <c>mt_c0201a0153_wrs_a.mtrl</c> (moved to character.shpk by the gear shader upgrade, index/mask
+    /// form, no mask) with its <c>_n</c>/<c>_id</c>/<c>_m</c>, the still-legacy <c>mt_c0101a0153_wrs_a.mtrl</c> and
+    /// <c>mt_c0201a0153_wrs_b.mtrl</c> (characterglass.shpk); the c0201 model comes from the Single group "Body Shape"
+    /// (Bibo+ / Rue+). Tests copy it to a temp folder and never write the original.</summary>
+    internal const string EnaretosMod = Mods + ":charmed - by solona";
 
     /// <summary>
     /// The uv transfer maps, which live in the repository (<c>Proteus/uvmaps</c>) but through Git LFS, so a checkout

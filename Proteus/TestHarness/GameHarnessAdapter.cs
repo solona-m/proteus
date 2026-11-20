@@ -61,8 +61,8 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     private readonly OverlayEditRouter editRouter;
     private readonly PresetService presets;
     private readonly SidecarDiscoveryService discovery;
-    private readonly Glamourer.Api.IpcSubscribers.ApplyDesign applyDesign;
-    private readonly Glamourer.Api.IpcSubscribers.ApplyState applyState;
+    private readonly GlamourerApplyDesign applyDesign;
+    private readonly GlamourerApplyState applyState;
     private long designApplied;
 
     private readonly RedrawCounter redraws = new();
@@ -105,8 +105,8 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
         this.editRouter = editRouter;
         this.presets = presets;
         // Created here, not in GlamourerBridge: apply and state-write IPC never ship outside a harness build.
-        applyDesign = new Glamourer.Api.IpcSubscribers.ApplyDesign(pluginInterface);
-        applyState = new Glamourer.Api.IpcSubscribers.ApplyState(pluginInterface);
+        applyDesign = new GlamourerApplyDesign(pluginInterface);
+        applyState = new GlamourerApplyState(pluginInterface);
         glamourer.LocalPlayerStateFinalized += OnStateFinalized;
         penumbra.LocalPlayerRedrawn += redraws.Note;
         framework.Update += OnUpdate;
@@ -247,12 +247,12 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     }
 
     public RefitOptions Options(bool remake) => new(config.SizeSetYas, config.SizeSetEnds, config.SizeSetPiercings, remake,
-                                                    config.SizeSetKeepHiddenSkin);
+                                                    config.SizeSetKeepHiddenSkin, config.SizeSetPubes);
 
     public SizeSetLaunch.Prepared PrepareSizeSet(string modRoot, IReadOnlyList<string> keys, RefitOptions options, ModList mods)
         => SizeSetLaunch.Prepare(mods.Mods, mods.ModsRoot, penumbra.ResolvePlayerPaths, modRoot, keys, options.Yas,
                                  options.Remake, options.Ends, options.Piercings, options.KeepHiddenSkin, null,
-                                 readGameFile, log);
+                                 readGameFile, log, pubes: options.Pubes);
 
     public Task<SizeSetLaunch.Outcome> RunSizeSet(SizeSetLaunch.Prepared prepared, Action<string> progress, Action afterChange,
                                                   Action<Action> postToFramework, CancellationToken ct)
@@ -438,6 +438,68 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     public void SetAutoRefitOverride(bool? enabled) => autoRefit.HarnessOverride = enabled;
 
     public IReadOnlyList<string> TakeRefitsWhileOverridden() => autoRefit.HarnessTakeRefitsWhileOverridden();
+
+    public bool CanRunAutoRefitNow()
+        => autoRefit.EffectivelyEnabled && !AutoRefit().Busy
+           && PlayerCollection() is { } coll
+           && config.AutoRefitByCollection.TryGetValue(coll.ToString("D"), out var pref) && pref.HasAnyBody();
+
+    public bool IsWornFrom(string modRoot)
+    {
+        string? modsRoot = penumbra.GetModDirectory();
+        var models = penumbra.GetActivePlayerModelPaths();
+        if (modsRoot == null || models == null) return false;
+        string want = System.IO.Path.GetFullPath(modRoot).TrimEnd(System.IO.Path.DirectorySeparatorChar);
+        foreach (var (_, gamePath) in DrawnModelPaths.EquippedPartModelsFromModels(models)
+                                                    .Concat(DrawnModelPaths.EquippedAccessoryGarmentModelsFromModels(models)))
+            if (penumbra.ResolvePlayer(gamePath) is { } resolved && System.IO.Path.IsPathRooted(resolved)
+                && HatCompatService.InMods(resolved, modsRoot, out string root, out _)
+                && string.Equals(System.IO.Path.GetFullPath(root).TrimEnd(System.IO.Path.DirectorySeparatorChar), want, StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
+    }
+
+    public IReadOnlyList<(string Slot, string GamePath, string Outcome)>? RunAutoRefitNowFor(string modRoot)
+        => autoRefit.RunNowFor(modRoot);
+
+    public string? AutoRefitPreferenceJson(Guid collection)
+    {
+        try
+        {
+            return config.AutoRefitByCollection.TryGetValue(collection.ToString("D"), out var pref)
+                ? Newtonsoft.Json.JsonConvert.SerializeObject(pref, ConfigJson.Settings)
+                : "";
+        }
+        catch (Exception e)
+        {
+            log.Warning(e, "[Proteus] test harness: the auto refit preference could not be read");
+            return null;
+        }
+    }
+
+    public bool RestoreAutoRefitPreference(Guid collection, string json)
+    {
+        try
+        {
+            string key = collection.ToString("D");
+            if (json.Length == 0) config.AutoRefitByCollection.Remove(key);
+            else if (Newtonsoft.Json.JsonConvert.DeserializeObject<AutoRefitPreference>(json, ConfigJson.Settings) is { } pref)
+                config.AutoRefitByCollection[key] = pref;
+            else return false;
+            config.Save();
+            return true;
+        }
+        catch (Exception e)
+        {
+            log.Warning(e, "[Proteus] test harness: the auto refit preference could not be put back");
+            return false;
+        }
+    }
+
+    public (bool Config, bool? Override, bool Effective) AutoRefitPubes()
+        => (config.AutoRefitPubes, autoRefit.HarnessPubesOverride, autoRefit.CarryPubesNow);
+
+    public void SetAutoRefitPubesOverride(bool? pubes) => autoRefit.HarnessPubesOverride = pubes;
 
     public (bool Built, bool Stale, bool Refreshing, long Generation) BodyIndex() => autoRefit.HarnessBodyIndexState();
 

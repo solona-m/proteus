@@ -411,6 +411,78 @@ public class HarnessQaRoutesTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-refit-keep-pubes-10")]
+    [Trait("Plan", "EDGE-refit-keep-pubes-22")]
+    public async Task Auto_refit_pubes_override_is_for_the_session()
+    {
+        // [AC-refit-keep-pubes-10] [EDGE-refit-keep-pubes-22] Pubes alone: the setting's override, reported beside the
+        // user's choice; the switch's override and the saved config are untouched.
+        fx.Game.AutoRefitPubesConfig = false;
+        var (status, body) = await fx.Post("/actions/auto-refit", "{\"pubes\":true}");
+        Assert.Equal(200, status);
+        var pubes = body.GetProperty("pubes");
+        Assert.False(pubes.GetProperty("config").GetBoolean());
+        Assert.True(pubes.GetProperty("harnessOverride").GetBoolean());
+        Assert.True(pubes.GetProperty("effective").GetBoolean());
+        Assert.False(fx.Game.AutoRefitPubesConfig);
+        Assert.Null(fx.Game.AutoRefitOverrideValue);
+        Assert.False(fx.Changes.Empty);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-refit-keep-pubes-10")]
+    [Trait("Plan", "EDGE-refit-keep-pubes-22")]
+    public async Task Auto_refit_requires_enabled_or_pubes_and_bools()
+    {
+        // [AC-refit-keep-pubes-10] [EDGE-refit-keep-pubes-22]
+        var (none, noneBody) = await fx.Post("/actions/auto-refit", "{}");
+        Assert.Equal(400, none);
+        Assert.Equal("invalid-field", noneBody.GetProperty("error").GetProperty("code").GetString());
+        var (bad, badBody) = await fx.Post("/actions/auto-refit", "{\"pubes\":\"yes\"}");
+        Assert.Equal(400, bad);
+        Assert.Equal("pubes must be true or false", badBody.GetProperty("error").GetProperty("message").GetString());
+        Assert.Null(fx.Game.AutoRefitPubesOverrideValue);
+        var (ok, okBody) = await fx.Post("/actions/auto-refit", "{\"enabled\":false}");
+        Assert.Equal(200, ok);
+        Assert.True(okBody.TryGetProperty("pubes", out _));
+        Assert.Null(fx.Game.AutoRefitPubesOverrideValue);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-refit-keep-pubes-10")]
+    [Trait("Plan", "EDGE-refit-keep-pubes-22")]
+    public async Task Put_back_clears_the_pubes_override()
+    {
+        // [AC-refit-keep-pubes-10] [EDGE-refit-keep-pubes-22] Only pubes was ever sent: put-back still clears it.
+        await fx.Post("/actions/auto-refit", "{\"pubes\":true}");
+        var (_, body) = await fx.Post("/actions/put-back", "{}");
+        Assert.Equal("cleared", body.GetProperty("autoRefit").GetProperty("result").GetString());
+        Assert.Null(fx.Game.AutoRefitPubesOverrideValue);
+        Assert.Null(fx.Game.AutoRefitOverrideValue);
+        Assert.True(fx.Changes.Empty);
+
+        // The off-thread stop takes the same path.
+        await fx.Post("/actions/auto-refit", "{\"pubes\":false}");
+        var (_, refit) = fx.Changes.PutBackOffThreadParts();
+        Assert.Equal("cleared", refit.Item1);
+        Assert.Null(fx.Game.AutoRefitPubesOverrideValue);
+        Assert.True(fx.Changes.Empty);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-refit-keep-pubes-10")]
+    [Trait("Plan", "EDGE-refit-keep-pubes-22")]
+    public async Task Refits_while_only_the_pubes_override_stood_are_reported()
+    {
+        // [AC-refit-keep-pubes-10] [EDGE-refit-keep-pubes-22]
+        await fx.Post("/actions/auto-refit", "{\"pubes\":true}");
+        fx.Game.RefitsWhileOverridden.Enqueue("Some Outfit");
+        var (_, body) = await fx.Post("/actions/put-back", "{}");
+        Assert.Equal(["Some Outfit"], body.GetProperty("autoRefit").GetProperty("refitsWhileOverridden")
+                                          .EnumerateArray().Select(e => e.GetString()).ToList());
+    }
+
+    [Fact]
     public async Task Empty_FalseWhileOverrideOrSidecarRecorded()
     {
         Assert.True(fx.Changes.Empty);

@@ -233,6 +233,9 @@ internal static partial class BodyRetarget
     /// <param name="TargetSwitched">The drawn tags of the new body its mod's options switch (<see cref="BodyDraw.Switched"/>):
     /// dropped from the skin and smallclothes the swap brings in, which would vanish when the user picks another option —
     /// the garment's skin is the only skin under a worn top. Null when its options switch nothing.</param>
+    /// <param name="Featureless">The same pair onto the new body made featureless — its genitals out and the owner's bulge
+    /// drawn in their place (see <see cref="Bulge.BulgeSwap"/>) — built on first call, or why it cannot be; null for a
+    /// pair that is not a legs pair, or when no bulge ships (see <see cref="FitBulges"/>).</param>
     /// <param name="SourceIsGameChest">The old body is the game's own chest, byte for byte (see
     /// <see cref="VanillaBodyCatalog.IsGameModel"/>): its bust is its bra, read with its skin (see
     /// <see cref="SmallclothesOverHoles"/>).</param>
@@ -242,7 +245,8 @@ internal static partial class BodyRetarget
                                              Func<string, byte[]?>? TargetMaterial = null,
                                              IReadOnlyDictionary<string, string>? Smallclothes = null,
                                              bool SourceIsGameChest = false,
-                                             IReadOnlySet<string>? TargetSwitched = null)
+                                             IReadOnlySet<string>? TargetSwitched = null,
+                                             Func<(SlotPair? Pair, string Why)>? Featureless = null)
     {
         /// <summary>Whether the swap puts this slot's body skin in: it carries the body's file, and is not
         /// <see cref="ShapeOnly"/>.</summary>
@@ -299,13 +303,24 @@ internal static partial class BodyRetarget
     /// shape — see <see cref="SmallclothesOverHoles"/>.</param>
     /// <param name="ShapeFallbacks">Turns of kept pieces that the polar fit could not give and Horn's quaternion fit did —
     /// flat cards, mostly (see <see cref="TurnOf"/>). A piece turned so in both passes counts twice.</param>
+    /// <param name="SeamPinnedNodes">Split places of a seam shared with the other piece held where the author put them —
+    /// see <see cref="PinSharedSeam"/>; 0 when none was held.</param>
+    /// <param name="SeamPinnedVertices">The raw vertices at those places, front and back sheets alike.</param>
+    /// <param name="SeamSkipped">Seam places left to the refit: in a piece kept whole, held, or welded to kept skin.</param>
+    /// <param name="SeamBandHeld">Points of the band around the seam whose correction was cut back to keep them off the
+    /// body.</param>
+    /// <param name="SeamBandNear">Points of that band ending within <see cref="Clearance"/> of the body.</param>
+    /// <param name="SeamDropped">Why the hold was let go (it folded triangles or buried cloth); null when it was not.</param>
+    /// <param name="SeamKept">The hold stands: at least one seam place held and not let go. What a refit's record keeps.</param>
     internal sealed record Report(
         int Nodes, int Snapped, int Transferred, int Missed, int Pushed,
         float WorstMove, float WorstPush, int UnmappedSpares, bool HasOtherLods, int Held = 0, int Laid = 0,
         SwapReport? Swap = null, int Folded = 0, IReadOnlyList<ShapeOutcome>? Shapes = null, int Smoothed = 0,
         int Layered = 0, float LayerResidual = 0f, int DeepCleared = 0, float DeepWorst = 0f,
         IReadOnlyList<int>? DeepAt = null, int StandoffPulled = 0, float StandoffWorst = 0f, int StandoffHeld = 0,
-        int OpenEdgeFitted = 0, int SmallclothesFallback = 0, int SourceSmallclothes = 0, int ShapeFallbacks = 0)
+        int OpenEdgeFitted = 0, int SmallclothesFallback = 0, int SourceSmallclothes = 0, int ShapeFallbacks = 0,
+        int SeamPinnedNodes = 0, int SeamPinnedVertices = 0, int SeamSkipped = 0, int SeamBandHeld = 0,
+        int SeamBandNear = 0, string? SeamDropped = null, bool SeamKept = false)
     {
         /// <summary>Share of moved nodes that landed on a body vertex exactly. Low means the author sculpted the
         /// garment's body mesh rather than copying it, and the seam may not come out perfect.</summary>
@@ -337,7 +352,7 @@ internal static partial class BodyRetarget
                                   float LayerResidual = 0f, int DeepCleared = 0, float DeepWorst = 0f,
                                   IReadOnlyList<int>? DeepAt = null, int StandoffPulled = 0, float StandoffWorst = 0f,
                                   int StandoffHeld = 0, int OpenEdgeFitted = 0, int SourceSmallclothes = 0,
-                                  int ShapeFallbacks = 0);
+                                  int ShapeFallbacks = 0, SeamPin? Seam = null);
 
     /// <summary>
     /// The garment split into the two sets the two passes act on.
@@ -756,6 +771,8 @@ internal static partial class BodyRetarget
     /// the Studio, never a modder's top. Only with <paramref name="clearBody"/>.</param>
     /// <param name="carryPiercings">With <paramref name="replaceSkin"/>, bring the new body's piercings in with its skin
     /// (see <see cref="Rebuild"/>). Off by default: the user asks for them.</param>
+    /// <param name="carryPubes">With <paramref name="replaceSkin"/>, bring the new body's pubes in with its skin (see
+    /// <see cref="Rebuild"/>). Off by default: the user asks for them.</param>
     /// <param name="liftUnderbust">Lift the cloth under the new breasts off their underside (see LiftUnderbust). Off only
     /// for a men's top refitted for women (<see cref="CrossSexRefit"/>): a shirt cut for a pec has no cloth under a
     /// breast to lift, and lifting it turned over faces the face clearing does not (13 folds on the Lumberjack shirt
@@ -776,6 +793,8 @@ internal static partial class BodyRetarget
     /// bare hand takes the men's hands skin. One swapped-mesh set, worked out over the pairs as the rebuild sees them,
     /// feeds both, so the cloth the solve parts is exactly the skin the rebuild drops.</param>
     /// <param name="swappedSkinTags">See <see cref="Rebuild"/>; null keeps the body's tags.</param>
+    /// <param name="sharedSeam">The garment's vertices on a seam it shares with the other piece of a mod split at the
+    /// waist, held where the author put them (see <see cref="PinSharedSeam"/>); null for none, which is today's refit.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
                                bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,
@@ -785,8 +804,24 @@ internal static partial class BodyRetarget
                                Outfit? outfit = null, string? tuckSlot = null, bool deepClear = false,
                                bool keepStandoff = false, bool carryPiercings = false, bool liftUnderbust = true,
                                bool seeInside = false, bool relaxSinkGuard = false, bool openSkin = false,
-                               bool rebuildSwapsShapeOnly = false, IReadOnlySet<string>? swappedSkinTags = null)
+                               bool rebuildSwapsShapeOnly = false, IReadOnlySet<string>? swappedSkinTags = null,
+                               bool carryPubes = false, SharedSeam? sharedSeam = null)
     {
+        // The featureless bulge, first: a legs pair onto a body with a penis the garment covers goes onto that body made
+        // featureless (see PlanFeatureless). Every run it plans goes back through here with the bulge switched off.
+        if (!Tuned.NoBulge && swapSlot == null && pairs.Any(p => p.Featureless != null))
+            return PlanFeatureless(garment, garmentBytes, pairs, replaceSkin, log, warn, (g, b, p, sink, traced)
+                => WithTuning(Tuned with { NoBulge = true }, () => Plan(g, b, p, garmentSlot: garmentSlot, pushOut: pushOut,
+                    held: held, replaceSkin: replaceSkin, acrossBodies: acrossBodies, clearBody: clearBody, cutHidden: cutHidden,
+                    keepShape: keepShape, swapSlot: swapSlot, log: l => sink(false, l), warn: l => sink(true, l),
+                    chestSlot: chestSlot, trace: traced ? trace : null,
+                    outfit: outfit, tuckSlot: tuckSlot, deepClear: deepClear, keepStandoff: keepStandoff,
+                    carryPiercings: carryPiercings, liftUnderbust: liftUnderbust, seeInside: seeInside,
+                    relaxSinkGuard: relaxSinkGuard, openSkin: openSkin, rebuildSwapsShapeOnly: rebuildSwapsShapeOnly,
+                    swappedSkinTags: swappedSkinTags, carryPubes: carryPubes, sharedSeam: sharedSeam)));
+        if (!Tuned.NoBulge && pairs.Any(p => p.Slot == "_dwn") && Bulge.TbseBulge.LoadFailure is { } broken)
+            Bulge.TbseBulge.SayOnce(broken, warn ?? log);
+
         // The pairs that go in for their shape only as asked — not one ReadySmallclothes turns so below, which keeps the
         // garment's own skin because its new body's smallclothes could not be brought in. A pair asked so is never readied
         // for smallclothes itself: the one caller, a glove's men's hands (TBSE, TBSE-X), draws none.
@@ -826,7 +861,19 @@ internal static partial class BodyRetarget
         bool standoff = keepStandoff && clearBody && garmentSlot == "_top" && !Tuned.NoKeepStandoff;
         var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin, clearBody, keepShape,
                            ModelSkinReader.Read(garmentBytes, null, null), swapSlot, parted, chestSlot, trace, outfit,
-                           deep, standoff, liftUnderbust, relaxSinkGuard);
+                           deep, standoff, liftUnderbust, relaxSinkGuard, sharedSeam);
+        var seamPin = solved.Seam;
+        if (sharedSeam != null && seamPin != null)
+        {
+            if (seamPin.Kept)
+                log?.Invoke($"shared seam: {seamPin.PinnedNodes} positions ({seamPin.PinnedVertices} vertices) held where "
+                            + $"the author put them ({sharedSeam.Label}); {seamPin.BandHeld} band points held off the skin, "
+                            + $"{seamPin.BandNear} within 1 mm"
+                            + (seamPin.Skipped > 0 ? $"; {seamPin.Skipped} left to the refit (kept whole, held or skin)" : ""));
+            else
+                log?.Invoke($"shared seam: not held — {seamPin.Dropped ?? "every seam point is kept whole, held or skin"} "
+                            + $"({sharedSeam.Label})");
+        }
         if (solved.ShapeFallbacks > 0)
             log?.Invoke($"keep shape: {solved.ShapeFallbacks} turns of kept pieces too flat for the usual fit, made by the "
                         + "quaternion fit");
@@ -853,7 +900,8 @@ internal static partial class BodyRetarget
         var whole = keepShape != null && solved.Shapes is { } judged
             ? keepShape.Where((_, k) => k >= judged.Count || !judged[k].Released).ToList()
             : keepShape;
-        var weights = PlanWeights(model, pairs, acrossBodies, before: garmentBytes, held: held, keepShape: whole);
+        var weights = PlanWeights(model, pairs, acrossBodies, before: garmentBytes, held: held, keepShape: whole,
+                                  seamFade: seamPin is { Kept: true } ? seamPin.VertexFade : null);
         if (weights?.CrotchNotes is { } crotchNotes)
         {
             foreach (var note in crotchNotes) log?.Invoke($"crotch: {note}");
@@ -865,7 +913,7 @@ internal static partial class BodyRetarget
             bool see = seeInside && tuckSlot != null && !Tuned.NoSeeInside;
             var rebuilt = Rebuild(model, rebuildPairs, replaceSkin, weights, out var swapped, cutHidden, acrossBodies,
                                   swapMeshes, tuckSlot, carryPiercings, parted, see, openSkin, swappedSkinTags,
-                                  addedBySlot);
+                                  addedBySlot, carryPubes: carryPubes);
             if (rebuilt != null)
             {
                 model = rebuilt;
@@ -900,7 +948,10 @@ internal static partial class BodyRetarget
                                 swap, solved.Folded, solved.Shapes, smoothed, solved.Layered, solved.LayerResidual,
                                 solved.DeepCleared, solved.DeepWorst, solved.DeepAt, solved.StandoffPulled,
                                 solved.StandoffWorst, solved.StandoffHeld, solved.OpenEdgeFitted, smallclothesFallback,
-                                solved.SourceSmallclothes, solved.ShapeFallbacks);
+                                solved.SourceSmallclothes, solved.ShapeFallbacks,
+                                seamPin is { Kept: true } ? seamPin.PinnedNodes : 0,
+                                seamPin is { Kept: true } ? seamPin.PinnedVertices : 0, seamPin?.Skipped ?? 0,
+                                seamPin?.BandHeld ?? 0, seamPin?.BandNear ?? 0, seamPin?.Dropped, seamPin?.Kept == true);
 
         // Only the copies the written model draws: a slot whose skin no mesh of the garment reached adds none.
         var drawnMaterials = new HashSet<string>(SecondSkinWriter.Parse(model).MatNames.Select(m => m.TrimStart('/')),
@@ -948,7 +999,8 @@ internal static partial class BodyRetarget
                                  XivLiveMesh.SkinnedMesh? garmentSkin = null, string? swapSlot = null,
                                  IReadOnlySet<int>? swapMeshes = null, string? chestSlot = null,
                                  Action<string, Vec3[]>? trace = null, Outfit? outfit = null, bool deepClear = false,
-                                 bool keepStandoff = false, bool liftUnderbust = true, bool relaxSinkGuard = false)
+                                 bool keepStandoff = false, bool liftUnderbust = true, bool relaxSinkGuard = false,
+                                 SharedSeam? sharedSeam = null)
     {
         // With the skin replaced, the garment's OWN slot body is drawn after all — Rebuild embeds that very mesh in the
         // garment, so it is what the cloth ends up lying against. Asking for the swap is not enough: Rebuild only swaps
@@ -1093,6 +1145,24 @@ internal static partial class BodyRetarget
         bool outfitOrder = outfit != null && !Tuned.NoOutfitOrder;
         bool[]? layered = !Tuned.NoLayerOrder || outfitOrder ? GarmentCloth(garment, sets) : null;
         List<Covered>? covered = !Tuned.NoLayerOrder ? CoveredPoints(sets, layered!, FacesOneWay(garment, sets)) : null;
+
+        // A seam the garment shares with the other piece of a mod split at the waist, back where the author put it —
+        // see PinSharedSeam. Before the layer order, which then holds the seam where it is and keeps whatever covers it
+        // outside.
+        SeamPin? seamPin = null;
+        if (sharedSeam is { Vertices.Length: > 0 } && !Tuned.NoSharedSeam)
+        {
+            var guard = SignedOff(TargetBody.Build(pairs, null, null, before: false));
+            seamPin = PinSharedSeam(sets, sharedSeam, nodeDelta, stay, layers, covered, guard, garment.Positions.Length / 3);
+            if (seamPin.Kept)
+            {
+                folded = FoldedTriangles(sets, nodeDelta);
+                stay ??= new bool[sets.NodeCount];
+                for (int n = 0; n < sets.NodeCount; n++) stay[n] |= seamPin.SeamNodes[n];
+            }
+            Stage("shared-seam");
+        }
+
         if (covered != null) KeepLayerOrder(sets, covered, nodeDelta, stay, layered!, drawn);
         Stage("layer-order");
 
@@ -1141,7 +1211,7 @@ internal static partial class BodyRetarget
         return new Solved(edit, CountTrue(snapped), transferred, missed, pushed, worstMove, worstPush, sets.HeldCount,
                           laid, folded, stage.Shapes, outfitLayered, layerResidual, stage.DeepCleared, stage.DeepWorst,
                           stage.DeepAt, standoffPulled, standoffWorst, standoffHeld, stage.OpenEdgeFitted,
-                          source.SmallclothesLanded, stage.Fallbacks);
+                          source.SmallclothesLanded, stage.Fallbacks, seamPin);
     }
 
     /// <summary>

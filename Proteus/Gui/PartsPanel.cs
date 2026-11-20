@@ -593,6 +593,12 @@ public sealed partial class PartsPanel
         {
             if (side)
             {
+                // Matcaps: a part or a colour row is what the matcap goes on (the row picker sits in the pane below).
+                if (tool == Tool.Matcap)
+                {
+                    ProteusStyle.DisabledWrapped(Strings.Matcap.PickHint);
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip(Strings.Matcap.RowOnlyTip);
+                }
                 if (DrawPartHeader(parts))
                 {
                     drawerOpen = !drawerOpen;
@@ -906,6 +912,9 @@ public sealed partial class PartsPanel
         previewHides = 0;
         share.Reset();
         matcapPending = null;
+        // The glass line describes a shown preview (or, set after this by Finish, the Apply that just converted one).
+        matcapRowGlass = false;
+        matcapRowGlassTriangles = 0;
         matcapPreview.Ended(keepMatcapWanted);
         preview.End(redraw: refreshGame);
     }

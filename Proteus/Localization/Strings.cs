@@ -216,10 +216,6 @@ public sealed class MatcapStrings
     public readonly string Lod0Cut = ProteusLoc.Localize("Parts.Matcap.Lod0Cut",
         "The model was cut to its nearest level of detail, so the matcap shows at every distance.");
 
-    /// <summary>{0} the files that did not line up.</summary>
-    public readonly string SiblingsSkippedFmt = ProteusLoc.Localize("Parts.Matcap.SiblingsSkipped.Fmt",
-        "Not applied to these other body options, whose parts differ: {0}.");
-
     /// <summary>{0} the file Penumbra draws instead.</summary>
     public readonly string NotWinningFmt = ProteusLoc.Localize("Parts.Matcap.NotWinning.Fmt",
         "Another mod's texture is drawn on this slot instead ({0}). Raise the library's priority in Penumbra.");
@@ -241,6 +237,50 @@ public sealed class MatcapStrings
     public readonly string LibraryOffFmt = ProteusLoc.Localize("Parts.Matcap.LibraryOff.Fmt", "{0} is switched off.");
 
     public readonly string Edited = ProteusLoc.Localize("Parts.Matcap.Edited", "The model was changed since.");
+
+    // ── a matcap on one colour row ──
+    public readonly string PickHint = ProteusLoc.Localize("Parts.Matcap.PickHint", "Pick a part or colorset row.");
+    public readonly string RowA = ProteusLoc.Localize("Parts.Matcap.RowA", "Row A");
+    public readonly string RowB = ProteusLoc.Localize("Parts.Matcap.RowB", "Row B");
+    public readonly string RowSubTip = ProteusLoc.Localize("Parts.Matcap.RowSubTip",
+        "Pick one or both. Pointing at it lights it on your character.");
+    public readonly string RowOnlyTip = ProteusLoc.Localize("Parts.Matcap.RowOnlyTip",
+        "Put the matcap only on the pixels of one colour row of the part's material, such as a lace or trim pattern. Leave everything unticked to cover every part with this material.");
+    public readonly string RowReading = ProteusLoc.Localize("Parts.Matcap.RowReading", "Reading the colour rows…");
+    public readonly string RowNoRows = ProteusLoc.Localize("Parts.Matcap.RowNoRows", "This part's material has no colour rows to pick from.");
+    public readonly string RowMaterial = ProteusLoc.Localize("Parts.Matcap.RowMaterial", "Material");
+    public readonly string RowAllFmt = ProteusLoc.Localize("Parts.Matcap.RowAll.Fmt", "Covers every part drawn with {0}.");
+    public readonly string RowFollowWarn = ProteusLoc.Localize("Parts.Matcap.RowFollowWarn",
+        "This material has colours set in Proteus. The matcapped row's pixels draw from a copy of the material and won't follow them.");
+    public readonly string RowHolesWarn = ProteusLoc.Localize("Parts.Matcap.RowHolesWarn",
+        "Some cut-out holes in this part sit inside the row's triangles, so they will show the matcap.");
+    /// <summary>{0} the Undo button's label; {1} how many triangles draw from the converted copy.</summary>
+    public readonly string RowGlassWarnFmt = ProteusLoc.Localize("Parts.Matcap.RowGlassWarn.Fmt",
+        "This part is glass, which can't be cut: Proteus draws {1} triangle(s) around the row from its own solid (character.shpk) copy of the material instead. Your glass material isn't changed, and \"{0}\" puts it all back.");
+    /// <summary>The Undo button's label without its ImGui id, for sentences.</summary>
+    public readonly string UndoLabel = ProteusLoc.Localize("Parts.Matcap.Undo", "Undo matcaps on this model");
+    // ── a finished job, said in chat ──
+    /// <summary>{0} the number of model files written.</summary>
+    public readonly string ChatAppliedFmt = ProteusLoc.Localize("Parts.Matcap.Chat.Applied.Fmt", "Matcap applied to {0} model file(s).");
+    public readonly string ChatHoles = ProteusLoc.Localize("Parts.Matcap.Chat.Holes", "Some see-through holes on this row will show the matcap.");
+    public readonly string ChatEdges = ProteusLoc.Localize("Parts.Matcap.Chat.Edges", "Check see-through edges in game.");
+    /// <summary>{0} the number of triangles a glass part's converted cut copy draws.</summary>
+    public readonly string ChatGlassFmt = ProteusLoc.Localize("Parts.Matcap.Chat.Glass.Fmt",
+        "This part is glass: {0} triangle(s) around the row now draw solid, not glass.");
+    /// <summary>{0} the options left out.</summary>
+    public readonly string ChatSkippedFmt = ProteusLoc.Localize("Parts.Matcap.Chat.Skipped.Fmt", "Not applied to {0}: their parts differ.");
+    /// <summary>{0} how many more options were left out.</summary>
+    public readonly string ChatMoreFmt = ProteusLoc.Localize("Parts.Matcap.Chat.More.Fmt", "and {0} more");
+    public readonly string RowStale = ProteusLoc.Localize("Parts.Matcap.RowStale",
+        "The author's material changed since this row matcap was made. Undo it and apply it again.");
+    public readonly string RowOneMaterial = ProteusLoc.Localize("Matcap.Refused.RowOneMaterial",
+        "A matcap on one colour row works on one material at a time. Tick parts of a single material.");
+    public readonly string RowNothingLeft = ProteusLoc.Localize("Matcap.Refused.RowNothingLeft",
+        "Every part with this material already has a matcap.");
+    public readonly string RowGameGear = ProteusLoc.Localize("Matcap.Refused.RowGameGear",
+        "A matcap on one colour row works on a mod's own gear, not the game's own pieces.");
+    public readonly string RowNotGear = ProteusLoc.Localize("Matcap.Refused.RowNotGear",
+        "A matcap on one colour row works on gear and accessories only.");
 
     public readonly string Superseded = ProteusLoc.Localize("Parts.Matcap.Superseded",
         "The model no longer uses this matcap (the mod was updated).");
@@ -362,6 +402,13 @@ public sealed class SizeSetStrings
 
     public readonly string PiercingsTip = ProteusLoc.Localize("SizeSet.Piercings.Tip",
         "On: each body's piercings come in with its skin where the piece shows that skin. Nails always come along.\n"
+      + "Sizes already made change only when made again.");
+
+    public readonly string Pubes = ProteusLoc.Localize("SizeSet.Pubes", "Keep the new bodies' pubes") + "###sizeSetPubes";
+
+    public readonly string PubesTip = ProteusLoc.Localize("SizeSet.Pubes.Tip",
+        "On: each body's pubes (its crotch mesh and pubic hair) come in with its skin where the piece shows that skin and "
+      + "no cloth covers it.\n"
       + "Sizes already made change only when made again.");
 
     public readonly string KeepHiddenSkin = ProteusLoc.Localize("SizeSet.KeepHiddenSkin", "Keep hidden skin")
@@ -550,7 +597,8 @@ public sealed class SizeSetStrings
         "{0}, \"{1}\": it has no skin of its own to read a body off, and its cloth sits on no body closely, so it was refit "
       + "as made on {2}, the body this outfit's legs (\"{3}\") were made on.");
 
-    /// <summary>{0} is the piece, {1} the men's option, {2} millimetres, {3} the body.</summary>
+    /// <summary>{0} is the piece, {1} the option: the men's option, or the author's size a skinless shoe's sizes were cut
+    /// from (<c>SizeSetRefit.MadeOnEnds.cs</c>); {2} millimetres, {3} the body.</summary>
     public readonly string EndClothGapFmt = ProteusLoc.Localize("SizeSet.EndClothGap.Fmt",
         "{0}, \"{1}\": its cloth sits about {2:F0} mm off {3}'s leg or arm on average, so the body it was read on may "
       + "not be the one it was made on.");
@@ -593,6 +641,13 @@ public sealed class AutoRefitStrings
 
     public readonly string PiercingsTip = ProteusLoc.Localize("AutoRefit.Piercings.Tip",
         "Off: gear is refitted without your body mod's piercings. Nails always come along.\n"
+      + "Gear already refitted keeps what it was made with; undo and refit what you're wearing to change it.");
+
+    public readonly string Pubes = ProteusLoc.Localize("AutoRefit.Pubes.Label",
+        "Keep my body's pubes on refitted gear") + "###autoRefitPubes";
+
+    public readonly string PubesTip = ProteusLoc.Localize("AutoRefit.Pubes.Tip",
+        "Off: gear is refitted without your body mod's pubes (its crotch mesh and pubic hair).\n"
       + "Gear already refitted keeps what it was made with; undo and refit what you're wearing to change it.");
 
     public readonly string Collection = ProteusLoc.Localize("AutoRefit.Collection", "Collection");
@@ -1497,6 +1552,8 @@ public sealed class SettingsStrings
         "a Proteus pack (Proteus draws it itself)");
     public readonly string GearShadersReasonDeclined = ProteusLoc.Localize("Settings.GearShaders.Reason.Declined",
         "undone by you");
+    public readonly string GearShadersReasonRowMatcap = ProteusLoc.Localize("Settings.GearShaders.Reason.RowMatcap",
+        "a row matcap was cut from its earlier upgrade (undo the matcap first)");
     public readonly string GearShadersUpgradeNow = ProteusLoc.Localize("Settings.GearShaders.UpgradeNow",
         "Upgrade what I'm wearing now") + "###shaderUpgradeNow";
     public readonly string GearShadersUpgradeNowTip = ProteusLoc.Localize("Settings.GearShaders.UpgradeNow.Tip",
@@ -3715,6 +3772,13 @@ public sealed class PartsStrings
     public readonly string RetargetPiercingsTip = ProteusLoc.Localize("Parts.Retarget.Piercings.Tip",
         "On: the new body's piercings come in with its skin where the garment shows that skin.\n"
       + "Nails always come along.");
+
+    public readonly string RetargetPubes = ProteusLoc.Localize("Parts.Retarget.Pubes", "Keep the new body's pubes")
+                                         + "###partsRetargetPubes";
+
+    public readonly string RetargetPubesTip = ProteusLoc.Localize("Parts.Retarget.Pubes.Tip",
+        "On: the new body's pubes (its crotch mesh and pubic hair) come in with its skin where the garment shows that "
+      + "skin and no cloth covers it.");
 
     public readonly string RetargetCutForcedTip = ProteusLoc.Localize("Parts.Retarget.CutForcedTip",
         "Always on while the shoe keeps its own foot or the glove its own hand: otherwise the whole new legs or arms "

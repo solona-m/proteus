@@ -116,7 +116,8 @@ internal static partial class BodyRetarget
     /// <see cref="EaseCrotch"/>). Null for none.</param>
     internal static WeightPlan? PlanWeights(byte[] garment, IReadOnlyList<SlotPair> pairs, bool acrossBodies = false,
                                             byte[]? before = null, IReadOnlySet<int>? held = null,
-                                            IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null)
+                                            IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null,
+                                            float[]? seamFade = null)
     {
         if (pairs.Count == 0 || pairs.Any(p => p.SourceModel == null || p.TargetModel == null)) return null;
 
@@ -311,6 +312,10 @@ internal static partial class BodyRetarget
         // the crotch.
         KeepToSide(own, result, bodyBones);
         KeepOffLegs(model, own, result, legFill);
+
+        // A seam shared with the other piece keeps the author's weights in both, faded in over its band — see
+        // PinSharedSeam. Last, so nothing above carries the refit's weights back onto it.
+        if (seamFade != null) FadeSeamWeights(own, result, seamFade, seams?.ClassOf);
 
         if (trace != null && seams != null)
         {
@@ -1237,7 +1242,7 @@ internal static partial class BodyRetarget
     /// A body mod's extras that are not skin: piercings and pubic hair, in the body's own material family
     /// (<c>mt_c0201b0001_piercings</c>, <c>_bibopube</c>, <c>_betterpube</c>, <c>_neolithe_piercings</c>). A garment
     /// refitted across bodies drops the ones it carried from its old body — they sit on the old body's shape — and
-    /// takes none from the new one.
+    /// takes none from the new one unless asked (see <see cref="AdornmentsOf"/>).
     /// </summary>
     internal static bool IsBodyExtraMaterial(string material)
         => !SecondSkinWriter.IsBodySkinMaterial(material) && BodyExtra.IsMatch(material);

@@ -155,6 +155,14 @@
     "message": "オフ: 体型 MOD のピアスなしで装備を調整します。爪は常に含まれます。\n調整済みの装備は作成時のままです。変更するには、着ている装備の調整を元に戻してから調整し直してください。",
     "description": ""
   },
+  "AutoRefit.Pubes.Label": {
+    "message": "リフィットした装備に自分の体の陰毛を残す",
+    "description": ""
+  },
+  "AutoRefit.Pubes.Tip": {
+    "message": "オフ：装備はボディMODの陰毛（股間のメッシュと陰毛）なしでリフィットされます。\nリフィット済みの装備は作成時のままです。変えるには着ているものを元に戻してリフィットし直してください。",
+    "description": ""
+  },
   "AutoRefit.Working": {
     "message": "処理中…",
     "description": ""
@@ -3987,6 +3995,14 @@
     "message": "オン: 衣装がその肌を見せている部分では、新しい体型のピアスが肌と一緒に入ります。\n爪は常に含まれます。",
     "description": ""
   },
+  "Parts.Retarget.Pubes": {
+    "message": "新しい体の陰毛を残す",
+    "description": ""
+  },
+  "Parts.Retarget.Pubes.Tip": {
+    "message": "オン：衣装がその肌を見せていて布が覆っていない所では、新しい体の陰毛（股間のメッシュと陰毛）が肌と一緒に入ります。",
+    "description": ""
+  },
   "Parts.Retarget.CutForcedTip": {
     "message": "靴が自分の足を、手袋が自分の手を残している間は常にオンです。オフにすると新しい脚や腕が丸ごと入ってしまいます。",
     "description": ""
@@ -5363,6 +5379,14 @@
     "message": "オン: パーツがその肌を見せている部分では、各体型のピアスが肌と一緒に入ります。爪は常に含まれます。\n作成済みのサイズは、作り直したときにだけ変わります。",
     "description": ""
   },
+  "SizeSet.Pubes": {
+    "message": "新しい体たちの陰毛を残す",
+    "description": ""
+  },
+  "SizeSet.Pubes.Tip": {
+    "message": "オン：パーツがその肌を見せていて布が覆っていない所では、各体の陰毛（股間のメッシュと陰毛）が肌と一緒に入ります。\n作成済みのサイズは作り直したときだけ変わります。",
+    "description": ""
+  },
   "SizeSet.KeepHiddenSkin": {
     "message": "隠れた肌を残す",
     "description": ""
@@ -6095,6 +6119,10 @@
     "message": "あなたが元に戻した",
     "description": ""
   },
+  "Settings.GearShaders.Reason.RowMatcap": {
+    "message": "以前のアップグレードから行マットキャップが切り出されています（先にマットキャップを元に戻してください）",
+    "description": ""
+  },
   "Settings.GearShaders.UpgradeNow": {
     "message": "着ている装備を今すぐ更新",
     "description": ""
@@ -6117,6 +6145,22 @@
   },
   "Settings.GearShaders.Edited.Fmt": {
     "message": "{0} はシェーダーのアップグレード後に編集されたため、元に戻すでは変更しません。作者のオリジナルは Proteus/shaderupgrade-backup/{0} に保存されています。元に戻すには、それをファイルに上書きコピーしてください。",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcap.Fmt": {
+    "message": "{0} のアップグレード済みマテリアルから行マットキャップが切り出されているため、元に戻すはそのままにします。先にそのマットキャップを元に戻し（{1}）、その後でこれを元に戻してください。",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapKept.Fmt": {
+    "message": "{0} のアップグレード済みマテリアルから切り出された行マットキャップを、{1} から作ったリフィットや髪の移植がまだ描画しています。それらを作り直すか元に戻し、マットキャップをもう一度元に戻してから、これを元に戻してください。",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapEdited.Fmt": {
+    "message": "{0} のアップグレード済みマテリアルから行マットキャップが切り出されており、そのマットキャップの後で {1} が変更されたため、マットキャップもまだ元に戻せません。先に後の変更を元に戻し（または Proteus/matcap-backup のコピーを戻し）、次にマットキャップ、最後にこれを元に戻してください。",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapLater.Fmt": {
+    "message": "{0} のアップグレード済みマテリアルから行マットキャップが切り出されており、そのマットキャップの後で {1} が {2} を変更しました。先に {1} を元に戻し、次にマットキャップ、最後にこれを元に戻してください。",
     "description": ""
   },
   "Settings.GearShaders.Busy": {
@@ -6527,10 +6571,6 @@
     "message": "この Mod を共有する相手にも、同じマットキャップに設定した {0}（{1}）が必要です。そのテクスチャがあなたの Mod にコピーされることはありません。",
     "description": ""
   },
-  "Parts.Matcap.SiblingsSkipped.Fmt": {
-    "message": "パーツが異なるため、次のほかの体型オプションには適用していません: {0}。",
-    "description": ""
-  },
   "Parts.Matcap.SkinTip": {
     "message": "肌にはマットキャップを付けられません。",
     "description": ""
@@ -6669,6 +6709,194 @@
   },
   "Parts.Matcap.PortKept": {
     "message": "このモデルはProteusが移植した髪型です。マットキャップがある間、Proteusはこのモデルをそのまま残し、同じ素材を共有する他の種族の移植もマットキャップを取り消すまで自動では作り直しません。スタジオでそれらの種族を手動で移植した場合は作り直されます。",
+    "description": ""
+  },
+  "Matcap.Refused.RowFileSwap.Fmt": {
+    "message": "{0} がこのパーツのマテリアルを別のファイルに差し替えているため、行マットキャップは追従できません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoNormal": {
+    "message": "このパーツのマテリアルには、行マットキャップの切り抜きに使うノーマルマップがありません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowAmbiguousOption.Fmt": {
+    "message": "グループ「{0}」に「{1}」という名前のオプションが2つあるため、行マットキャップは区別できません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowShader.Fmt": {
+    "message": "行マットキャップにはパーツが character.shpk である必要がありますが、{0} は {1} を使っています。",
+    "description": ""
+  },
+  "Matcap.Refused.RowGlassLayout.Fmt": {
+    "message": "{0} は {1} を、Proteus が行マットキャップのために character.shpk へ移せない構成で使っています（法線・マスク・インデックスマップがちょうど1枚ずつと、黄金のレガシーのカラーテーブルが必要です）。",
+    "description": ""
+  },
+  "Matcap.Refused.RowGlassTemplate": {
+    "message": "ガラス部位の切り抜きの元になるゲーム本体のマテリアルを読み込めなかったため、何も変更していません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyWear.Fmt": {
+    "message": "{0} はまだ古いシェーダー（characterlegacy.shpk）のままで、行マットキャップには character.shpk が必要です。一度装備して装備シェーダーで character.shpk に移してから、行マットキャップを追加してください。古いシェーダーのままの場合は、{1} の件数にカーソルを合わせると理由が分かります。",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyDeclined.Fmt": {
+    "message": "{0} はアップグレードを元に戻したため古いシェーダー（characterlegacy.shpk）のままで、行マットキャップには character.shpk が必要です。装備して {2} の「{1}」を押してから、行マットキャップを追加してください。",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyOff.Fmt": {
+    "message": "{0} はまだ古いシェーダー（characterlegacy.shpk）のままで、行マットキャップには character.shpk が必要です。{2} の「{1}」をオンにして一度装備してから、行マットキャップを追加してください。",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Fmt": {
+    "message": "行を切り抜けませんでした: {0}。",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Normal": {
+    "message": "ノーマルマップを読み込めませんでした",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Index": {
+    "message": "インデックスマップを読み込めませんでした",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Write": {
+    "message": "切り抜いたマテリアルを書き込めませんでした",
+    "description": ""
+  },
+  "Matcap.Refused.RowTextureVaries.Fmt": {
+    "message": "{0} がこのパーツのノーマルマップかインデックスマップを差し替えるため、1つの切り抜きではすべての選択肢に合いません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowEmpty.Fmt": {
+    "message": "このパーツには行 {0} を使うピクセルがありません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowNothingLeft": {
+    "message": "このマテリアルのパーツにはすべてマットキャップが付いています。",
+    "description": ""
+  },
+  "Matcap.Refused.RowNotGear": {
+    "message": "1つのカラー行へのマットキャップは装備とアクセサリーでのみ使えます。",
+    "description": ""
+  },
+  "Matcap.Refused.RowOneMaterial": {
+    "message": "1つのカラー行へのマットキャップは一度に1つのマテリアルにしか使えません。1つのマテリアルのパーツだけにチェックを入れてください。",
+    "description": ""
+  },
+  "Matcap.Refused.RowMixedThreshold": {
+    "message": "このパーツのオプションは切り抜き方が一致せず、頂点カラーで切り抜かれてしまいます。行マットキャップは両方には合いません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowVertexAlpha": {
+    "message": "このパーツの頂点カラーが行マットキャップを切り抜いてしまい、変更もできません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowGameGear": {
+    "message": "1つのカラー行へのマットキャップはModの装備で使えます。ゲーム本体の装備には使えません。",
+    "description": ""
+  },
+  "Matcap.Row.GameFile": {
+    "message": "ゲーム本体のファイル",
+    "description": ""
+  },
+  "Matcap.Row.DefaultData": {
+    "message": "Modの既定ファイル",
+    "description": ""
+  },
+  "Matcap.Row.Option.Fmt": {
+    "message": "「{0}」のオプション「{1}」",
+    "description": ""
+  },
+  "Matcap.Row.Container.Fmt": {
+    "message": "「{0}」の項目 {1}",
+    "description": ""
+  },
+  "Parts.Matcap.PickHint": {
+    "message": "パーツかカラーセットの行を選んでください。",
+    "description": ""
+  },
+  "Parts.Matcap.RowA": {
+    "message": "行 A",
+    "description": ""
+  },
+  "Parts.Matcap.RowB": {
+    "message": "行 B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubTip": {
+    "message": "片方か両方を選びます。ポインターを合わせるとキャラクター上で光ります。",
+    "description": ""
+  },
+  "Parts.Matcap.RowOnlyTip": {
+    "message": "マットキャップをパーツのマテリアルの1つのカラー行のピクセル（レースや縁取りの模様など）だけに付けます。何もチェックしなければ、このマテリアルのパーツすべてが対象になります。",
+    "description": ""
+  },
+  "Parts.Matcap.RowReading": {
+    "message": "カラー行を読み込み中…",
+    "description": ""
+  },
+  "Parts.Matcap.RowNoRows": {
+    "message": "このパーツのマテリアルには選べるカラー行がありません。",
+    "description": ""
+  },
+  "Parts.Matcap.RowMaterial": {
+    "message": "マテリアル",
+    "description": ""
+  },
+  "Parts.Matcap.RowAll.Fmt": {
+    "message": "{0} で描画されるパーツすべてが対象です。",
+    "description": ""
+  },
+  "Parts.Matcap.RowFollowWarn": {
+    "message": "このマテリアルには Proteus で設定した色があります。マットキャップを付けた行のピクセルはマテリアルのコピーで描かれるため、その色に追従しません。",
+    "description": ""
+  },
+  "Parts.Matcap.RowHolesWarn": {
+    "message": "このパーツの切り抜き穴の一部が行の三角形の中にあるため、そこにマットキャップが見えます。",
+    "description": ""
+  },
+  "Parts.Matcap.RowGlassWarn.Fmt": {
+    "message": "この部位はガラスで、切り抜けません。代わりに Proteus は、行の周りの {1} 個の三角形を、マテリアルを不透明（character.shpk）にした独自のコピーで描画します。元のガラスのマテリアルは変更されず、「{0}」で元に戻ります。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Applied.Fmt": {
+    "message": "{0} 個のモデルファイルにマットキャップを適用しました。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Holes": {
+    "message": "この行の透けた穴の一部にはマットキャップが見えます。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Edges": {
+    "message": "透ける縁をゲーム内で確認してください。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Glass.Fmt": {
+    "message": "この部位はガラスです。行の周りの {0} 個の三角形は、ガラスではなく不透明で描画されるようになりました。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Skipped.Fmt": {
+    "message": "{0} には適用していません: パーツが異なります。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.More.Fmt": {
+    "message": "ほか {0} 件",
+    "description": ""
+  },
+  "Parts.Matcap.RowStale": {
+    "message": "この行マットキャップを作った後に作者のマテリアルが変わりました。元に戻してから、もう一度適用してください。",
+    "description": ""
+  },
+  "Matcap.Refused.RowManifestUnreadable": {
+    "message": "Modのファイル一覧（meta.json）を読み込めなかったため、何も変更していません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoSource": {
+    "message": "Proteus はこのパーツのマテリアルを Mod でもゲームでも見つけられなかったため、切り抜くものがありません。",
+    "description": ""
+  },
+  "Matcap.Refused.RowMapSwap.Fmt": {
+    "message": "{0} がこのパーツのノーマルマップかインデックスマップを別のファイルに差し替えているため、行マットキャップは追従できません。",
     "description": ""
   }
 }

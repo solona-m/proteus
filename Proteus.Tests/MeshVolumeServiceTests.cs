@@ -665,6 +665,7 @@ public partial class MeshVolumeServiceTests
     /// </summary>
     [LocalDataFact(PlugModel)]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Real_shape_keyed_model_keeps_every_shape_offset()   // [EDGE-spare-carry-append-worn-9]
     {
         var mdl = System.IO.File.ReadAllBytes(LocalData.Path(PlugModel));

@@ -72,6 +72,7 @@ public class SizeSetGameCopyLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-old-game-copies-1")]
     [Trait("Plan", "AC-old-game-copies-2")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void BOObies_men_get_the_design_and_keep_the_copy()   // [AC-old-game-copies-1] [AC-old-game-copies-2]
     {
         string copy = Unpacked(BOObiesPack);

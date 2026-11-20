@@ -169,6 +169,12 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     private bool carryPiercings;
 
     /// <summary>
+    /// With <see cref="replaceSkin"/>, bring the new body's pubes in with its skin (see <see cref="BodyRetarget.Rebuild"/>).
+    /// Off by default, and not remembered, as <see cref="carryPiercings"/>.
+    /// </summary>
+    private bool carryPubes;
+
+    /// <summary>
     /// A shoe keeps its own foot, a glove its own hand, and only the leg or arm is refitted (see <see cref="KeepEnds"/>).
     /// On for every garment it can apply to; unticked gives the whole-garment refit. Per garment, not remembered.
     /// </summary>
@@ -1746,6 +1752,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         using (ImRaii.Disabled(!swap))
             ImGui.Checkbox(ps.RetargetPiercings, ref carryPiercings);
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.RetargetPiercingsTip);
+        using (ImRaii.Disabled(!swap))
+            ImGui.Checkbox(ps.RetargetPubes, ref carryPubes);
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.RetargetPubesTip);
         ImGui.Unindent();
 
         // The game's own top is always cleared, as the automatic refit clears it (see RetargetInputs.StudioSkin).
@@ -2010,7 +2019,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             if (swap.Trimmed > 0) parts.Add($"{swap.Trimmed:N0} weights trimmed");
             if (swap.Posed > 0) parts.Add($"{swap.Posed} posed skin mesh(es) kept");
             if (swap.ExtrasDropped > 0) parts.Add($"{swap.ExtrasDropped:N0} extras tris dropped");
-            if (swap.Adorned > 0) parts.Add($"{swap.Adorned:N0} nail/piercing tris carried");
+            if (swap.Adorned > 0) parts.Add($"{swap.Adorned:N0} nail/piercing/pube tris carried");
             if (swap.Smallclothes > 0) parts.Add($"{swap.Smallclothes:N0} smallclothes tris brought in");
             if (swap.Unplaced > 0) parts.Add($"{swap.Unplaced:N0} weights unplaced");
             if (swap.LostShapes > 0) parts.Add($"{swap.LostShapes} shape key(s) lost");
@@ -2154,6 +2163,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         // A shoe or glove keeping its foot or hand takes the box as it is: the game-top rule is for whole tops.
         bool boxClear = clearBody;
         bool piercings = RetargetInputs.CarryPiercings(replaceSkin, carryPiercings);
+        bool pubes = RetargetInputs.CarryPubes(replaceSkin, carryPubes);
         // A picked race's bent bodies are another rig than the race's own, even within one body mod: the cloth takes the
         // new body's weights, as it does between body mods.
         // A part on a body of its own other than the one made for makes it one between bodies too — with none, exactly
@@ -2248,7 +2258,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                         // The size refitted onto counts as chosen only when there is one: several share the slot's.
                         s => s == primary ? (limbMasks.Source, limbMasks.Target(RetargetInputs.OverlayFor(limbTargets)))
                                           : (endMasks?.Source, endMasks?.Target(null)),
-                        SlotName, modelRel, shapeNames, piercings);
+                        SlotName, modelRel, shapeNames, piercings, pubes);
                     var kept = KeepEnds.StudioPlan(input, Baked, uvRemap, log, () => Interlocked.Increment(ref planDone));
                     return new PlanResult(key, kept.Planned, kept.Error, kept.Notice, kept.ShapeNames);
                 }
@@ -2273,7 +2283,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                                                          skinRule, cut, pieces, piercings,
                                                          liftUnderbust: !crossSex || CrossSexRefit.LiftsUnderbust(bake!.Route.Drawn, bake.Route.To),
                                                          log: line => log.Debug("[Proteus] body size: {0}", line),
-                                                         warn: line => log.Warning("[Proteus] body size: {0}", line));
+                                                         warn: line => log.Warning("[Proteus] body size: {0}", line),
+                                                         carryPubes: pubes);
                     // Skin the refit kept of the garment's own, drawn in the new body's layout and material — or a
                     // gen2 garment's kept skin shows the wrong skin, and none of the tattoos, on a bibo body.
                     // With parts on bodies of their own, every body the refit went onto, the lead's first: skin of any of
@@ -2559,7 +2570,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                                   RetargetInputs.ShapesFor(crossEnd, ctx.KeepShape),
                                   RetargetInputs.EffectiveReplaceSkin(replaceSkin, crossEnd), cutHidden, clearBody,
                                   carryPiercings, SkinRule(inputs).ClearForced,
-                                  bodiesInPlay)
+                                  bodiesInPlay, carryPubes)
                + "|g" + madeForGeneration;
     }
 

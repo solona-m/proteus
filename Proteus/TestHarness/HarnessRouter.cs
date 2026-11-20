@@ -125,6 +125,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
             character = s.Character,
             collection = s.CollectionId is { } id ? new { id } : null,
             models,
+            materials = GearMaterials(s.ResourceMap),
             compositor = new
             {
                 phase = CompositorPhase.Of(c), inFlight = c.InFlight, epoch = c.Epoch,
@@ -151,7 +152,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                 enabled = qa.AutoRefitEnabled,
                 bodyIndex = qa.BodyIndex,
             },
-            shaderUpgrade = ShaderUpgradeBlock(Game.ShaderUpgrade()),
+            shaderUpgrade = ShaderUpgradeBlock(Game.ShaderUpgrade(), names),
             variantRepoint = VariantRepointBlock(Game.VariantRepoint()),
             hairPort = HairPortBlock(Game.HairPort(), names),
             job = jobs.Current?.View(),
@@ -159,6 +160,19 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
             harnessChanges,
         });
     }
+
+    /// <summary>
+    /// The player's gear materials in <c>/state</c>: each equipment or accessory material game path and the file Penumbra
+    /// resolves it to (prefixes stripped), from the resource map <c>/state</c> already read on the framework thread — what
+    /// a row matcap's cut copy is checked by. Paths only (scrubbed with the rest); empty when Penumbra can't be read.
+    /// </summary>
+    internal static object GearMaterials(IReadOnlyDictionary<string, HashSet<string>>? map) =>
+        (map ?? new Dictionary<string, HashSet<string>>())
+            .SelectMany(kv => kv.Value.Where(Proteus.Services.ShaderUpgradePlan.IsGearMaterial)
+                                      .Select(gp => (GamePath: gp, Resolved: Proteus.Services.ShaderUpgradePlan.StripPenumbraPrefix(kv.Key))))
+            .OrderBy(x => x.GamePath, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.Resolved, StringComparer.OrdinalIgnoreCase)
+            .Select(x => new { gamePath = x.GamePath, resolved = x.Resolved })
+            .ToList();
 
     /// <summary>The ten slots in <c>/state</c>, in slot order: item and dyes (null when unreadable), set/variant for a custom id.</summary>
     internal static object GearBlock(IReadOnlyDictionary<string, Worn>? gear)
@@ -174,7 +188,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
         }).ToList();
 
     /// <summary>The gear shader upgrade in <c>/state</c>: read-only, scrubbed with the rest.</summary>
-    internal static object ShaderUpgradeBlock(ShaderUpgradeWatcher.View v) => new
+    internal static object ShaderUpgradeBlock(ShaderUpgradeWatcher.View v, SessionNames names) => new
     {
         enabled = v.Enabled, busy = v.Busy, waiting = v.Waiting, awaitingRedraw = v.AwaitingRedraw, maskGloss = v.MaskGloss,
         upgraded = v.UpgradedList.Select(u => new
@@ -184,12 +198,18 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
         }),
         left = v.LeftList.Select(l => new { gamePath = l.GamePath, source = l.Source, reason = l.Reason }),
         masks = new { memoHits = v.MemoHits, decodes = v.Decodes },
-        lastRun = v.LastRun is { } r
-            ? new { kind = r.Kind, modsChanged = r.ModsChanged, filesChanged = r.FilesChanged, restored = r.Restored,
-                    kept = r.Kept, refused = r.Refused, reloaded = r.Reloaded, redrawRequested = r.RedrawRequested,
-                    atUtc = r.AtUtc }
-            : null,
+        lastRun = RunBlock(v.LastRun, names),
+        // The last "Undo for what I'm wearing", kept through the walks after it (what the Settings result line shows).
+        lastUndo = RunBlock(v.LastUndo, names),
     };
+
+    private static object? RunBlock(ShaderUpgradeWatcher.RunInfo? run, SessionNames names) => run is { } r
+        ? new { kind = r.Kind, modsChanged = r.ModsChanged, filesChanged = r.FilesChanged, restored = r.Restored,
+                kept = r.Kept, refused = r.Refused, reloaded = r.Reloaded, redrawRequested = r.RedrawRequested,
+                atUtc = r.AtUtc,
+                // An undo's refusals (mod-relative paths only); free text, so scrubbed like autoRefit's.
+                message = names.Scrub(r.Message) }
+        : null;
 
     /// <summary>The automatic hair path in <c>/state</c>: read-only, folder names only, scrubbed with the rest.</summary>
     internal static object HairPortBlock(HairPortInfo h, SessionNames names) => new
@@ -603,7 +623,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
 
     private async Task<HarnessResponse> Refit(HarnessRequest request)
     {
-        var (body, bad) = JsonBody(request, "mod", "bodies", "remake", "keepHiddenSkin");
+        var (body, bad) = JsonBody(request, "mod", "bodies", "remake", "keepHiddenSkin", "pubes");
         if (bad != null) return bad;
         string? mod = OptionalString(body, "mod", out bad);
         if (bad != null) return bad;
@@ -626,6 +646,13 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                 return HarnessResponse.Error(400, "invalid-field", "keepHiddenSkin must be true or false");
             keepHiddenSkin = keepValue.GetBoolean();
         }
+        bool? pubes = null;
+        if (body.TryGetProperty("pubes", out var pubesValue))
+        {
+            if (pubesValue.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                return HarnessResponse.Error(400, "invalid-field", "pubes must be true or false");
+            pubes = pubesValue.GetBoolean();
+        }
 
         if (!jobs.TryReserve()) return HarnessResponse.Error(409, "busy", "a job is already running");
         bool started = false;
@@ -635,7 +662,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
             if (error != null) return error;
             if (HairBusy("refit", Path.Combine(mods!.ModsRoot, dir!)) is { } hairBusy) return hairBusy;
             var job = new HarnessJob(HarnessJobs.NewJobId(), "refit", dir!);
-            var args = new RefitJob.Args(dir!, Path.Combine(mods!.ModsRoot, dir!), keys, remake, mods, keepHiddenSkin);
+            var args = new RefitJob.Args(dir!, Path.Combine(mods!.ModsRoot, dir!), keys, remake, mods, keepHiddenSkin, pubes);
             _ = jobs.Start(job, j => RefitJob.Run(jobs, j, args));
             started = true;
             return HarnessResponse.Json(202, new { job = job.Id, modDir = dir, state = "queued" });

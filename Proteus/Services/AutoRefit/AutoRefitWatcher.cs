@@ -310,6 +310,21 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// its override stands. Worker or framework thread.</summary>
     partial void HarnessNoteRefit(string modDir);
 
+    /// <summary>Whether refits bring the new body's pubes in: <see cref="Configuration.AutoRefitPubes"/>, or the QA test
+    /// harness's session-only override of it (local builds only). Any thread.</summary>
+    internal bool CarryPubesNow
+    {
+        get
+        {
+            bool pubes = config.AutoRefitPubes;
+            HarnessPubes(ref pubes);
+            return pubes;
+        }
+    }
+
+    /// <summary>The QA test harness's session-only override of <see cref="Configuration.AutoRefitPubes"/>.</summary>
+    partial void HarnessPubes(ref bool pubes);
+
     // ── signals ─────────────────────────────────────────────────────────────
 
     private void OnEquipmentChanged() => RequestWalkIn(EquipSettleMs);
@@ -834,54 +849,71 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
         long tick = Environment.TickCount64;
         foreach (string slot in changed)
+            WalkSlot(slot, now, resolvedOf, pref, collection.Id, all, tick);
+    }
+
+    /// <summary>A collection's auto refit preference, or null: read here so the harness partial never names the
+    /// configuration (it may not write it — ADR 0002).</summary>
+    private AutoRefitPreference? PreferenceOf(Guid collectionId)
+        => config.AutoRefitByCollection.TryGetValue(collectionId.ToString("D"), out var pref) ? pref : null;
+
+    /// <summary>
+    /// One worn piece through the walk's checks — the just-refitted window, <see cref="AutoRefitDecisions.ShouldRefit"/>,
+    /// a refit the player undid — and enqueued when it passes. Shared by <see cref="Walk"/> and the harness's <c>RunNowFor</c>,
+    /// so a forced refit of one mod is exactly the walk's. Framework thread.
+    /// </summary>
+    /// <returns>"enqueued", or why not: "just-refitted", "declined", "skipped:&lt;reason&gt;".</returns>
+    private string WalkSlot(string slot, Dictionary<string, Worn> now,
+                            Dictionary<string, (string? Resolved, string? Root, bool Outside)> resolvedOf,
+                            AutoRefitPreference pref, Guid collectionId, bool all, long tick)
+    {
+        var worn = now[slot];
+        var (resolved, root, outside) = resolvedOf[slot];
+        if (ours.TryGetValue(slot + "|" + worn.GamePath, out long until) && tick < until) return "just-refitted";
+
+        var skip = AutoRefitDecisions.ShouldRefit(slot, worn, config.AutoRefitVanilla, outside);
+        if (skip != AutoRefitDecisions.Skip.None)
         {
-            var worn = now[slot];
-            var (resolved, root, outside) = resolvedOf[slot];
-            if (ours.TryGetValue(slot + "|" + worn.GamePath, out long until) && tick < until) continue;
-
-            var skip = AutoRefitDecisions.ShouldRefit(slot, worn, config.AutoRefitVanilla, outside);
-            if (skip != AutoRefitDecisions.Skip.None)
-            {
-                // A garment the second skin is appended into is drawn from Proteus's managed mod, rebuilt from its own
-                // file by every shell build: a refit saved into its mod would never reach what is drawn. Named, so a
-                // report of one left unrefitted can be told apart from jewellery.
-                if (skip == AutoRefitDecisions.Skip.Managed && AutoRefitDecisions.IsAccessory(slot)
-                    && compositor.GetAppendHostSource(worn.GamePath) is { } host)
-                    log.Information("[Proteus] auto refit: {0} {1} hosts the second skin (from {2}), left as it is", slot,
-                                    worn.GamePath, host);
-                else
-                    log.Debug("[Proteus] auto refit: {0} {1} left alone ({2})", slot, worn.GamePath, skip);
-                continue;
-            }
-
-            // A piece whose refit the player undid stays as it is — unless they ask for what they are wearing now.
-            if (pref.Declined.Contains(worn.Key))
-            {
-                if (!all)
-                {
-                    log.Information("[Proteus] auto refit: {0} {1} had its refit undone, left as it is", slot, worn.GamePath);
-                    continue;
-                }
-                pref.Declined.Remove(worn.Key);
-                config.Save();
-            }
-            // An accessory is sized off the chest or legs piece worn with it, and a shoe or glove is kept outside it
-            // (OutfitPartners): what those draw now, before their own refits switch them to another file.
-            bool accessory = AutoRefitDecisions.IsAccessory(slot);
-            var beside = accessory || slot is "_glv" or "_sho"
-                ? AutoRefitDecisions.Slots.Where(s => s is "_top" or "_dwn" && now.ContainsKey(s))
-                                          .ToDictionary(s => s, s => new Beside(now[s], resolvedOf[s].Resolved,
-                                                                                resolvedOf[s].Root))
-                : null;
-            // Read only for a body piece drawn from a mod: one call per piece, on the framework thread.
-            var modSettings = !accessory && worn.ModDir != null
-                              && penumbra.GetModSettings(collection.Id, worn.ModDir) is { } ms
-                ? new PenumbraBridge.ModSettingsSnapshot(ms.Enabled, ms.Priority, ms.Options, Inherited: false, Temporary: false)
-                : (PenumbraBridge.ModSettingsSnapshot?)null;
-            Enqueue(new Request(slot, worn, resolved, root, collection.Id, all, beside,
-                                accessory ? AutoRefitTargets.ChosenOf(pref) : null,
-                                ModSettings: modSettings));
+            // A garment the second skin is appended into is drawn from Proteus's managed mod, rebuilt from its own
+            // file by every shell build: a refit saved into its mod would never reach what is drawn. Named, so a
+            // report of one left unrefitted can be told apart from jewellery.
+            if (skip == AutoRefitDecisions.Skip.Managed && AutoRefitDecisions.IsAccessory(slot)
+                && compositor.GetAppendHostSource(worn.GamePath) is { } host)
+                log.Information("[Proteus] auto refit: {0} {1} hosts the second skin (from {2}), left as it is", slot,
+                                worn.GamePath, host);
+            else
+                log.Debug("[Proteus] auto refit: {0} {1} left alone ({2})", slot, worn.GamePath, skip);
+            return "skipped:" + skip;
         }
+
+        // A piece whose refit the player undid stays as it is — unless they ask for what they are wearing now.
+        if (pref.Declined.Contains(worn.Key))
+        {
+            if (!all)
+            {
+                log.Information("[Proteus] auto refit: {0} {1} had its refit undone, left as it is", slot, worn.GamePath);
+                return "declined";
+            }
+            pref.Declined.Remove(worn.Key);
+            config.Save();
+        }
+        // An accessory is sized off the chest or legs piece worn with it, and a shoe or glove is kept outside it
+        // (OutfitPartners): what those draw now, before their own refits switch them to another file.
+        bool accessory = AutoRefitDecisions.IsAccessory(slot);
+        var beside = accessory || slot is "_glv" or "_sho"
+            ? AutoRefitDecisions.Slots.Where(s => s is "_top" or "_dwn" && now.ContainsKey(s))
+                                      .ToDictionary(s => s, s => new Beside(now[s], resolvedOf[s].Resolved,
+                                                                            resolvedOf[s].Root))
+            : null;
+        // Read only for a body piece drawn from a mod: one call per piece, on the framework thread.
+        var modSettings = !accessory && worn.ModDir != null
+                          && penumbra.GetModSettings(collectionId, worn.ModDir) is { } ms
+            ? new PenumbraBridge.ModSettingsSnapshot(ms.Enabled, ms.Priority, ms.Options, Inherited: false, Temporary: false)
+            : (PenumbraBridge.ModSettingsSnapshot?)null;
+        Enqueue(new Request(slot, worn, resolved, root, collectionId, all, beside,
+                            accessory ? AutoRefitTargets.ChosenOf(pref) : null,
+                            ModSettings: modSettings));
+        return "enqueued";
     }
 
     /// <summary>What each body and accessory slot draws: the mod and file supplying it, or the game's own. Framework
@@ -1534,8 +1566,25 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                               TargetMask("_top"), uvRemap, Note, out chestBeneathPair))
                 chestBeneathTo = chestTo;
         }
+        // A seam the garment shares with the other piece of a mod split at the waist, held where the author put it (see
+        // RefitCore.SeamForGarment). A refit recorded before the seam was held is put back as it is, unless the player
+        // asked for what they are wearing now — and then nothing is read for it.
+        BodyRetarget.SharedSeam? sharedSeam = null;
+        string? seamKey = null;
+        bool compareSeam = false;
+        // Nor for a group the player switched away from its refit: that piece is left as chosen below, unread.
+        if (r.ModRoot != null && root != null && !route.Any && primary is "_top" or "_dwn"
+            && (r.Forced || !ChoseOtherwise(g, root, group))
+            && (r.Forced || RecordedEntry(root, group, option, savePath) is not { Seam: null }))
+        {
+            // A resolve that could not decide now (a file locked, the chest's body missing) compares nothing: an existing
+            // refit is put back as it is rather than remade without the seam it holds.
+            (sharedSeam, seamKey, compareSeam) = ResolveSharedSeam(r.ModRoot, g, state, vanillaCat, targets, redirects,
+                                                                   ownRecord, garment, bytes, race, item);
+        }
         if (await LetBeOrPutBack(r, g, root, group, option, savePath, cutFrom, item, lead.Name, ct,
-                                 pick, chestBeneath: chestBeneathTo?.Rel, chestBeneathDir: chestDir))
+                                 pick, chestBeneath: chestBeneathTo?.Rel, chestBeneathDir: chestDir,
+                                 seam: compareSeam ? (seamKey, true) : null))
             return;
 
         // ── the refit ──
@@ -1589,10 +1638,18 @@ public sealed partial class AutoRefitWatcher : IDisposable
                             item);
         bool piercings = config.AutoRefitPiercings;
         log.Debug("[Proteus] auto refit: {0}: piercings {1}", item, piercings ? "carried" : "left out");
+        bool pubes = CarryPubesNow;
+        log.Debug("[Proteus] auto refit: {0}: pubes {1}", item, pubes ? "carried" : "left out");
         var plan = RefitCore.PlanRefit(garment, bytes, pairs, primary, across, gameGear, out var pieceNames,
                                        line => log.Debug("[Proteus] auto refit: {0}", line),
                                        line => log.Warning("[Proteus] auto refit: {0}", line),
-                                       carryPiercings: piercings);
+                                       carryPiercings: piercings, carryPubes: pubes, sharedSeam: sharedSeam);
+        if (sharedSeam != null)
+            log.Information("[Proteus] auto refit: {0}: shared seam {1}", item,
+                            plan.Report.SeamKept
+                                ? $"held: {plan.Report.SeamPinnedNodes} positions ({plan.Report.SeamPinnedVertices} vertices) "
+                                  + $"where the author put them ({sharedSeam.Label})"
+                                : $"not held — {plan.Report.SeamDropped ?? "every seam place is kept whole, held or skin"}");
         plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPaths, uvRemap, male, log);
         // Up, the kept skin named like the body's; down, bent back into the drawn race — or not saved at all.
         var (finished, _, bentBack) = RefitCore.Finish(plan, route, g.Wearer, targetPaths, log);
@@ -1615,7 +1672,10 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                                     StringComparer.Ordinal);
         if (await SaveAndWear(r, g, root, group, savePath, lead, labelFrom, refit, cutFrom, route, item, gameGear,
                               new BodyRetargetWriter.Provenance(pick.Dir, pick.Option.Rel, recorded,
-                                                                AutoRefitTargets.BodiesOf(recordedOn, lead.Dir)))
+                                                                AutoRefitTargets.BodiesOf(recordedOn, lead.Dir),
+                                                                plan.Report.SeamKept || plan.Report.SeamDropped != null
+                                                                    ? RefitCore.RecordedSeam(seamKey, plan.Report.SeamKept)
+                                                                    : null))
             is not { } savedRoot)
             return;
         Outcome(r, onTarget: true, pick, RecordedFile(savedRoot, group, option, savePath));
@@ -1826,7 +1886,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                             CancellationToken ct, AutoRefitDecisions.Pick? source = null,
                                             IReadOnlyDictionary<string, string>? layers = null,
                                             string? chestBeneath = null, string? chestBeneathDir = null,
-                                            (string Key, string Dir, string Rel)? end = null)
+                                            (string Key, string Dir, string Rel)? end = null,
+                                            (string? Key, bool Compare)? seam = null)
     {
         if (!r.Forced && root != null && ChoseOtherwise(g, root, group))
         {
@@ -1837,8 +1898,15 @@ public sealed partial class AutoRefitWatcher : IDisposable
         }
         if (root == null) return false;
         (string, string)? from = source == null ? null : (source.Dir, source.Option.Rel);
-        if (!Existing(root, group, option, savePath, from, layers, r.Forced, chestBeneath, chestBeneathDir, end))
+        if (!Existing(root, group, option, savePath, from, layers, r.Forced, chestBeneath, chestBeneathDir, end, seam))
         {
+            if (seam is { Compare: true } && Existing(root, group, option, savePath, from, layers, r.Forced, chestBeneath,
+                                                      chestBeneathDir, end))
+            {
+                log.Information("[Proteus] auto refit: {0}: \"{1}\" was made with another seam held at the waist than "
+                              + "now; making it again", item, option);
+                return false;
+            }
             if (from != null && !Existing(root, group, option, savePath, from) && Existing(root, group, option, savePath))
                 log.Information("[Proteus] auto refit: {0}: \"{1}\" was made from another size; making it again", item,
                                 option);
@@ -2270,11 +2338,14 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// <param name="chestBeneathDir">The body <paramref name="chestBeneath"/> is of; null compares the file alone.</param>
     /// <param name="end">The hands or feet a glove or shoe rides on now, when not plainly matched on its own body (see
     /// <see cref="SameEnd"/>); null for plainly matched.</param>
+    /// <param name="seam">The seam the garment would hold now (see <see cref="SameSeam"/>), and whether to compare it at
+    /// all; null compares none.</param>
     internal static bool Existing(string root, string group, string option, string savePath,
                                   (string Dir, string Rel)? source = null,
                                   IReadOnlyDictionary<string, string>? layers = null, bool forced = false,
                                   string? chestBeneath = null, string? chestBeneathDir = null,
-                                  (string Key, string Dir, string Rel)? end = null)
+                                  (string Key, string Dir, string Rel)? end = null,
+                                  (string? Key, bool Compare)? seam = null)
     {
         var record = BodyRetargetWriter.ReadRecord(root);
         if (record == null) return false;
@@ -2284,9 +2355,72 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                                 && SameSource(e, source)
                                                 && OutfitPartners.SameLayers(e.Layers, layers, forced)
                                                 && SameChestBeneath(e, chestBeneath, forced, chestBeneathDir)
-                                                && SameEnd(e, end));
+                                                && SameEnd(e, end)
+                                                && SameSeam(e, seam, forced));
         return recorded && (PenumbraModMeta.TryReadFileOptions(root, group) ?? [])
                            .Any(o => string.Equals(o.Name, option, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Whether a refit held the seam it would hold now (see <see cref="RefitCore.SeamForGarment"/>). One recording none was
+    /// made before the seam was held — or the rule did not apply to it — and is put back as it was unless the player asked
+    /// for what they are wearing now; then it is the same only while the rule still does not apply (null and null), so a
+    /// piece on another waist is never remade for it. A seam the fallback let go is the same seam.
+    /// </summary>
+    internal static bool SameSeam(BodyRetargetWriter.Entry e, (string? Key, bool Compare)? seam, bool forced)
+    {
+        if (seam is not { Compare: true } now) return true;
+        if (e.Seam == null) return now.Key == null || !forced;
+        return RefitCore.SameSeamKey(e.Seam, now.Key);
+    }
+
+    /// <summary>The record's entry for an option of a group at a game path, or null.</summary>
+    internal static BodyRetargetWriter.Entry? RecordedEntry(string root, string group, string option, string savePath)
+    {
+        var record = BodyRetargetWriter.ReadRecord(root);
+        return record?.Options.FirstOrDefault(e => string.Equals(e.Name, option, StringComparison.OrdinalIgnoreCase)
+                                                   && string.Equals(e.GamePath, savePath, StringComparison.OrdinalIgnoreCase)
+                                                   && string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// The garment's side of a seam it shares with the other piece of its mod (see <see cref="RefitCore.ResolveSeamGate"/>),
+    /// and the key its record compares; nulls when there is none (said in the log). The gate's answer is kept across runs
+    /// (<see cref="RefitCore.CrossRunSeams"/>), keyed on the mod's files and the installed bodies. <c>Conclusive</c> is false
+    /// when the answer could not be decided now — a candidate file locked, the chest's body not installed — and then the
+    /// caller compares no seam with an existing refit.
+    /// </summary>
+    private (BodyRetarget.SharedSeam? Seam, string? Key, bool Conclusive) ResolveSharedSeam(
+        string modRoot, Gathered g, BodyModIndex.State state, BodySizeCatalog vanillaCat, AutoRefitTargets targets,
+        IReadOnlyList<PenumbraModMeta.Redirect> redirects, BodyRetargetWriter.Record? ownRecord, ModelParts garment,
+        byte[] bytes, string race, string item)
+    {
+        void Note(string note) => log.Information("[Proteus] auto refit: {0}: {1}", item, note);
+        if (RefitCore.SeamFilesOf(redirects, ownRecord, race, Note) is not { } files) return (null, null, true);
+        // A mod with no split at all says so only at Debug: that is most outfit mods.
+        void Said(RefitCore.SeamGate gate, string why)
+        {
+            if (gate.NoSplit) log.Debug("[Proteus] auto refit: {0}: shared seam: not held — {1}", item, why);
+            else Note($"shared seam: not held — {why}");
+        }
+        string chestDir = targets.DirOf("_top"), legsDir = targets.DirOf("_dwn");
+        if (state.Find(chestDir) is not { } chestEntry)
+        {
+            Note("shared seam: not held — the chest's body is not installed");
+            return (null, null, false);
+        }
+        AssertOffFramework("reading the shared seam");
+        string key = RefitCore.SeamCacheKey(modRoot, files, chestDir, legsDir, race,
+                                            DetectionCache.BodiesOf(state.Version, EnabledBodies(g, state),
+                                                                    VanillaPrint(vanillaCat, "_top", race)));
+        var gate = RefitCore.CrossRunSeams.GetOrAdd(key, () => RefitCore.ResolveSeamGate(
+            modRoot, files, race, chestDir, targets.Catalog("_top"), legsDir, targets.Catalog("_dwn"),
+            (f, fileBytes, parts, bones) => ReadSource(g, state, chestEntry, vanillaCat, fileBytes, parts, bones, "_top",
+                                                       race, false, f.File).Source,
+            Note, chestName: chestEntry.Name));
+        var (seam, seamKey, why) = RefitCore.SeamForGarment(gate, garment, bytes, chestDir, legsDir);
+        if (seam == null) Said(gate, why);
+        return (seam, seamKey, !gate.Transient);
     }
 
     /// <summary>

@@ -155,6 +155,14 @@
     "message": "Off: gear is refitted without your body mod's piercings. Nails always come along.\nGear already refitted keeps what it was made with; undo and refit what you're wearing to change it.",
     "description": "Tooltip on the checkbox for adding the body's piercings to automatically refitted gear."
   },
+  "AutoRefit.Pubes.Label": {
+    "message": "Keep my body's pubes on refitted gear",
+    "description": "Checkbox under the Body refit switch: also bring the body mod's pubes (any body material named \"pube\") into refitted gear. Off by default."
+  },
+  "AutoRefit.Pubes.Tip": {
+    "message": "Off: gear is refitted without your body mod's pubes (its crotch mesh and pubic hair).\nGear already refitted keeps what it was made with; undo and refit what you're wearing to change it.",
+    "description": "Tooltip on the checkbox for keeping the body's pubes on automatically refitted gear."
+  },
   "AutoRefit.Working": {
     "message": "Working...",
     "description": "Shown while a refit is running."
@@ -3987,6 +3995,14 @@
     "message": "On: the new body's piercings come in with its skin where the garment shows that skin.\nNails always come along.",
     "description": "Tooltip on the Body size tool's piercings checkbox."
   },
+  "Parts.Retarget.Pubes": {
+    "message": "Keep the new body's pubes",
+    "description": "Checkbox under \"Use the new body's skin\" in the Body size tool: also bring the new body's pubes in with its skin."
+  },
+  "Parts.Retarget.Pubes.Tip": {
+    "message": "On: the new body's pubes (its crotch mesh and pubic hair) come in with its skin where the garment shows that skin and no cloth covers it.",
+    "description": "Tooltip on the Body size tool's checkbox for keeping the new body's pubes."
+  },
   "Parts.Retarget.CutForcedTip": {
     "message": "Always on while the shoe keeps its own foot or the glove its own hand: otherwise the whole new legs or arms would go in with it.",
     "description": "Tooltip on the greyed-out 'Remove hidden skin' checkbox in Studio > Body size while a shoe keeps its own foot (or a glove its hand)."
@@ -5363,6 +5379,14 @@
     "message": "On: each body's piercings come in with its skin where the piece shows that skin. Nails always come along.\nSizes already made change only when made again.",
     "description": "Tooltip on the size set's piercings checkbox."
   },
+  "SizeSet.Pubes": {
+    "message": "Keep the new bodies' pubes",
+    "description": "Size set checkbox: bring each new body's pubes (any body material named \"pube\") in with its skin. Off by default."
+  },
+  "SizeSet.Pubes.Tip": {
+    "message": "On: each body's pubes (its crotch mesh and pubic hair) come in with its skin where the piece shows that skin and no cloth covers it.\nSizes already made change only when made again.",
+    "description": "Tooltip on the size set's checkbox for keeping each new body's pubes."
+  },
   "SizeSet.KeepHiddenSkin": {
     "message": "Keep hidden skin",
     "description": "Checkbox in the size set ('Every size for other bodies'). Use this language's term for 'hidden skin' from Parts.Retarget.CutHidden."
@@ -6095,6 +6119,10 @@
     "message": "undone by you",
     "description": "Reason in the tooltip: the user undid this piece's upgrade, so it is left alone until they choose \"Upgrade what I'm wearing now\"."
   },
+  "Settings.GearShaders.Reason.RowMatcap": {
+    "message": "a row matcap was cut from its earlier upgrade (undo the matcap first)",
+    "description": "Reason in the tooltip: a row matcap (Studio > Matcaps, a matcap on one colour row) was cut from this piece's earlier upgrade, so the upgrade leaves it alone until that matcap is undone."
+  },
   "Settings.GearShaders.UpgradeNow": {
     "message": "Upgrade what I'm wearing now",
     "description": "Button: upgrade the old-shader materials of the gear being worn now, including pieces previously undone."
@@ -6118,6 +6146,22 @@
   "Settings.GearShaders.Edited.Fmt": {
     "message": "{0} was edited after its shader upgrade, so Undo leaves it as it is. The author's original is kept in Proteus/shaderupgrade-backup/{0}: copy it back over the file to undo.",
     "description": "Undo refusal for a material edited after the upgrade. {0} = the material's path inside the mod (used twice)."
+  },
+  "Settings.GearShaders.RowMatcap.Fmt": {
+    "message": "{0} has a row matcap cut from its upgraded material, so Undo leaves it as it is. Undo that matcap first ({1}), then undo this.",
+    "description": "Result of \"Undo for what I'm wearing\" for one file. {0} = the mod-relative material file; {1} = where the matcap is undone (\"Studio > Matcaps\", built from Tab.Parts and Parts.Tool.Matcap). A row matcap (a matcap on one colour row) was made from the upgraded material, so the upgrade can't be undone before it."
+  },
+  "Settings.GearShaders.RowMatcapKept.Fmt": {
+    "message": "{0} has a row matcap cut from its upgraded material that refits or hair ports made from {1} still draw. Remake or undo them, undo the matcap again, then undo this.",
+    "description": "Result of \"Undo for what I'm wearing\" for one file. {0} = the mod-relative material file; {1} = the mod-relative model file the row matcap is on. The matcap's own Undo already ran but kept its files because refits or hair ports made from that model still draw it."
+  },
+  "Settings.GearShaders.RowMatcapEdited.Fmt": {
+    "message": "{0} has a row matcap cut from its upgraded material, and {1} was changed after that matcap, so the matcap can't be undone yet either. Undo the later change first (or put back the copy in Proteus/matcap-backup), then the matcap, then this.",
+    "description": "Result of \"Undo for what I'm wearing\" for one file. {0} = the mod-relative material file; {1} = the mod-relative model file the row matcap is on, which was changed after the matcap (so the matcap's own Undo refuses too). Keep Proteus/matcap-backup as written."
+  },
+  "Settings.GearShaders.RowMatcapLater.Fmt": {
+    "message": "{0} has a row matcap cut from its upgraded material, and {1} changed {2} after that matcap. Undo {1} first, then the matcap, then this.",
+    "description": "Result of \"Undo for what I'm wearing\" for one file. {0} = the mod-relative material file; {1} = the name of a later Proteus feature (\"the brush\", \"part switches\"… see MeshVolume.Feature.*); {2} = the mod-relative model file it changed after the row matcap."
   },
   "Settings.GearShaders.Busy": {
     "message": "Working…",
@@ -6527,10 +6571,6 @@
     "message": "Anyone you share this mod with needs {0} too ({1}), set to the same matcap. Its textures are never copied into your mod.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
-  "Parts.Matcap.SiblingsSkipped.Fmt": {
-    "message": "Not applied to these other body options, whose parts differ: {0}.",
-    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
-  },
   "Parts.Matcap.SkinTip": {
     "message": "Skin can't take a matcap.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
@@ -6670,5 +6710,193 @@
   "Parts.Matcap.PortKept": {
     "message": "That model is one of Proteus's hair ports. While it has a matcap, Proteus keeps it as it is, and doesn't by itself remake the ports of other races that share its material, until you undo the matcap. Porting one of those races by hand in the Studio still remakes it.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.RowFileSwap.Fmt": {
+    "message": "{0} swaps this part's material for another file, so a row matcap can't follow it.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowNoNormal": {
+    "message": "This part's material has no normal map, which a row matcap cuts by.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowAmbiguousOption.Fmt": {
+    "message": "The group \"{0}\" has two options called \"{1}\", so a row matcap can't tell them apart.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowShader.Fmt": {
+    "message": "A row matcap needs the part on character.shpk, and {0} uses {1}.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowGlassLayout.Fmt": {
+    "message": "{0} uses {1} in a layout Proteus can't move to character.shpk for a row matcap (it needs exactly a normal, mask and index map and a Dawntrail colour table).",
+    "description": "Studio Matcaps tool, matcap on one colour row, refusal. {0} = where the material is (e.g. the option \"Everything\" of \"Enaretos Bracelet\"); {1} = the shader name (characterglass.shpk). Keep character.shpk exactly as written."
+  },
+  "Matcap.Refused.RowGlassTemplate": {
+    "message": "The game's own material a glass part's cut is built from could not be read, so nothing was changed.",
+    "description": "Studio Matcaps tool, matcap on one colour row, refusal: the game's own material that a glass part's converted cut copy takes its shader settings from could not be read (game files unavailable, or changed by a patch)."
+  },
+  "Matcap.Refused.RowLegacyWear.Fmt": {
+    "message": "{0} is still on the old shader (characterlegacy.shpk), and a row matcap needs character.shpk. Wear it once so Gear shaders moves it to character.shpk, then add the row matcap. If it stays on the old shader, hover the count under {1} to see why.",
+    "description": "Studio Matcaps tool, matcap on one colour row. {0} = where the file is (e.g. the option \"Blue\" of \"Colour\"); {1} = \"Settings > Gear shaders\" (built from Tab.Settings and Settings.Section.GearShaders). Keep characterlegacy.shpk and character.shpk exactly as written."
+  },
+  "Matcap.Refused.RowLegacyDeclined.Fmt": {
+    "message": "{0} is still on the old shader (characterlegacy.shpk) because you undid its upgrade, and a row matcap needs character.shpk. Wear it and press \"{1}\" under {2}, then add the row matcap.",
+    "description": "Studio Matcaps tool, matcap on one colour row. {0} = where the file is; {1} = the button name (Settings.GearShaders.UpgradeNow); {2} = \"Settings > Gear shaders\" (built from Tab.Settings and Settings.Section.GearShaders). The user undid this piece's gear shader upgrade earlier. Keep characterlegacy.shpk and character.shpk exactly as written."
+  },
+  "Matcap.Refused.RowLegacyOff.Fmt": {
+    "message": "{0} is still on the old shader (characterlegacy.shpk), and a row matcap needs character.shpk. Switch on \"{1}\" under {2} and wear it once, then add the row matcap.",
+    "description": "Studio Matcaps tool, matcap on one colour row. {0} = where the file is; {1} = the checkbox label (Settings.GearShaders.AutoUpgrade.Label); {2} = \"Settings > Gear shaders\" (built from Tab.Settings and Settings.Section.GearShaders). The gear shader upgrade is switched off. Keep characterlegacy.shpk and character.shpk exactly as written."
+  },
+  "Matcap.Refused.RowBake.Fmt": {
+    "message": "The row couldn't be cut: {0}.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowBake.Normal": {
+    "message": "the normal map couldn't be read",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowBake.Index": {
+    "message": "the index map couldn't be read",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowBake.Write": {
+    "message": "the cut material couldn't be written",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowTextureVaries.Fmt": {
+    "message": "{0} swaps this part's normal or index map, so one cut can't fit every choice.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowEmpty.Fmt": {
+    "message": "No pixel of this part uses row {0}.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowNothingLeft": {
+    "message": "Every part with this material already has a matcap.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowNotGear": {
+    "message": "A matcap on one colour row works on gear and accessories only.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowOneMaterial": {
+    "message": "A matcap on one colour row works on one material at a time. Tick parts of a single material.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowMixedThreshold": {
+    "message": "This part's options don't agree on how it is cut out, and its vertex colours would cut it. A row matcap can't fit both.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowVertexAlpha": {
+    "message": "This part's vertex colours would cut the row matcap, and they can't be changed.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowGameGear": {
+    "message": "A matcap on one colour row works on a mod's own gear, not the game's own pieces.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Row.GameFile": {
+    "message": "the game's own file",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Row.DefaultData": {
+    "message": "the mod's default files",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Row.Option.Fmt": {
+    "message": "the option \"{1}\" of \"{0}\"",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Row.Container.Fmt": {
+    "message": "entry {1} of \"{0}\"",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.PickHint": {
+    "message": "Pick a part or colorset row.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowA": {
+    "message": "Row A",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowB": {
+    "message": "Row B",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowSubTip": {
+    "message": "Pick one or both. Pointing at it lights it on your character.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowOnlyTip": {
+    "message": "Put the matcap only on the pixels of one colour row of the part's material, such as a lace or trim pattern. Leave everything unticked to cover every part with this material.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowReading": {
+    "message": "Reading the colour rows…",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowNoRows": {
+    "message": "This part's material has no colour rows to pick from.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowMaterial": {
+    "message": "Material",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowAll.Fmt": {
+    "message": "Covers every part drawn with {0}.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowFollowWarn": {
+    "message": "This material has colours set in Proteus. The matcapped row's pixels draw from a copy of the material and won't follow them.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowHolesWarn": {
+    "message": "Some cut-out holes in this part sit inside the row's triangles, so they will show the matcap.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Parts.Matcap.RowGlassWarn.Fmt": {
+    "message": "This part is glass, which can't be cut: Proteus draws {1} triangle(s) around the row from its own solid (character.shpk) copy of the material instead. Your glass material isn't changed, and \"{0}\" puts it all back.",
+    "description": "Studio Matcaps tool, warning under the row options after a row matcap preview or Apply on a glass part. {0} = the label of the button \"Undo matcaps on this model\" (Parts.Matcap.Undo); {1} = a number of triangles. Keep character.shpk exactly as written."
+  },
+  "Parts.Matcap.Chat.Applied.Fmt": {
+    "message": "Matcap applied to {0} model file(s).",
+    "description": "Studio Matcaps tool, a finished matcap Apply said in game chat, short."
+  },
+  "Parts.Matcap.Chat.Holes": {
+    "message": "Some see-through holes on this row will show the matcap.",
+    "description": "Studio Matcaps tool, a finished matcap Apply said in game chat, short."
+  },
+  "Parts.Matcap.Chat.Edges": {
+    "message": "Check see-through edges in game.",
+    "description": "Studio Matcaps tool, a finished matcap Apply said in game chat, short."
+  },
+  "Parts.Matcap.Chat.Glass.Fmt": {
+    "message": "This part is glass: {0} triangle(s) around the row now draw solid, not glass.",
+    "description": "Chat line after a row matcap Apply on a glass part. {0} = a number of triangles."
+  },
+  "Parts.Matcap.Chat.Skipped.Fmt": {
+    "message": "Not applied to {0}: their parts differ.",
+    "description": "Studio Matcaps tool, a finished matcap Apply said in game chat, short."
+  },
+  "Parts.Matcap.Chat.More.Fmt": {
+    "message": "and {0} more",
+    "description": "Studio Matcaps tool, a finished matcap Apply said in game chat, short."
+  },
+  "Parts.Matcap.RowStale": {
+    "message": "The author's material changed since this row matcap was made. Undo it and apply it again.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowManifestUnreadable": {
+    "message": "The mod's list of files (meta.json) could not be read, so nothing was changed.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowNoSource": {
+    "message": "Proteus couldn't find this part's material in the mod or the game, so there is nothing to cut.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
+  },
+  "Matcap.Refused.RowMapSwap.Fmt": {
+    "message": "{0} swaps this part's normal or index map for another file, so a row matcap can't follow it.",
+    "description": "Studio Matcaps tool, matcap on one colour row (a pattern such as lace drawn by one colour-table row)."
   }
 }

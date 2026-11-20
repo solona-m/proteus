@@ -1145,7 +1145,16 @@ internal static class PenumbraModMeta
     /// <see cref="ReadContainerRedirects"/>, but null when the manifest is there and cannot be read (held open past the
     /// retries, or malformed) — never mistaken for a mod with no redirects. Empty for a missing manifest or a v3 folder.
     /// </summary>
-    public static List<ContainerRedirect>? TryReadContainerRedirects(string modRoot)
+    public static List<ContainerRedirect>? TryReadContainerRedirects(string modRoot) => TryReadContainerEntries(modRoot, "Files");
+
+    /// <summary>
+    /// Every file swap of a v4 mod with its container, shaped like <see cref="ReadContainerRedirects"/>: the swapped game
+    /// path as <see cref="ContainerRedirect.GamePath"/> and the game path it is served from as <see cref="ContainerRedirect.File"/>.
+    /// Read only. Null when the manifest is there and cannot be read.
+    /// </summary>
+    public static List<ContainerRedirect>? TryReadContainerFileSwaps(string modRoot) => TryReadContainerEntries(modRoot, "FileSwaps");
+
+    private static List<ContainerRedirect>? TryReadContainerEntries(string modRoot, string property)
     {
         var found = new List<ContainerRedirect>();
         try
@@ -1181,7 +1190,7 @@ internal static class PenumbraModMeta
 
         void Add(JsonElement owner, ContainerRef at)
         {
-            if (owner.ValueKind != JsonValueKind.Object || !owner.TryGetProperty("Files", out var f)
+            if (owner.ValueKind != JsonValueKind.Object || !owner.TryGetProperty(property, out var f)
                 || f.ValueKind != JsonValueKind.Object)
                 return;
             foreach (var p in f.EnumerateObject())

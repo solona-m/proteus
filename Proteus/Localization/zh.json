@@ -155,6 +155,14 @@
     "message": "关闭：装备适配时不带体型模组的穿孔。指甲始终会带上。\n已适配的装备保持原样；要更改，请撤销正在穿戴的装备的适配后重新适配。",
     "description": ""
   },
+  "AutoRefit.Pubes.Label": {
+    "message": "在重新适配的装备上保留我身体的阴毛",
+    "description": ""
+  },
+  "AutoRefit.Pubes.Tip": {
+    "message": "关闭：装备重新适配时不带身体模组的阴毛（其胯部网格和阴毛）。\n已重新适配的装备保持制作时的样子；要更改，请撤销并重新适配你正穿着的装备。",
+    "description": ""
+  },
   "AutoRefit.Working": {
     "message": "处理中…",
     "description": ""
@@ -3987,6 +3995,14 @@
     "message": "开启：在服装露出该皮肤的地方，新体型的穿孔随皮肤一同加入。\n指甲始终会带上。",
     "description": ""
   },
+  "Parts.Retarget.Pubes": {
+    "message": "保留新身体的阴毛",
+    "description": ""
+  },
+  "Parts.Retarget.Pubes.Tip": {
+    "message": "开启：在服装露出该皮肤且没有布料遮盖的地方，新身体的阴毛（其胯部网格和阴毛）会随皮肤一起带入。",
+    "description": ""
+  },
   "Parts.Retarget.CutForcedTip": {
     "message": "鞋子保留自己的脚、手套保留自己的手时始终开启：否则整条新腿或新手臂都会跟着放进去。",
     "description": ""
@@ -5363,6 +5379,14 @@
     "message": "开启：在部件露出该皮肤的地方，每个体型的穿孔随皮肤一同加入。指甲始终会带上。\n已制作的尺码只有在重新制作时才会改变。",
     "description": ""
   },
+  "SizeSet.Pubes": {
+    "message": "保留各新身体的阴毛",
+    "description": ""
+  },
+  "SizeSet.Pubes.Tip": {
+    "message": "开启：在部件露出该皮肤且没有布料遮盖的地方，每个身体的阴毛（其胯部网格和阴毛）会随皮肤一起带入。\n已制作的尺寸只有重新制作时才会改变。",
+    "description": ""
+  },
   "SizeSet.KeepHiddenSkin": {
     "message": "保留隐藏皮肤",
     "description": ""
@@ -6095,6 +6119,10 @@
     "message": "已由你撤销",
     "description": ""
   },
+  "Settings.GearShaders.Reason.RowMatcap": {
+    "message": "已从其先前的升级中切出行材质捕获（请先撤销该材质捕获）",
+    "description": ""
+  },
   "Settings.GearShaders.UpgradeNow": {
     "message": "立即升级身上装备",
     "description": ""
@@ -6117,6 +6145,22 @@
   },
   "Settings.GearShaders.Edited.Fmt": {
     "message": "{0} 在着色器升级后被编辑过，因此撤销不会改动它。作者的原始文件保存在 Proteus/shaderupgrade-backup/{0}：将其复制回去覆盖该文件即可撤销。",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcap.Fmt": {
+    "message": "{0} 的升级材质中切出了行材质捕获，因此撤销会保持原样。请先撤销该材质捕获（{1}），然后再撤销这个。",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapKept.Fmt": {
+    "message": "{0} 的升级材质中切出的行材质捕获，仍被由 {1} 制作的重新适配或发型移植所绘制。请重新制作或撤销它们，再次撤销该材质捕获，然后再撤销这个。",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapEdited.Fmt": {
+    "message": "{0} 的升级材质中切出了行材质捕获，而 {1} 在该材质捕获之后被修改过，因此该材质捕获目前也无法撤销。请先撤销之后的修改（或放回 Proteus/matcap-backup 中的副本），再撤销该材质捕获，然后再撤销这个。",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapLater.Fmt": {
+    "message": "{0} 的升级材质中切出了行材质捕获，而 {1} 在该材质捕获之后修改了 {2}。请先撤销 {1}，再撤销该材质捕获，然后再撤销这个。",
     "description": ""
   },
   "Settings.GearShaders.Busy": {
@@ -6527,10 +6571,6 @@
     "message": "你分享此模组的对象也需要 {0}（{1}），并设为同一个 matcap。它的纹理绝不会被复制进你的模组。",
     "description": ""
   },
-  "Parts.Matcap.SiblingsSkipped.Fmt": {
-    "message": "以下其他体型选项的部件不同，因此未应用：{0}。",
-    "description": ""
-  },
   "Parts.Matcap.SkinTip": {
     "message": "皮肤不能使用 matcap。",
     "description": ""
@@ -6669,6 +6709,194 @@
   },
   "Parts.Matcap.PortKept": {
     "message": "该模型是 Proteus 移植的发型之一。在它带有 matcap 期间，Proteus 会让它保持原样，也不会自动重新生成与它共用材质的其他种族的移植，直到你撤销 matcap。在工作室中手动移植这些种族时，仍会重新生成。",
+    "description": ""
+  },
+  "Matcap.Refused.RowFileSwap.Fmt": {
+    "message": "{0} 将此部件的材质换成了另一个文件，因此单行 matcap 无法跟随。",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoNormal": {
+    "message": "此部件的材质没有法线贴图，而单行 matcap 依靠它来裁切。",
+    "description": ""
+  },
+  "Matcap.Refused.RowAmbiguousOption.Fmt": {
+    "message": "组“{0}”有两个名为“{1}”的选项，因此单行 matcap 无法区分它们。",
+    "description": ""
+  },
+  "Matcap.Refused.RowShader.Fmt": {
+    "message": "单行 matcap 需要部件使用 character.shpk，而 {0} 使用的是 {1}。",
+    "description": ""
+  },
+  "Matcap.Refused.RowGlassLayout.Fmt": {
+    "message": "{0} 以 Proteus 无法为行材质捕获转换到 character.shpk 的结构使用 {1}（需要恰好一张法线贴图、遮罩贴图和索引贴图，以及金曦之遗辉的颜色表）。",
+    "description": ""
+  },
+  "Matcap.Refused.RowGlassTemplate": {
+    "message": "无法读取用于制作玻璃部件切割副本的游戏自带材质，因此没有做任何更改。",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyWear.Fmt": {
+    "message": "{0} 仍在使用旧着色器（characterlegacy.shpk），而行材质捕获需要 character.shpk。请穿戴一次，让装备着色器将其改为 character.shpk，然后再添加行材质捕获。如果仍停留在旧着色器，请将鼠标悬停在 {1} 下的计数上查看原因。",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyDeclined.Fmt": {
+    "message": "{0} 因为你撤销了它的升级而仍在使用旧着色器（characterlegacy.shpk），而行材质捕获需要 character.shpk。请穿戴它并在 {2} 中点击“{1}”，然后再添加行材质捕获。",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyOff.Fmt": {
+    "message": "{0} 仍在使用旧着色器（characterlegacy.shpk），而行材质捕获需要 character.shpk。请在 {2} 中开启“{1}”并穿戴一次，然后再添加行材质捕获。",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Fmt": {
+    "message": "无法裁切该行：{0}。",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Normal": {
+    "message": "无法读取法线贴图",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Index": {
+    "message": "无法读取索引贴图",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Write": {
+    "message": "无法写入裁切后的材质",
+    "description": ""
+  },
+  "Matcap.Refused.RowTextureVaries.Fmt": {
+    "message": "{0} 会替换此部件的法线或索引贴图，因此一次裁切无法适配所有选项。",
+    "description": ""
+  },
+  "Matcap.Refused.RowEmpty.Fmt": {
+    "message": "此部件没有像素使用第 {0} 行。",
+    "description": ""
+  },
+  "Matcap.Refused.RowNothingLeft": {
+    "message": "使用此材质的所有部件都已有 matcap。",
+    "description": ""
+  },
+  "Matcap.Refused.RowNotGear": {
+    "message": "单个颜色行的 matcap 只适用于装备和饰品。",
+    "description": ""
+  },
+  "Matcap.Refused.RowOneMaterial": {
+    "message": "单个颜色行的 matcap 一次只能用于一种材质。请只勾选同一材质的部件。",
+    "description": ""
+  },
+  "Matcap.Refused.RowMixedThreshold": {
+    "message": "此部件的各选项对裁切方式不一致，且其顶点色会将其裁掉。单行 matcap 无法同时适配。",
+    "description": ""
+  },
+  "Matcap.Refused.RowVertexAlpha": {
+    "message": "此部件的顶点色会裁掉单行 matcap，且无法更改。",
+    "description": ""
+  },
+  "Matcap.Refused.RowGameGear": {
+    "message": "单个颜色行的 matcap 适用于模组自带的装备，不适用于游戏本身的装备。",
+    "description": ""
+  },
+  "Matcap.Row.GameFile": {
+    "message": "游戏自带的文件",
+    "description": ""
+  },
+  "Matcap.Row.DefaultData": {
+    "message": "模组的默认文件",
+    "description": ""
+  },
+  "Matcap.Row.Option.Fmt": {
+    "message": "“{0}”的选项“{1}”",
+    "description": ""
+  },
+  "Matcap.Row.Container.Fmt": {
+    "message": "“{0}”的条目 {1}",
+    "description": ""
+  },
+  "Parts.Matcap.PickHint": {
+    "message": "选择一个部件或一行 colorset。",
+    "description": ""
+  },
+  "Parts.Matcap.RowA": {
+    "message": "行 A",
+    "description": ""
+  },
+  "Parts.Matcap.RowB": {
+    "message": "行 B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubTip": {
+    "message": "选择一个或两个。指向它时会在角色身上发光。",
+    "description": ""
+  },
+  "Parts.Matcap.RowOnlyTip": {
+    "message": "只把 matcap 放在部件材质某一颜色行的像素上，例如蕾丝或饰边图案。不勾选任何部件即可覆盖使用此材质的所有部件。",
+    "description": ""
+  },
+  "Parts.Matcap.RowReading": {
+    "message": "正在读取颜色行…",
+    "description": ""
+  },
+  "Parts.Matcap.RowNoRows": {
+    "message": "此部件的材质没有可选的颜色行。",
+    "description": ""
+  },
+  "Parts.Matcap.RowMaterial": {
+    "message": "材质",
+    "description": ""
+  },
+  "Parts.Matcap.RowAll.Fmt": {
+    "message": "覆盖所有用 {0} 绘制的部件。",
+    "description": ""
+  },
+  "Parts.Matcap.RowFollowWarn": {
+    "message": "此材质在 Proteus 中设置了颜色。加了 matcap 的行像素由材质副本绘制，不会跟随这些颜色。",
+    "description": ""
+  },
+  "Parts.Matcap.RowHolesWarn": {
+    "message": "此部件的部分镂空孔位于该行的三角形内，因此会露出 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.RowGlassWarn.Fmt": {
+    "message": "此部件是玻璃，无法切割：Proteus 会改用自己的不透明（character.shpk）材质副本绘制该行周围的 {1} 个三角形。你的玻璃材质不会被更改，“{0}”可以全部还原。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Applied.Fmt": {
+    "message": "已将 matcap 应用于 {0} 个模型文件。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Holes": {
+    "message": "此行的部分透明镂空处会显示 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Edges": {
+    "message": "请在游戏中检查透明边缘。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Glass.Fmt": {
+    "message": "此部件是玻璃：该行周围的 {0} 个三角形现在以不透明方式绘制，而不是玻璃。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Skipped.Fmt": {
+    "message": "未应用于 {0}：它们的部件不同。",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.More.Fmt": {
+    "message": "及另外 {0} 个",
+    "description": ""
+  },
+  "Parts.Matcap.RowStale": {
+    "message": "制作此单行 matcap 后，作者的材质已更改。请撤销后重新应用。",
+    "description": ""
+  },
+  "Matcap.Refused.RowManifestUnreadable": {
+    "message": "无法读取模组的文件列表（meta.json），因此未做任何更改。",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoSource": {
+    "message": "Proteus 在模组和游戏中都找不到此部件的材质，因此没有可裁切的内容。",
+    "description": ""
+  },
+  "Matcap.Refused.RowMapSwap.Fmt": {
+    "message": "{0} 将此部件的法线或索引贴图换成了另一个文件，因此单行 matcap 无法跟随。",
     "description": ""
   }
 }

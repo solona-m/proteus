@@ -189,8 +189,13 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     private Was Snapshot(int n) => new(nodeDelta[n], nodeWeight[n], nodeWind[n], nodeMoved[n], nodeRebase[n]);
 
 
+    /// <summary><see cref="Here"/> as a delegate, made once: the guard's measures take the skin's positions as an
+    /// accessor, and a method group would allocate one per call.</summary>
+    private readonly Func<int, Vec3> hereFn;
+
     public MeshVolumeSolve(ModelParts model)
     {
+        hereFn = Here;
         sourceModel = model;
         Spans = model.MeshSpans;
 
@@ -1709,7 +1714,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         undo.Add(touched!);
         foreach (var (n, w) in moveWeights)
             if (w < 1f) nodeWeight[n] = MathF.Max(nodeWeight[n], w);
-        KeepRidersAboveSkin(touched!, relativeToStart: true);
+        KeepRidersAboveSkin(touched!, RiderGuard.SinceFace, holdCentre: moveMode == MirrorMode.Sides);
         RebaseNormals(touched!);
         moveWeights.Clear();
         moveMatrix = null;
@@ -2073,7 +2078,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
             float w = len > 1e-9f ? Math.Clamp(went / len, 0f, 1f) : 0f;
             nodeWeight[n] = MathF.Max(nodeWeight[n], w);
         }
-        KeepRidersAboveSkin(touched!, relativeToStart: true);
+        KeepRidersAboveSkin(touched!, RiderGuard.SinceFace);
         grabTerms.Clear();
         grabRiders.Clear();
         Settle(null);

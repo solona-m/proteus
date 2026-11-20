@@ -202,6 +202,7 @@ public class SizeSetMadeOnLocalTests(ITestOutputHelper output, ObliqueRun obliqu
     [LocalDataFact(Data.ObliquePack, Data.Bibo, Data.Rue, LocalData.GameData, LocalData.UvMaps)]
     [Trait("Plan", "AC-size-set-made-on-4")]
     [Trait("Plan", "EDGE-size-set-made-on-8")]
+    [Trait("Speed", "Slow")]
     public void Oblique_without_made_on_gets_nothing_and_is_told_to_choose_it() // [AC-size-set-made-on-4] [EDGE-size-set-made-on-8]
     {
         string copy = MigratedOblique();
@@ -257,6 +258,8 @@ public class SizeSetMadeOnLocalTests(ITestOutputHelper output, ObliqueRun obliqu
     [LocalDataFact(Data.ObliquePack, Data.Tbse, Data.Rue, Data.Neolithe, LocalData.GameData, LocalData.UvMaps)]
     [Trait("Plan", "AC-size-set-made-on-7")]
     [Trait("Plan", "EDGE-size-set-made-on-1")]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void Oblique_made_on_a_body_of_another_race_makes_nothing() // [AC-size-set-made-on-7] [EDGE-size-set-made-on-1]
     {
         string copy = MigratedOblique();
@@ -286,6 +289,7 @@ public class SizeSetMadeOnLocalTests(ITestOutputHelper output, ObliqueRun obliqu
     [Trait("Plan", "AC-size-set-made-on-7")]
     [Trait("Plan", "EDGE-size-set-made-on-2")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Oblique_made_on_a_wrong_body_is_as_measured() // [AC-size-set-made-on-7] [EDGE-size-set-made-on-2]
     {
         // Each of the author's sizes read on the body: how many were taken, and how many not, per piece.
@@ -371,6 +375,7 @@ public class SizeSetMadeOnLocalTests(ITestOutputHelper output, ObliqueRun obliqu
     [LocalDataFact(Data.ObliquePack, Data.Bibo, Data.Rue, LocalData.GameData, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-size-set-made-on-19")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void A_file_read_twice_keeps_its_made_on_reading() // [EDGE-size-set-made-on-19]
     {
         string copy = MigratedOblique();
@@ -416,6 +421,7 @@ public class SizeSetMadeOnLocalTests(ITestOutputHelper output, ObliqueRun obliqu
     [Trait("Plan", "AC-size-set-made-on-3")]
     [Trait("Plan", "EDGE-size-set-made-on-15")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Cli_made_on_sizes_Oblique_and_reports_it() // [AC-size-set-made-on-3] [EDGE-size-set-made-on-15]
     {
         string copy = Data.UnpackedPack(Data.ObliquePack);
@@ -543,6 +549,7 @@ public class SizeSetMadeOnLocalTests(ITestOutputHelper output, ObliqueRun obliqu
     [Trait("Plan", "AC-size-set-made-on-10")]
     [Trait("Plan", "EDGE-size-set-made-on-20")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Made_on_is_only_a_fallback_for_This_Old_Thing() // [AC-size-set-made-on-6] [AC-size-set-made-on-10] [EDGE-size-set-made-on-20]
     {
         string[] bodies = [Data.Neolithe, Data.Rue, Data.Bibo, Data.Rosaline];
@@ -624,6 +631,7 @@ public class SizeSetMadeOnLocalTests(ITestOutputHelper output, ObliqueRun obliqu
     [LocalDataFact(LocalData.ShiftPack, Data.Yab, Data.Rue, Data.Bibo, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-size-set-made-on-6")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void A_shoe_only_mod_reads_the_same_with_made_on() // [EDGE-size-set-made-on-6]
     {
         List<string> Run(string? madeOn)

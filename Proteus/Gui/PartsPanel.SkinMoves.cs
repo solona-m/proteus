@@ -62,9 +62,10 @@ public sealed partial class PartsPanel
         if (vol.SkinStillOutside > 0)
             log.Information("[Proteus] brush: skin follow: {0} skin points still outside the cloth", vol.SkinStillOutside);
         // What the guard lifted (#86): a lift where none was needed shows as a move going further than the drag.
-        if (vol.LastGuard is { Bound: > 0 } or { Face: > 0 })
-            log.Debug("[Proteus] brush: skin guard lifted {0} bound / {1} face point(s), worst {2:F2} mm, {3} inward",
-                vol.LastGuard.Bound, vol.LastGuard.Face, vol.LastGuard.WorstMm, vol.LastGuard.Inward);
+        // Riders left under their floor: what a mirrored drag's centre rule gave back of a lift.
+        if (vol.LastGuard is { Bound: > 0 } or { Face: > 0 } || vol.RidersLeftUnder > 0)
+            log.Debug("[Proteus] brush: skin guard lifted {0} bound / {1} face point(s), worst {2:F2} mm, {3} inward; {4} left under their floor",
+                vol.LastGuard.Bound, vol.LastGuard.Face, vol.LastGuard.WorstMm, vol.LastGuard.Inward, vol.RidersLeftUnder);
     }
 
     /// <summary>Bind the open model's clothes to its skin on a worker; see <see cref="SkinFollow.Bind"/>.</summary>

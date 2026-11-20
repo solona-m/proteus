@@ -45,6 +45,9 @@ internal static class SizeSetBatchData
     /// <summary>Tutting (KAN-6): its "Pant Size" Small/Medium/Large are loose sweatpants with no skin at all, made on
     /// Bibo+; its "Top Size" is read automatically.</summary>
     internal const string DancePack = LocalData.ModPacks + ":Dance - by Solona.pmp";
+    /// <summary>Oops I Did It Again as it shipped, v3: its "Boot Size" Small/Medium/Large are Wild Rose boots with no skin
+    /// at all, made on Bibo+ (not the "[Chaele]" add-on pack of the same name).</summary>
+    internal const string OopsPack = LocalData.ModPacks + ":Oops I Did It Again - by Solona.pmp";
 
     /// <summary>A pack unpacked into a work folder of its own.</summary>
     internal static string UnpackedPack(string pack)
@@ -531,6 +534,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
     [LocalDataFact(SizeSetBatchData.ThisOldThing, SizeSetBatchData.Neolithe, SizeSetBatchData.Rue, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-headless-size-set-7")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Missing_body_is_reported_and_the_rest_made() // [EDGE-headless-size-set-7]
     {
         string copy = SizeSetBatchData.CopyOf(SizeSetBatchData.ThisOldThing);
@@ -550,6 +554,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
     [LocalDataFact(SizeSetBatchData.ThisOldThing, SizeSetBatchData.Neolithe, SizeSetBatchData.TreYas, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-headless-size-set-8")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Tre_is_made_from_its_YAS_release_when_plain_is_absent() // [EDGE-headless-size-set-8]
     {
         string copy = SizeSetBatchData.CopyOf(SizeSetBatchData.ThisOldThing);
@@ -570,6 +575,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
     [LocalDataFact(SizeSetBatchData.ThisOldThing, SizeSetBatchData.Neolithe, SizeSetBatchData.Rosaline, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-headless-size-set-11")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Refused_size_is_reported_and_the_rest_made() // [EDGE-headless-size-set-11]
     {
         string copy = SizeSetBatchData.CopyOf(SizeSetBatchData.ThisOldThing);
@@ -602,6 +608,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
     [LocalDataFact(SizeSetBatchData.ThisOldThing, SizeSetBatchData.Neolithe, SizeSetBatchData.Rue, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-headless-size-set-18")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void A_throwing_piece_is_failed_and_others_run() // [EDGE-headless-size-set-18]
     {
         string copy = SizeSetBatchData.CopyOf(SizeSetBatchData.ThisOldThing);
@@ -633,6 +640,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
     [LocalDataFact(SizeSetBatchData.ThisOldThing, SizeSetBatchData.Neolithe, SizeSetBatchData.Bibo, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-headless-size-set-19")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Cancelled_run_lists_saved_sizes() // [EDGE-headless-size-set-19]
     {
         string copy = SizeSetBatchData.CopyOf(SizeSetBatchData.ThisOldThing);
@@ -663,6 +671,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
     [Trait("Plan", "AC-headless-size-set-4")]
     [Trait("Plan", "EDGE-headless-size-set-17")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Cli_new_group_starts_with_Original_as_default() // [AC-headless-size-set-4] [EDGE-headless-size-set-17]
     {
         // This Old Thing's M top, alone in the default files: no size group of the author's.
@@ -698,6 +707,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
     [Trait("Plan", "AC-headless-size-set-3")]
     [Trait("Plan", "EDGE-headless-size-set-12")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Cli_men_appends_a_mens_group_for_a_womens_mod() // [AC-headless-size-set-3] [EDGE-headless-size-set-12]
     {
         string copy = SizeSetBatchData.CopyOf(SizeSetBatchData.Sheer);
@@ -742,6 +752,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
     [Trait("Plan", "AC-headless-size-set-3")]
     [Trait("Plan", "EDGE-headless-size-set-16")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Cli_men_sizes_a_mens_piece_directly() // [AC-headless-size-set-3] [EDGE-headless-size-set-16]
     {
         string copy = SizeSetBatchData.NewCopy();
@@ -777,6 +788,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
                    LocalData.TbseUvMaps, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-headless-size-set-30")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Every_mens_key_gets_an_outcome_when_none_can_be_crossed() // [EDGE-headless-size-set-30]
     {
         string copy = SizeSetBatchData.CopyOf(SizeSetBatchData.ThisOldThing);
@@ -856,6 +868,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
     [Trait("Plan", "AC-headless-size-set-4")]
     [Trait("Plan", "EDGE-headless-size-set-21")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void V3_pack_is_converted_then_sized() // [AC-headless-size-set-10] [AC-headless-size-set-4] [EDGE-headless-size-set-21]
     {
         string copy = SizeSetBatchData.UnpackedPack(SizeSetBatchData.ScarletPack);

@@ -139,6 +139,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Speed", "Slow")]
     [Trait("Plan", "EDGE-uvmap-nipples-48")]
     [Trait("Plan", "AC-uvmap-nipples-8")]
+    [Trait("Suite", "Diagnostic")]
     public void Lumberjack_refits_onto_bibo_for_midlander_women() // [AC-cross-sex-refit-2] [AC-cross-sex-refit-3] [AC-cross-sex-refit-5] [EDGE-cross-sex-refit-13] [EDGE-cross-sex-refit-14] [EDGE-uvmap-nipples-48] [AC-uvmap-nipples-8]
     {
         var inputs = Inputs(LumberjackShirt, 201, Tbse, UvBakeInputs.TbseChest, Bibo, UvBakeInputs.BiboChest);
@@ -173,6 +174,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-cross-sex-refit-5")]
     [Trait("Plan", "EDGE-cross-sex-refit-13")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Sheer_elegance_legs_refit_onto_tbse_for_midlander_men() // [AC-cross-sex-refit-1] [AC-cross-sex-refit-4] [AC-cross-sex-refit-5] [EDGE-cross-sex-refit-13]
     {
         var inputs = Inputs(SheerLegs, 101, Bibo, BiboSfwLegs, Tbse, UvBakeInputs.TbseLegs[0].Rel);
@@ -196,6 +198,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-cross-sex-tops-yas-2")]
     [Trait("Plan", "AC-cross-sex-tops-yas-3")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Sheer_elegance_top_refits_onto_tbse_for_midlander_men() // [AC-cross-sex-tops-yas-1] [AC-cross-sex-tops-yas-2] [AC-cross-sex-tops-yas-3]
     {
         var offered = OtherRaceRefit.Offered("chara/equipment/e6010/model/c0201e6010_top.mdl",
@@ -220,6 +223,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, SheerTop, Bibo, Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-uvmap-nipples-10")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void RefitMap_sheer_elegance_bust_lands_at_tbse_nipple_height() // [AC-uvmap-nipples-10] [EDGE-uvmap-nipples-31] [AC-uvmap-nipples-8]
     {
         var inputs = Inputs(SheerTop, 101, Bibo, UvBakeInputs.BiboChest, Tbse, UvBakeInputs.TbseChest);
@@ -274,6 +278,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, SheerTop, Bibo, Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-cross-sex-tops-yas-3")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Underbust_lift_for_a_womans_top_is_measured() // [AC-cross-sex-tops-yas-3]
     {
         var results = new Dictionary<bool, (int Folds, float Inside)>();
@@ -308,6 +313,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-cross-sex-tops-yas-13")]
     [Trait("Plan", "EDGE-cross-sex-tops-yas-19")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Starlit_rigged_to_yas_bones_refits_onto_tbse_legs(bool ivcs) // [AC-cross-sex-tops-yas-4] [AC-cross-sex-tops-yas-5] [AC-cross-sex-tops-yas-6] [EDGE-cross-sex-tops-yas-3] [EDGE-cross-sex-tops-yas-4] [EDGE-cross-sex-tops-yas-13] [EDGE-cross-sex-tops-yas-19]
     {
         var inputs = Inputs(Starlit, 101, Rue, RueRel(RueYiggleWc), Tbse, UvBakeInputs.TbseLegs[0].Rel,
@@ -357,6 +363,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-cross-sex-tops-yas-5")]
     [Trait("Plan", "EDGE-cross-sex-tops-yas-6")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Starlit_drawn_with_the_game_s_women_skeleton_still_refits() // [EDGE-cross-sex-tops-yas-5] [EDGE-cross-sex-tops-yas-6]
     {
         var inputs = Inputs(Starlit, 101, Rue, RueRel(RueYiggleWc), Tbse, UvBakeInputs.TbseLegs[0].Rel);
@@ -453,6 +460,8 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     /// for, nor one that falls through to one.</summary>
     [LocalDataFact(LocalData.GameData, ThornPrincess)]
     [Trait("Plan", "AC-own-model-overwrite-8")]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void Thorn_princess_s_mens_save_is_not_said_to_be_worn_by_races_with_their_own_model() // [AC-own-model-overwrite-8]
     {
         var redirects = PenumbraModMeta.ReadAllRedirects(LocalData.Path(ThornPrincess));

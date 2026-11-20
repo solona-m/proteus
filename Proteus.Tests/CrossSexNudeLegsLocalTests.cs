@@ -66,7 +66,7 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
 
     /// <summary>Cloth faces each garment turns over fitted to TBSE's Gen A legs, and cloth points the solve misses
     /// (measured 2026-10-24), guarded against growing.</summary>
-    private const int KnownStormblessedLegsFolds = 69, KnownStormblessedLegsMissed = 0, KnownSheerLegsFolds = 8;
+    private const int KnownStormblessedLegsFolds = 38, KnownStormblessedLegsMissed = 0, KnownSheerLegsFolds = 8;
 
     private (string Name, Misses? Sfw, Misses? GenA) Both(string name, string path)
     {
@@ -82,6 +82,7 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-cross-sex-area-coverage-2")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-15")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Nude_legs_reach_tbse_gen_a() // [AC-cross-sex-area-coverage-2] [EDGE-cross-sex-area-coverage-2] [EDGE-cross-sex-area-coverage-15]
     {
         var lava = LegsOf(LavaBod).ToList();
@@ -102,6 +103,7 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-cross-sex-area-coverage-1")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-16")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Sfw_made_and_rue_legs_keep_tbse_sfw() // [AC-cross-sex-area-coverage-4] [EDGE-cross-sex-area-coverage-1] [EDGE-cross-sex-area-coverage-16]
     {
         var kept = new[] { ("Bibo+ SFW Undies", Path.Combine(LocalData.Path(CrossSexRefitLocalTests.Bibo), UvBakeInputs.BiboLegs[3].Rel)) }
@@ -233,6 +235,7 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-cross-sex-area-coverage-15")]
     [Trait("Speed", "Slow")]
     [Trait("Plan", "AC-mens-ends-crotch-10")]
+    [Trait("Suite", "Diagnostic")]
     public void Stormblessed_legs_through_the_job() // [AC-mens-ends-crotch-10] [AC-cross-sex-area-coverage-2] [AC-cross-sex-area-coverage-5] [AC-cross-sex-area-coverage-6] [EDGE-cross-sex-area-coverage-10] [EDGE-cross-sex-area-coverage-15]
     {
         var log = Substitute.For<IPluginLog>();
@@ -296,6 +299,7 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, StormblessedLegs, LavaBod, CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-3")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Nude_legs_that_match_too_little_leave_the_sfw_refusal_standing() // [EDGE-cross-sex-area-coverage-3]
     {
         // The "nude" legs offered are the SFW ones again: they build, and match the same 89% — so nothing is swapped, and
@@ -319,6 +323,8 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
 
     [LocalDataFact(LocalData.GameData, StormblessedLegs, LavaBod, CrossSexRefitLocalTests.Tbse)]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-4")]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void A_pair_the_match_refuses_never_tries_the_nude_legs() // [EDGE-cross-sex-area-coverage-4]
     {
         // No body maps: the SFW pair is refused in the match itself, before any share is measured.
@@ -339,6 +345,8 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, CrossSexRefitLocalTests.SheerLegs, CrossSexRefitLocalTests.Bibo,
                    CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-cross-sex-area-coverage-3")]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void Sheer_legs_read_as_nude_bibo_fit_gen_a() // [AC-cross-sex-area-coverage-3]
     {
         // Its skin lies exactly on Bibo+'s nude Type A (and B, C), 4 mm from SFW Undies: made nude, not SFW.
@@ -395,6 +403,7 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-tbsex-nude-legs-1")]
     [Trait("Plan", "AC-tbsex-nude-legs-6")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Coverage_refusal_tries_the_nude_legs() // [AC-tbsex-nude-legs-1] [AC-tbsex-nude-legs-6]
     {
         var bibo = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.Bibo));
@@ -425,6 +434,7 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, StormblessedLegs, LavaBod, CrossSexRefitLocalTests.TbseX, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-tbsex-nude-legs-1")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Tbsex_takes_flaccid_legs_for_nude_made_legs() // [AC-tbsex-nude-legs-1]
     {
         // Stormblessed's bottoms, made on LavaBod+'s nude Gen A legs, onto TBSE-X as the size set fits them.
@@ -459,6 +469,7 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-tbsex-nude-legs-1")]
     [Trait("Plan", "EDGE-tbsex-nude-legs-9")]
     [Trait("Speed", "Slow")]
+    [Trait("Suite", "Diagnostic")]
     public void Nude_failing_keeps_the_sfw_refusal() // [AC-tbsex-nude-legs-5] [EDGE-tbsex-nude-legs-4] [EDGE-tbsex-nude-legs-1] [EDGE-tbsex-nude-legs-9]
     {
         var log = Substitute.For<IPluginLog>();
@@ -519,6 +530,8 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
     [LocalDataFact(CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.TbseX, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-tbsex-nude-legs-6")]
     [Trait("Plan", "EDGE-tbsex-nude-legs-8")]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void Refusals_before_measuring_give_no_stats() // [AC-tbsex-nude-legs-6] [EDGE-tbsex-nude-legs-8]
     {
         var bibo = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.Bibo));

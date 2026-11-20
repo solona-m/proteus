@@ -55,7 +55,25 @@ public class RowHoverWiringTests
     }
 
     private static string Editor => Source("Gui/ColorTableEditor.cs");
-    private static string DrawRows => Method(Editor, "public static void DrawRows(");
+    /// <summary>DrawRows with the row buttons it draws through (DrawRowButtons, shared with the pick-only DrawRowPicker).</summary>
+    private static string DrawRows
+    {
+        get
+        {
+            var rows = Method(Editor, "public static void DrawRows(");
+            Assert.Contains("DrawRowButtons(", rows);
+            return rows + Method(Editor, "private static void DrawRowButtons(");
+        }
+    }
+
+    /// <summary>The Matcaps tool's pick-only picker draws the same buttons, so it lands and lights rows the same way.</summary>
+    [Fact]
+    public void DrawRowPicker_draws_through_the_shared_row_buttons()
+    {
+        var picker = Method(Editor, "public static bool DrawRowPicker(");
+        Assert.Contains("DrawRowButtons(", picker);
+        Assert.Contains("RowPickerView.ToggleRelevant(usedRows)", picker);
+    }
     private static string Commit => Method(Editor, "internal static void CommitRowHover(");
     private static string Status => Source("Gui/StatusWindow.cs");
     private static string Gear => Source("Interop/ColorTableHighlighter.cs");
@@ -88,8 +106,13 @@ public class RowHoverWiringTests
     public void DrawRows_lands_through_RowPickerView()
     {
         var body = DrawRows;
-        Assert.Contains("selectedRow = RowPickerView.Land(selectedRow, visible, _showAllRows, InUse);", body);
+        Assert.Contains("selectedRow = RowPickerView.Land(selectedRow, visible, _showAllRows, InUse, allowNone);", body);
         Assert.DoesNotContain("if (selectedRow is <= 0 or > 16)", body);
+        // The Colors window's own tables always land on a row; only the Matcaps picker allows none.
+        Assert.DoesNotContain("allowNone: true", Method(Editor, "public static void DrawRows("));
+        Assert.Contains("allowNone: true", Method(Editor, "public static bool DrawRowPicker("));
+        // A Row A/B toggle for a column the index never uses isn't drawn, so it must not count.
+        Assert.Contains("RowPickerView.Usable(", Method(Editor, "public static bool DrawRowPicker("));
     }
 
     [Fact]
@@ -169,7 +192,7 @@ public class RowHoverWiringTests
         var writes = Regex.Matches(body, @"selectedRow\s*=[^=]").Select(m => body.Substring(m.Index, Math.Min(60, body.Length - m.Index))).ToArray();
         Assert.Equal(2, writes.Length);
         Assert.Contains(writes, w => w.StartsWith("selectedRow = RowPickerView.Land(", StringComparison.Ordinal));
-        Assert.Contains(writes, w => w.StartsWith("selectedRow = row;", StringComparison.Ordinal));
+        Assert.Contains(writes, w => w.StartsWith("selectedRow = RowPickerView.Click(selectedRow, row, ", StringComparison.Ordinal));
         Assert.DoesNotContain("selectedRow", Commit);
     }
 
@@ -191,7 +214,8 @@ public class RowHoverWiringTests
             return body[at..end];
         }
         var gear = Case("case HoverAction.Gear:");
-        Assert.Contains("Highlighter?.SetPreview(a!.ShellLeaves!, ColorRowMask.Pair(a.Row))", gear);
+        // Both sub-rows of the hovered row (RowHoverOffer.GearMask), or one for a sub-row button.
+        Assert.Contains("Highlighter?.SetPreview(a!.ShellLeaves!, a.GearMask)", gear);
         Assert.Contains("SkinGlow?.EndPreview()", gear);
 
         var skin = Case("case HoverAction.Skin:");
@@ -248,8 +272,13 @@ public class RowHoverWiringTests
     public void Closing_the_window_clears_both_highlighters_and_the_hover()
     {
         var window = Method(Status, "private void DrawColorWindow(");
-        Assert.Equal(2, Count(window, "ClearColorHighlights(); return;"));
+        // Both closed-window exits clear — unless the Matcaps tool's row picker drew this frame, whose hover and pin live on.
+        Assert.Equal(2, Count(window, "KeepOrClearColorHighlights(pickerDrew); return;"));
+        Assert.Contains("bool pickerDrew = ColorTableEditor.TakePickerDrew();", window);
         Assert.DoesNotContain("ColorTableEditor.Highlighter?.Clear(); return;", window);
+        var keepOrClear = Method(Status, "private void KeepOrClearColorHighlights(");
+        Assert.Contains("if (!pickerDrew) { ClearColorHighlights(); return; }", keepOrClear);
+        Assert.Contains("ColorTableEditor.CommitRowHover(", keepOrClear);
 
         // Closing the main window hides the Colors window (drawn from its PostDraw), so it clears them too.
         Assert.Contains("ClearColorHighlights();", Method(Status, "public override void OnClose("));

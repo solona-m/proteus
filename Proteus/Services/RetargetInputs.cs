@@ -236,6 +236,10 @@ internal static class RetargetInputs
     /// skin in, and its piercings with it.</summary>
     internal static bool CarryPiercings(bool replaceSkin, bool carryPiercings) => replaceSkin && carryPiercings;
 
+    /// <summary>Whether the Body size tool's "Keep the new body's pubes" takes effect: only the swap brings the body's
+    /// skin in, and its pubes with it.</summary>
+    internal static bool CarryPubes(bool replaceSkin, bool carryPubes) => replaceSkin && carryPubes;
+
     /// <summary>How the Body size tool's whole-garment refit treats the body under the cloth (see <see cref="StudioSkin"/>).</summary>
     /// <param name="ClearForced">"Push cloth out of the body" is on whatever the box says, and the box shows it greyed.</param>
     /// <param name="ClearBody">Push the cloth clear of the body (see <see cref="BodyRetarget.Plan"/>).</param>
@@ -285,17 +289,20 @@ internal static class RetargetInputs
     /// <param name="carryPiercings">See <see cref="CarryPiercings"/>.</param>
     /// <param name="liftUnderbust">See <see cref="BodyRetarget.Plan"/>.</param>
     /// <param name="trace">See <see cref="BodyRetarget.Plan"/>: for tests measuring inside the pass.</param>
+    /// <param name="carryPubes">See <see cref="CarryPubes"/>.</param>
     internal static BodyRetarget.Planned StudioPlan(ModelParts garment, byte[] bytes, IReadOnlyList<BodyRetarget.SlotPair> pairs,
                                                     string garmentSlot, IReadOnlySet<int>? held, bool layOnBody,
                                                     bool acrossBodies, StudioSkinRule rule, bool cut,
                                                     IReadOnlyList<IReadOnlyCollection<int>>? pieces, bool carryPiercings,
                                                     bool liftUnderbust, Action<string>? log = null, Action<string>? warn = null,
-                                                    Action<string, SecondSkinWriter.Vec3[]>? trace = null)
+                                                    Action<string, SecondSkinWriter.Vec3[]>? trace = null,
+                                                    bool carryPubes = false)
         => BodyRetarget.Plan(garment, bytes, pairs, garmentSlot, held: held, replaceSkin: layOnBody,
                              acrossBodies: acrossBodies, clearBody: rule.ClearBody, cutHidden: cut, keepShape: pieces,
                              log: log, warn: warn, trace: trace, tuckSlot: rule.TuckSlot, deepClear: rule.DeepClear,
                              keepStandoff: rule.KeepStandoff, carryPiercings: carryPiercings,
-                             liftUnderbust: liftUnderbust, seeInside: rule.SeeInside, relaxSinkGuard: rule.RelaxSinkGuard);
+                             liftUnderbust: liftUnderbust, seeInside: rule.SeeInside, relaxSinkGuard: rule.RelaxSinkGuard,
+                             carryPubes: carryPubes);
 
     /// <summary>The size a kept-end refit takes as chosen in the body mod's options (see <see cref="BodyRetarget.BodyDraw.Onto"/>):
     /// the one target when there is one; with several they share the slot's selection, so none is.</summary>
@@ -306,8 +313,8 @@ internal static class RetargetInputs
 
     /// <summary>
     /// What a plan was made from: the model, each chosen pair, which parts were held and kept in shape, and the options.
-    /// A plan whose key no longer matches is stale. The piercings choice counts only where it changes the plan (see
-    /// <see cref="CarryPiercings"/>): never on a skin-only redraw, which swaps nothing.
+    /// A plan whose key no longer matches is stale. The piercings and pubes choices count only where they change the plan
+    /// (see <see cref="CarryPiercings"/>, <see cref="CarryPubes"/>): never on a skin-only redraw, which swaps nothing.
     /// </summary>
     /// <param name="partBodies">The parts going onto a body of their own, by slot (see <see cref="StudioPartBodies"/>):
     /// only those taking part, none while set aside. Without any the key is what it always was.</param>
@@ -318,7 +325,7 @@ internal static class RetargetInputs
                                IReadOnlyDictionary<string, List<BodyOption>> to, IEnumerable<string> held,
                                IEnumerable<string>? keepShape, bool replaceSkin, bool cutHidden, bool clearBody,
                                bool carryPiercings = false, bool gameTop = false,
-                               IReadOnlyDictionary<string, string>? partBodies = null)
+                               IReadOnlyDictionary<string, string>? partBodies = null, bool carryPubes = false)
         => modelRel + "|from:" + (fromBodyDir ?? "") + "|"
          + string.Join("|", chosen.Select(s => $"{s}:{from[s].Rel}>{string.Join(",", to[s].Select(t => t.Rel))}"))
          + "|held:" + string.Join(",", held.OrderBy(h => h, StringComparer.Ordinal))
@@ -328,6 +335,7 @@ internal static class RetargetInputs
          + (clearBody ? "|clear" : "")
          + (inputs.KeepEnds ? "|keep" : "")
          + (CarryPiercings(replaceSkin, carryPiercings) && !inputs.SkinOnly ? "|pierce" : "")
+         + (CarryPubes(replaceSkin, carryPubes) && !inputs.SkinOnly ? "|pubes" : "")
          + (inputs.SkinOnly && inputs.EndSlot != null && from.TryGetValue(inputs.EndSlot, out var own)
                 ? "|skin:" + own.Rel + ">" + string.Join(",", inputs.PrimaryTargets.Select(t => t.Rel))
                 : "")

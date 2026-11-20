@@ -45,6 +45,55 @@ internal static class MatcapPanelModel
         return line;
     }
 
+    /// <summary>What a finished matcap job says, short: an Apply's facts and warnings.</summary>
+    /// <param name="PortKept">An Apply wrote one of Proteus's hair ports (kept as it is while it has a matcap).</param>
+    /// <param name="Extra">Lines to act on (the library slot wasn't switched or is outranked, the character draws another
+    /// file): kept in the panel too.</param>
+    public sealed record JobReport(string Message, bool IsApply, int ModelCount, bool RowHoles, IReadOnlyList<string> SiblingsSkipped,
+                                   bool AlphaTested, bool Lod0Cut, IReadOnlyList<string> Extra, bool PortKept = false,
+                                   bool RowGlass = false, int RowGlassTriangles = 0);
+
+    /// <summary>At most this many skipped options are named; the rest are counted.</summary>
+    public const int SkippedNamed = 6;
+
+    /// <summary>
+    /// A finished job, said briefly: the panel's status (one headline, plus any <see cref="JobReport.Extra"/> line to act on)
+    /// and the chat lines (headline first). An Apply's own message names materials and is long; its headline is just the
+    /// model count, and each warning is one short line. Change, Undo and Forget keep their message.
+    /// </summary>
+    public static (string Headline, string Status, List<string> Chat) Report(JobReport r)
+    {
+        var s = Strings.Matcap;
+        string headline = r.IsApply ? string.Format(s.ChatAppliedFmt, r.ModelCount) : r.Message;
+        var extra = r.Extra.Where(l => l.Length > 0).ToList();
+        var chat = new List<string> { headline };
+        if (r.IsApply && r.PortKept) chat.Add(MatcapWriter.PortKeptText);
+        if (r.RowHoles) chat.Add(s.ChatHoles);
+        else if (r.AlphaTested) chat.Add(s.ChatEdges);
+        if (r.IsApply && r.RowGlass) chat.Add(string.Format(s.ChatGlassFmt, r.RowGlassTriangles));
+        if (r.SiblingsSkipped.Count > 0)
+        {
+            var names = r.SiblingsSkipped.Select(OptionName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var shown = string.Join(", ", names.Take(SkippedNamed));
+            if (names.Count > SkippedNamed) shown += " " + string.Format(s.ChatMoreFmt, names.Count - SkippedNamed);
+            chat.Add(string.Format(s.ChatSkippedFmt, shown));
+        }
+        if (r.Lod0Cut) chat.Add(s.Lod0Cut);
+        chat.AddRange(extra);
+        return (headline, string.Join("\n", extra.Prepend(headline)), chat);
+    }
+
+    /// <summary>
+    /// A mod file named by its option: the folder before <c>chara/</c> (<c>body retarget/rosaline m/chara/…</c> →
+    /// <c>rosaline m</c>), else the file name.
+    /// </summary>
+    public static string OptionName(string file)
+    {
+        var parts = file.Split('/', '\\');
+        int at = Array.FindIndex(parts, p => string.Equals(p, "chara", StringComparison.OrdinalIgnoreCase));
+        return at > 0 ? parts[at - 1] : System.IO.Path.GetFileNameWithoutExtension(file);
+    }
+
     /// <summary>A file of the managed mod the face overlay's rewrite published (<c>facelr_*.mdl</c>).</summary>
     public static bool IsManagedFaceRewrite(string file) =>
         System.IO.Path.GetFileName(file).StartsWith("facelr_", StringComparison.OrdinalIgnoreCase);
@@ -53,26 +102,37 @@ internal static class MatcapPanelModel
     /// Why Apply can't be pressed, or null when it can. Ticked parts that all have a matcap change it (in the record, same
     /// kind; no material room needed); none having one makes a new one (room needed); a mix is refused.
     /// </summary>
+    /// <param name="ticked">The parts Apply covers: the ticks, or — a row picked and nothing ticked — the row pool.</param>
+    /// <param name="row">The colour row picked (0: the whole part).</param>
+    /// <param name="gamePiece">The open model is the game's own gear (row matcaps refuse it).</param>
     public static string? ApplyDisabledReason(bool penumbra, IReadOnlyList<ModelPart> ticked, MatcapChoice? choice, int materialRoom,
-                                              MatcapRecord record)
+                                              MatcapRecord record, int row = 0, bool gamePiece = false)
     {
         var s = Strings.Matcap;
         if (!penumbra) return s.NoPenumbra;
-        if (ticked.Count == 0) return s.NeedParts;
+        if (ticked.Count == 0) return row > 0 ? s.RowNothingLeft : s.NeedParts;
         if (choice == null) return s.NeedMatcap;
         switch (MatcapPlan.KindOfApply(ticked))
         {
             case MatcapPlan.ApplyKind.Mixed:
                 return s.AlreadyMatcap;
             case MatcapPlan.ApplyKind.Change:
-                foreach (var name in MatcapPlan.ChangeNames(ticked))
+                foreach (var name in MatcapPlan.ChangeNames(ticked, record))
                 {
-                    var entry = record.Materials.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));
+                    var entry = record.EntryFor(name);
                     if (entry == null) return s.NoEntry;
                     if (entry.Source.IsLibrary != choice.IsLibrary) return s.ChangeKindTip;
                 }
                 return null;
             default:
+                if (row > 0)
+                {
+                    if (gamePiece) return s.RowGameGear;
+                    if (ticked.Select(p => p.Material).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1) return s.RowOneMaterial;
+                    // A row matcap adds two materials: the matcap and the cut copy of the part's own.
+                    if (materialRoom < 2) return string.Format(s.MaterialCapFmt, SecondSkinWriter.MaxMaterials);
+                    return null;
+                }
                 return materialRoom <= 0 ? string.Format(s.MaterialCapFmt, SecondSkinWriter.MaxMaterials) : null;
         }
     }
@@ -84,16 +144,16 @@ internal static class MatcapPanelModel
     /// </summary>
     /// <param name="kind">The open model's kind; null when unknown (the build refuses it as not a target).</param>
     public static string? PreviewBlocked(bool penumbra, IReadOnlyList<ModelPart> ticked, MatcapPlan.Kind? kind, bool gamePiece,
-                                         bool importedPiece, MatcapChoice? choice, int room, MatcapRecord record)
+                                         bool importedPiece, MatcapChoice? choice, int room, MatcapRecord record, int row = 0)
     {
         var s = Strings.Matcap;
         if (!penumbra) return s.NoPenumbra;
-        if (ticked.Count == 0) return s.PreviewTick;
+        if (ticked.Count == 0) return row > 0 ? s.RowNothingLeft : s.PreviewTick;
         if (kind is { } k && k != MatcapPlan.Kind.Gear) return s.PreviewGearOnly;
         if (gamePiece) return s.PreviewGameGear;
         if (importedPiece) return ProteusLoc.Localize("Matcap.Refused.ImportedPiece",
             "This piece belongs to an imported pack, which Proteus rebuilds itself. Put the matcap on the pack's own mod instead.");
-        return ApplyDisabledReason(penumbra, ticked, choice, room, record);
+        return ApplyDisabledReason(penumbra, ticked, choice, room, record, row);
     }
 
     /// <summary>
@@ -105,7 +165,7 @@ internal static class MatcapPanelModel
                                             string modelFile)
     {
         var s = Strings.Matcap;
-        var names = MatcapPlan.ChangeNames(ticked);
+        var names = MatcapPlan.ChangeNames(ticked, record);
         if (names.Count == 0) return [];
         var lines = new List<string> { string.Format(s.ChangesFmt, string.Join(", ", names.Select(MatcapWriter.StemOf))) };
         var tickedLabels = ticked.Select(p => p.Label).ToHashSet(StringComparer.Ordinal);
@@ -170,6 +230,7 @@ internal static class MatcapPanelModel
         var s = Strings.Matcap;
         if (state == MatcapWriter.State.Superseded) return s.Superseded;
         if (state == MatcapWriter.State.Edited) return s.Edited;
+        if (state == MatcapWriter.State.RowStale) return s.RowStale;
         if (entry.Source.IsLibrary && entry.Source.Library is { } lib)
         {
             if (!installed) return string.Format(s.LibraryMissingFmt, lib.Name);

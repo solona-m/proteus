@@ -125,7 +125,7 @@ internal static class CharacterShaderUpgrade
     /// The material naming another shader package. The name is appended to the string table rather than written over
     /// the old one, as <see cref="TextureLoader.RetargetTexturePaths"/> appends, so no other string's offset moves.
     /// </summary>
-    private static byte[]? RenameShader(byte[] b, string shader)
+    internal static byte[]? RenameShader(byte[] b, string shader)
     {
         ushort fileSize = BitConverter.ToUInt16(b, 4), size = BitConverter.ToUInt16(b, 8);
         int stringsEnd = 16 + 4 * (b[12] + b[13] + b[14]) + size;

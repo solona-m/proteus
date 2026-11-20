@@ -50,6 +50,8 @@ public class MoveAllLocalTests(ITestOutputHelper output)
 
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-move-all-parts-2")]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Speed", "Slow")]
     public void AllMoveAndRotateOnARealModelAreOnePiece()
     {
         var model = TopWithClothToLock();

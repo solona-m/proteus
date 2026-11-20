@@ -63,7 +63,8 @@ public sealed partial class PartsPanel : IStudioHarness
                                              || !string.Equals(modDir, dir, StringComparison.OrdinalIgnoreCase)) return;
                                          matcapRecordFor = null;
                                          SelectModel(modelIndex);
-                                     });
+                                     },
+                                     HasColours);
     }
 
     public bool IsOpen(string modDir, string file)
@@ -286,6 +287,13 @@ public sealed partial class PartsPanel : IStudioHarness
         note = matcapPreview.Wanted ? matcapPreview.Note : null,
         drawnNote = matcapPreview.DrawnNote,
         gamePaths = matcapPreview.ShownKey != null ? matcapShownPaths : [],
+        row = matcapRowOnly,
+        sub = matcapRowSub.ToString(),
+        rowMaterial = matcapRowOnly > 0 ? MatcapRowMaterial() : null,
+        resolvedFrom = matcapRowOnly > 0 ? matcapPreviewResolvedFrom : null,
+        rowHoles = matcapRowOnly > 0 && matcapRowHoles,
+        rowGlass = matcapRowOnly > 0 && matcapRowGlass,
+        rowGlassTriangles = matcapRowOnly > 0 && matcapRowGlass ? matcapRowGlassTriangles : 0,
     };
 
     StudioMatcapPreviewOutcome IStudioHarness.MatcapPreview(StudioMatcapPreviewRequest request, StudioSession session)
@@ -322,6 +330,8 @@ public sealed partial class PartsPanel : IStudioHarness
         matcapRecord = Services.Matcap.MatcapRecord.Read(root);
         matcapRecordFor = null;
         try { matcapRoom = brushBase != null ? ModelMaterialWriter.MaterialRoom(brushBase) : 0; } catch { matcapRoom = 0; }
+        matcapRowMaterial = request.Material;
+        SetMatcapRow(request.Row, request.Sub);
         RequestMatcapPreview(choice!);
         return new StudioMatcapPreviewOutcome(null, MatcapPreviewView(), View());
     }

@@ -84,6 +84,7 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
     [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Stormblessed, CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-hands-feet-port-2")]
     [Trait("Plan", "EDGE-hands-feet-port-9")]
+    [Trait("Suite", "Diagnostic")]
     public void Stormblessed_end_in_studio_on_the_game_body() // [AC-hands-feet-port-2] [EDGE-hands-feet-port-9]
     {
         var tbse = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.Tbse));
@@ -124,6 +125,7 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
     [Trait("Plan", "AC-hands-feet-port-3")]
     [Trait("Plan", "AC-hands-feet-port-5")]
     [Trait("Plan", "EDGE-hands-feet-port-37")]
+    [Trait("Suite", "Diagnostic")]
     public void Stormblessed_end_in_studio_equals_the_cli() // [AC-hands-feet-port-3] [AC-hands-feet-port-5] [EDGE-hands-feet-port-37]
     {
         string mod = LocalData.Path(SizeSetCrossSexLocalTests.Stormblessed);
@@ -183,6 +185,7 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
     [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Stormblessed, CrossSexRefitLocalTests.TbseX, LocalData.TbseUvMaps)]
     [Trait("Plan", "EDGE-hands-feet-port-29")]
     [Trait("Plan", "AC-tbsex-nude-legs-3")]
+    [Trait("Suite", "Diagnostic")]
     public void Tbse_x_glove_and_shoe_made() // [EDGE-hands-feet-port-29] [AC-tbsex-nude-legs-3]
     {
         var tbseX = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.TbseX));
@@ -203,6 +206,7 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
                    LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-tbsex-nude-legs-3")]
     [Trait("Plan", "EDGE-tbsex-nude-legs-9")]
+    [Trait("Suite", "Diagnostic")]
     public void Tbsex_shoe_in_studio_takes_flaccid_legs() // [AC-tbsex-nude-legs-3] [EDGE-tbsex-nude-legs-9]
     {
         var inputs = CrossSexNudeLegsLocalTests.HalonesBootOntoTbseX(Substitute.For<IPluginLog>());
@@ -267,6 +271,7 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
     /// <summary>The guard guards something real: the bake's model handed in as if drawn is bent a second time.</summary>
     [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Stormblessed, CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "EDGE-hands-feet-port-30")]
+    [Trait("Suite", "Diagnostic")]
     public void Baked_bytes_would_bend_twice() // [EDGE-hands-feet-port-30]
     {
         var tbse = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.Tbse));
@@ -284,6 +289,7 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
     [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Stormblessed, CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "EDGE-hands-feet-port-13")]
     [Trait("Plan", "EDGE-hands-feet-port-10")]
+    [Trait("Suite", "Diagnostic")]
     public void Unticked_parts_are_held() // [EDGE-hands-feet-port-13] [EDGE-hands-feet-port-10]
     {
         var tbse = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.Tbse));
@@ -322,6 +328,7 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
     [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Stormblessed, CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "EDGE-hands-feet-port-4")]
     [Trait("Plan", "EDGE-hands-feet-port-3")]
+    [Trait("Suite", "Diagnostic")]
     public void Made_for_or_onto_without_feet_still_makes_it() // [EDGE-hands-feet-port-4] [EDGE-hands-feet-port-3]
     {
         var tbse = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.Tbse));
@@ -338,6 +345,7 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
     /// <summary>A Bibo-skinned shoe made a men's: never saved naming a skin the men's body doesn't use.</summary>
     [LocalDataFact(LocalData.GameData, AirForce1, CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "EDGE-hands-feet-port-19")]
+    [Trait("Suite", "Diagnostic")]
     public void Foot_skinned_shoe_never_saves_foreign_skin() // [EDGE-hands-feet-port-19]
     {
         string root = LocalData.Path(AirForce1);
@@ -461,6 +469,7 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
     [Trait("Plan", "EDGE-tbsex-nude-legs-7")]
     [Trait("Plan", "EDGE-tbsex-nude-legs-11")]
     [Trait("Plan", "EDGE-tbsex-nude-legs-12")]
+    [Trait("Suite", "Diagnostic")]
     public void Halones_chosen_boots_take_their_legs_body() // [AC-hands-feet-port-12] [EDGE-hands-feet-port-39] [EDGE-hands-feet-port-45] [AC-tbsex-nude-legs-2] [AC-tbsex-nude-legs-7] [EDGE-tbsex-nude-legs-6] [EDGE-tbsex-nude-legs-7] [EDGE-tbsex-nude-legs-11] [EDGE-tbsex-nude-legs-12]
     {
         string copy = CopyOf(HalonesChosen);
@@ -532,6 +541,7 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
     [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Stormblessed, CrossSexRefitLocalTests.Bibo,
                    CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "EDGE-hands-feet-port-43")]
+    [Trait("Suite", "Diagnostic")]
     public void Stormblessed_ends_no_regression() // [EDGE-hands-feet-port-43]
     {
         string copy = CopyOf(SizeSetCrossSexLocalTests.Stormblessed);
@@ -564,6 +574,7 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
     [Trait("Plan", "AC-hands-feet-port-9")]
     [Trait("Plan", "EDGE-hands-feet-port-17")]
     [Trait("Plan", "EDGE-hands-feet-port-25")]
+    [Trait("Suite", "Diagnostic")]
     public void Halones_chosen_ends_for_men_are_never_silent() // [AC-hands-feet-port-9] [EDGE-hands-feet-port-17] [EDGE-hands-feet-port-25]
     {
         string Copy()

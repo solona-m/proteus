@@ -21,6 +21,7 @@ public class SkinlessTargetCensusLocalTests(ITestOutputHelper output)
 {
     [LocalDataFact(LocalData.Mods)]
     [Trait("Plan", "AC-skinless-target-10")]
+    [Trait("Suite", "Diagnostic")]
     public void Census_of_pairs_the_rule_changes()
     {
         var clock = Stopwatch.StartNew();

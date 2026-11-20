@@ -26,6 +26,7 @@ public class PioneerBottomsRefitTests(ITestOutputHelper output)
     [InlineData("hs-Rue+-2.2.7-y0f")]
     [InlineData("Neolithe [ALL IN ONE]")]
     [InlineData("Bibo+")]
+    [Trait("Suite", "Diagnostic")]
     public void The_vanilla_waist_skin_is_swapped_for_the_body_s(string bodyMod)
     {
         var game = new Lumina.GameData(LocalData.Path(LocalData.GameData));
@@ -109,6 +110,7 @@ public class PioneerBottomsRefitTests(ITestOutputHelper output)
     /// slit opens at the back.
     /// </summary>
     [LocalDataFact(LocalData.GameData, LocalData.Mods + ":Neolithe [ALL IN ONE]")]
+    [Trait("Suite", "Diagnostic")]
     public void The_new_skin_stops_under_the_hem_and_no_slit_opens_at_the_back()
     {
         var refit = RefitOntoNeolitheGenCSmall();

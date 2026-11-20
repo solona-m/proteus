@@ -155,6 +155,14 @@
     "message": "Desactivado: el equipo se ajusta sin los piercings de tu mod de cuerpo. Las uñas siempre se incluyen.\nEl equipo ya ajustado conserva lo que tenía; deshaz y vuelve a ajustar lo que llevas puesto para cambiarlo.",
     "description": ""
   },
+  "AutoRefit.Pubes.Label": {
+    "message": "Conservar el vello púbico de mi cuerpo en el equipo reajustado",
+    "description": ""
+  },
+  "AutoRefit.Pubes.Tip": {
+    "message": "Desactivado: el equipo se reajusta sin el vello púbico de tu mod de cuerpo (su malla de la entrepierna y el vello).\nEl equipo ya reajustado conserva aquello con lo que se hizo; deshaz y reajusta lo que llevas puesto para cambiarlo.",
+    "description": ""
+  },
   "AutoRefit.Working": {
     "message": "Trabajando…",
     "description": ""
@@ -3987,6 +3995,14 @@
     "message": "Activado: los piercings del nuevo cuerpo llegan con su piel donde la prenda muestra esa piel.\nLas uñas siempre se incluyen.",
     "description": ""
   },
+  "Parts.Retarget.Pubes": {
+    "message": "Conservar el vello púbico del nuevo cuerpo",
+    "description": ""
+  },
+  "Parts.Retarget.Pubes.Tip": {
+    "message": "Activado: el vello púbico del nuevo cuerpo (su malla de la entrepierna y el vello) llega con su piel donde la prenda muestra esa piel y ninguna tela la cubre.",
+    "description": ""
+  },
   "Parts.Retarget.CutForcedTip": {
     "message": "Siempre activado mientras el zapato conserva su propio pie o el guante su propia mano: si no, entrarían con él las piernas o los brazos nuevos enteros.",
     "description": ""
@@ -5363,6 +5379,14 @@
     "message": "Activado: los piercings de cada cuerpo llegan con su piel donde la pieza muestra esa piel. Las uñas siempre se incluyen.\nLas tallas ya hechas solo cambian cuando se vuelven a hacer.",
     "description": ""
   },
+  "SizeSet.Pubes": {
+    "message": "Conservar el vello púbico de los nuevos cuerpos",
+    "description": ""
+  },
+  "SizeSet.Pubes.Tip": {
+    "message": "Activado: el vello púbico de cada cuerpo (su malla de la entrepierna y el vello) llega con su piel donde la pieza muestra esa piel y ninguna tela la cubre.\nLas tallas ya hechas solo cambian cuando se vuelven a hacer.",
+    "description": ""
+  },
   "SizeSet.KeepHiddenSkin": {
     "message": "Conservar la piel oculta",
     "description": ""
@@ -6095,6 +6119,10 @@
     "message": "deshecho por ti",
     "description": ""
   },
+  "Settings.GearShaders.Reason.RowMatcap": {
+    "message": "se recortó un matcap de fila de su mejora anterior (deshaz primero el matcap)",
+    "description": ""
+  },
   "Settings.GearShaders.UpgradeNow": {
     "message": "Actualizar lo que llevo puesto",
     "description": ""
@@ -6117,6 +6145,22 @@
   },
   "Settings.GearShaders.Edited.Fmt": {
     "message": "{0} se editó después de su actualización de shader, así que Deshacer lo deja como está. El original del autor se conserva en Proteus/shaderupgrade-backup/{0}: cópialo sobre el archivo para deshacer.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcap.Fmt": {
+    "message": "Del material mejorado de {0} se recortó un matcap de fila, así que Deshacer lo deja como está. Deshaz primero ese matcap ({1}) y después esto.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapKept.Fmt": {
+    "message": "Del material mejorado de {0} se recortó un matcap de fila que los reajustes o adaptaciones de pelo hechos a partir de {1} aún dibujan. Rehazlos o deshazlos, deshaz otra vez el matcap y después esto.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapEdited.Fmt": {
+    "message": "Del material mejorado de {0} se recortó un matcap de fila, y {1} cambió después de ese matcap, así que tampoco se puede deshacer aún el matcap. Deshaz primero el cambio posterior (o vuelve a poner la copia de Proteus/matcap-backup), después el matcap y después esto.",
+    "description": ""
+  },
+  "Settings.GearShaders.RowMatcapLater.Fmt": {
+    "message": "Del material mejorado de {0} se recortó un matcap de fila, y {1} cambió {2} después de ese matcap. Deshaz primero {1}, después el matcap y después esto.",
     "description": ""
   },
   "Settings.GearShaders.Busy": {
@@ -6527,10 +6571,6 @@
     "message": "Quien reciba este mod también necesita {0} ({1}), con el mismo matcap elegido. Sus texturas nunca se copian a tu mod.",
     "description": ""
   },
-  "Parts.Matcap.SiblingsSkipped.Fmt": {
-    "message": "No se aplicó a estas otras opciones de cuerpo, cuyas partes son distintas: {0}.",
-    "description": ""
-  },
   "Parts.Matcap.SkinTip": {
     "message": "La piel no puede llevar un matcap.",
     "description": ""
@@ -6669,6 +6709,194 @@
   },
   "Parts.Matcap.PortKept": {
     "message": "Ese modelo es una de las adaptaciones de pelo de Proteus. Mientras tenga un matcap, Proteus lo deja como está y no rehace por sí solo las adaptaciones de otras razas que comparten su material, hasta que deshagas el matcap. Adaptar a mano una de esas razas en el Estudio sigue rehaciéndola.",
+    "description": ""
+  },
+  "Matcap.Refused.RowFileSwap.Fmt": {
+    "message": "{0} cambia el material de esta pieza por otro archivo, así que un matcap de fila no puede seguirlo.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoNormal": {
+    "message": "El material de esta pieza no tiene mapa de normales, que es lo que usa un matcap de fila para recortar.",
+    "description": ""
+  },
+  "Matcap.Refused.RowAmbiguousOption.Fmt": {
+    "message": "El grupo «{0}» tiene dos opciones llamadas «{1}», así que un matcap de fila no puede distinguirlas.",
+    "description": ""
+  },
+  "Matcap.Refused.RowShader.Fmt": {
+    "message": "Un matcap de fila necesita la pieza en character.shpk, y {0} usa {1}.",
+    "description": ""
+  },
+  "Matcap.Refused.RowGlassLayout.Fmt": {
+    "message": "{0} usa {1} con una estructura que Proteus no puede pasar a character.shpk para un matcap de fila (necesita exactamente un mapa normal, una máscara y un mapa de índice, y una tabla de colores de Dawntrail).",
+    "description": ""
+  },
+  "Matcap.Refused.RowGlassTemplate": {
+    "message": "No se pudo leer el material propio del juego a partir del cual se crea el recorte de una pieza de cristal, así que no se cambió nada.",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyWear.Fmt": {
+    "message": "{0} sigue con el shader antiguo (characterlegacy.shpk), y un matcap de fila necesita character.shpk. Póntelo una vez para que los shaders del equipo lo pasen a character.shpk y después añade el matcap de fila. Si sigue con el shader antiguo, pasa el ratón por el recuento en {1} para ver por qué.",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyDeclined.Fmt": {
+    "message": "{0} sigue con el shader antiguo (characterlegacy.shpk) porque deshiciste su mejora, y un matcap de fila necesita character.shpk. Póntelo y pulsa «{1}» en {2}; después añade el matcap de fila.",
+    "description": ""
+  },
+  "Matcap.Refused.RowLegacyOff.Fmt": {
+    "message": "{0} sigue con el shader antiguo (characterlegacy.shpk), y un matcap de fila necesita character.shpk. Activa «{1}» en {2} y póntelo una vez; después añade el matcap de fila.",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Fmt": {
+    "message": "No se pudo recortar la fila: {0}.",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Normal": {
+    "message": "no se pudo leer el mapa de normales",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Index": {
+    "message": "no se pudo leer el mapa de índices",
+    "description": ""
+  },
+  "Matcap.Refused.RowBake.Write": {
+    "message": "no se pudo escribir el material recortado",
+    "description": ""
+  },
+  "Matcap.Refused.RowTextureVaries.Fmt": {
+    "message": "{0} cambia el mapa de normales o de índices de esta pieza, así que un solo recorte no sirve para todas las opciones.",
+    "description": ""
+  },
+  "Matcap.Refused.RowEmpty.Fmt": {
+    "message": "Ningún píxel de esta pieza usa la fila {0}.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNothingLeft": {
+    "message": "Todas las piezas con este material ya tienen un matcap.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNotGear": {
+    "message": "Un matcap en una sola fila de color solo funciona en equipo y accesorios.",
+    "description": ""
+  },
+  "Matcap.Refused.RowOneMaterial": {
+    "message": "Un matcap en una sola fila de color funciona con un material a la vez. Marca piezas de un único material.",
+    "description": ""
+  },
+  "Matcap.Refused.RowMixedThreshold": {
+    "message": "Las opciones de esta pieza no coinciden en cómo se recorta, y sus colores de vértice la recortarían. Un matcap de fila no puede servir para ambas.",
+    "description": ""
+  },
+  "Matcap.Refused.RowVertexAlpha": {
+    "message": "Los colores de vértice de esta pieza recortarían el matcap de fila, y no se pueden cambiar.",
+    "description": ""
+  },
+  "Matcap.Refused.RowGameGear": {
+    "message": "Un matcap en una sola fila de color funciona en el equipo propio de un mod, no en las piezas del propio juego.",
+    "description": ""
+  },
+  "Matcap.Row.GameFile": {
+    "message": "el archivo del propio juego",
+    "description": ""
+  },
+  "Matcap.Row.DefaultData": {
+    "message": "los archivos predeterminados del mod",
+    "description": ""
+  },
+  "Matcap.Row.Option.Fmt": {
+    "message": "la opción «{1}» de «{0}»",
+    "description": ""
+  },
+  "Matcap.Row.Container.Fmt": {
+    "message": "la entrada {1} de «{0}»",
+    "description": ""
+  },
+  "Parts.Matcap.PickHint": {
+    "message": "Elige una parte o una fila del colorset.",
+    "description": ""
+  },
+  "Parts.Matcap.RowA": {
+    "message": "Fila A",
+    "description": ""
+  },
+  "Parts.Matcap.RowB": {
+    "message": "Fila B",
+    "description": ""
+  },
+  "Parts.Matcap.RowSubTip": {
+    "message": "Elige una o ambas. Al señalarla, se ilumina en tu personaje.",
+    "description": ""
+  },
+  "Parts.Matcap.RowOnlyTip": {
+    "message": "Pone el matcap solo en los píxeles de una fila de color del material de la pieza, como un patrón de encaje o ribete. Deja todo sin marcar para cubrir todas las piezas con este material.",
+    "description": ""
+  },
+  "Parts.Matcap.RowReading": {
+    "message": "Leyendo las filas de color…",
+    "description": ""
+  },
+  "Parts.Matcap.RowNoRows": {
+    "message": "El material de esta pieza no tiene filas de color para elegir.",
+    "description": ""
+  },
+  "Parts.Matcap.RowMaterial": {
+    "message": "Material del objeto",
+    "description": ""
+  },
+  "Parts.Matcap.RowAll.Fmt": {
+    "message": "Cubre todas las piezas dibujadas con {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.RowFollowWarn": {
+    "message": "Este material tiene colores definidos en Proteus. Los píxeles de la fila con matcap salen de una copia del material y no los seguirán.",
+    "description": ""
+  },
+  "Parts.Matcap.RowHolesWarn": {
+    "message": "Algunos huecos recortados de esta pieza están dentro de los triángulos de la fila, así que mostrarán el matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.RowGlassWarn.Fmt": {
+    "message": "Esta pieza es de cristal, que no se puede recortar: Proteus dibuja en su lugar {1} triángulo(s) alrededor de la fila con su propia copia opaca del material (character.shpk). Tu material de cristal no cambia, y «{0}» lo deshace todo.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Applied.Fmt": {
+    "message": "Matcap aplicado a {0} archivo(s) de modelo.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Holes": {
+    "message": "Algunos huecos transparentes de esta fila mostrarán el matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Edges": {
+    "message": "Revisa los bordes transparentes en el juego.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Glass.Fmt": {
+    "message": "Esta pieza es de cristal: {0} triángulo(s) alrededor de la fila ahora se dibujan opacos, no como cristal.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.Skipped.Fmt": {
+    "message": "No se aplicó a {0}: sus partes son distintas.",
+    "description": ""
+  },
+  "Parts.Matcap.Chat.More.Fmt": {
+    "message": "y {0} más",
+    "description": ""
+  },
+  "Parts.Matcap.RowStale": {
+    "message": "El material del autor cambió desde que se hizo este matcap de fila. Deshazlo y vuelve a aplicarlo.",
+    "description": ""
+  },
+  "Matcap.Refused.RowManifestUnreadable": {
+    "message": "No se pudo leer la lista de archivos del mod (meta.json), así que no se cambió nada.",
+    "description": ""
+  },
+  "Matcap.Refused.RowNoSource": {
+    "message": "Proteus no encontró el material de esta pieza en el mod ni en el juego, así que no hay nada que recortar.",
+    "description": ""
+  },
+  "Matcap.Refused.RowMapSwap.Fmt": {
+    "message": "{0} cambia el mapa de normales o de índices de esta pieza por otro archivo, así que un matcap de fila no puede seguirlo.",
     "description": ""
   }
 }

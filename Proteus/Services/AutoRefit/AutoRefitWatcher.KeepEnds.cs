@@ -410,9 +410,12 @@ public sealed partial class AutoRefitWatcher
         AssertOffFramework("the refit");
         bool piercings = config.AutoRefitPiercings;
         log.Debug("[Proteus] auto refit: {0}: piercings {1}", item, piercings ? "carried" : "left out");
+        bool pubes = CarryPubesNow;
+        log.Debug("[Proteus] auto refit: {0}: pubes {1}", item, pubes ? "carried" : "left out");
         var plan = KeepEnds.Plan(j.Garment, j.Bytes, reading, limbPair, endPair, across,
                                  line => log.Debug("[Proteus] auto refit: {0}", line),
-                                 line => log.Warning("[Proteus] auto refit: {0}", line), outfit, piercings);
+                                 line => log.Warning("[Proteus] auto refit: {0}", line), outfit, piercings,
+                                 carryPubes: pubes);
         if (outfit != null)
             log.Information("[Proteus] auto refit: {0} kept outside its {1} piece: {2} points lifted, {3:F1} mm short at "
                           + "most", item, limb == "_top" ? "chest" : "legs", plan.Report.Layered,

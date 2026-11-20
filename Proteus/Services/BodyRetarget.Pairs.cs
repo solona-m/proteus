@@ -77,6 +77,9 @@ internal static partial class BodyRetarget
                             TargetMaterial: targetMaterial,
                             SourceIsGameChest: slot == "_top" && VanillaBodyCatalog.IsGameModel(sourceBytes, slot),
                             TargetSwitched: targetSwitched);
+        if (slot == "_dwn" && Bulge.TbseBulge.Shared is { } bulge)
+            pair = pair with { Featureless = FeaturelessFactory(pair, source, sourceBytes, targetBytes, targetHidden, name, uvRemap,
+                                                               male, targetMale, bulge) };
         return null;
     }
 
@@ -99,4 +102,48 @@ internal static partial class BodyRetarget
         => SecondSkinWriter.TryReadLod0Geometry(mdl, out _, out var uv, out _, out _, out _, false, false, null)
             ? uv
             : [];
+
+    /// <summary>
+    /// The pair onto the new body made featureless (plan featureless-bulge, path A), built on first call and kept: the
+    /// body's genital piece rewritten to the owner's bulge (<see cref="Bulge.BulgeSwap"/>), read with the same options'
+    /// mask, and the correspondence built again onto it — the bulge's landing uvs standing in for its own in the
+    /// correspondence only, so a garment's crotch lands on it where the transfer maps send it. Never throws: a body it
+    /// cannot be made for says why.
+    /// </summary>
+    private static Func<(SlotPair? Pair, string Why)> FeaturelessFactory(SlotPair plain, ModelParts source, byte[] sourceBytes,
+        byte[] targetBytes, IReadOnlySet<string>? targetHidden, string name, UVRemapService? uvRemap, bool male, bool? targetMale,
+        Bulge.TbseBulge bulge)
+    {
+        var made = new Lazy<(SlotPair?, string)>(() =>
+        {
+            try
+            {
+                var swapped = Bulge.BulgeSwap.Featureless(targetBytes, bulge, out string why);
+                if (swapped == null) return (null, why);
+                var parts = ModelPartReader.Read(swapped.Model);
+                if (parts == null) return (null, "the featureless body could not be read back");
+                var drawn = Without(parts, targetHidden);
+                var uv = Uv(swapped.Model);
+                for (int i = 0; i < swapped.SlotOf.Length; i++)
+                    if (bulge.Data.land[i] is { } l && swapped.SlotOf[i] * 2 + 1 < uv.Length)
+                    {
+                        uv[swapped.SlotOf[i] * 2] = l[0];
+                        uv[swapped.SlotOf[i] * 2 + 1] = l[1];
+                    }
+                if (!BodyCorrespondence.TryBuild(source, Uv(sourceBytes), drawn, uv, name, out var correspondence,
+                                                 out string refusal, out _, uvRemap, male, targetMale))
+                    return (null, "the featureless body was refused: " + refusal);
+                // A source of the same mesh would land vertex for vertex: its genitals onto bulge slots in whatever order
+                // they were written. Only a landing by uv knows where the bulge is.
+                if (correspondence is IdentityCorrespondence)
+                    return (null, "the garment's body is the same mesh as the new body: no landing onto the bulge");
+                return (plain with { Correspondence = correspondence!, Target = drawn, TargetModel = swapped.Model, Featureless = null }, "");
+            }
+            catch (Exception e)
+            {
+                return (null, "failed: " + e.Message);
+            }
+        }, System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        return () => made.Value;
+    }
 }

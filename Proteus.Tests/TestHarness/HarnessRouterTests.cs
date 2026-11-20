@@ -230,6 +230,67 @@ public class HarnessRouterTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-upgrade-vs-matcap-6")]
+    [Trait("Plan", "EDGE-upgrade-vs-matcap-23")]
+    public async Task State_shader_upgrade_last_run_carries_the_scrubbed_refusal()
+    {
+        // The session's character name inside a refusal (a mod folder can be named anything) comes out scrubbed.
+        var hold = new Proteus.Services.Matcap.MatcapRowCut.RowHold(Proteus.Services.Matcap.MatcapRowCut.RowHoldKind.Active, "model/wrs.mdl", null);
+        var msg = Proteus.Services.ShaderUpgradeWriter.RowMatcapMessage("Hidden Person bracelet/mt_c0201a0153_wrs_a.mtrl", hold);
+        var undo = new Proteus.Services.ShaderUpgradeWatcher.RunInfo("undo-worn", 0, 0, 0, 0, 1, false, false, DateTime.UtcNow, msg);
+        f.Game.ShaderUpgradeView = new Proteus.Services.ShaderUpgradeWatcher.View(Enabled: false, LastRun: undo, LastUndo: undo);
+        f.Names.Add("Hidden Person", NameKind.Character);
+        var (status, b) = await f.Get("/state");
+        Assert.Equal(200, status);
+        var run = b.GetProperty("shaderUpgrade").GetProperty("lastRun");
+        Assert.Equal(1, run.GetProperty("refused").GetInt32());
+        var text = run.GetProperty("message").GetString()!;
+        Assert.Contains("bracelet/mt_c0201a0153_wrs_a.mtrl", text);
+        Assert.DoesNotContain("Hidden Person", text);
+        Assert.Contains("<CHARACTER>", text);
+        Assert.DoesNotContain(":\\", text);
+        // The kept undo (what the Settings line shows) carries the same scrubbed text.
+        var kept = b.GetProperty("shaderUpgrade").GetProperty("lastUndo");
+        Assert.Equal("undo-worn", kept.GetProperty("kind").GetString());
+        Assert.Equal(text, kept.GetProperty("message").GetString());
+
+        // One /state call site, and it passes the session's names.
+        var src = File.ReadAllText(Path.Combine(RepoRoot(), "Proteus", "TestHarness", "HarnessRouter.cs"));
+        var calls = System.Text.RegularExpressions.Regex.Matches(src, @"ShaderUpgradeBlock\(([^)]*\))?[^)]*\)").Select(m => m.Value).ToList();
+        Assert.Equal(2, calls.Count);   // the definition and the one call
+        Assert.All(calls, c => Assert.Contains("names", c));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-row-matcap-glass-4")]
+    public async Task State_lists_gear_materials_from_the_resource_map()
+    {
+        f.Game.ResourceMap = new(StringComparer.OrdinalIgnoreCase)
+        {
+            [$@"{f.ModsRoot}\Gear\mat\b.mtrl"] = new(["chara/accessory/a0153/material/v0001/mt_c0201a0153_wrs_b.mtrl"]),
+            [$@"|prefix|{f.ModsRoot}\Gear\Proteus Matcaps\cut.mtrl"] = new(["chara/accessory/a0153/material/v0001/mt_c0201a0153_wrs_b_mcutabc1231.mtrl"]),
+            [$@"{f.ModsRoot}\Gear\tex\n.tex"] = new(["chara/accessory/a0153/texture/c0201a0153_wrs_b_n.tex"]),
+            [$@"{f.ModsRoot}\Body\skin.mtrl"] = new(["chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_a.mtrl"]),
+        };
+        var mats = (await f.Get("/state")).Body.GetProperty("materials").EnumerateArray().ToList();
+        Assert.Equal(2, mats.Count);   // gear materials only: no texture, no body material
+        Assert.Equal("chara/accessory/a0153/material/v0001/mt_c0201a0153_wrs_b.mtrl", mats[0].GetProperty("gamePath").GetString());
+        Assert.EndsWith(@"Gear\mat\b.mtrl", mats[0].GetProperty("resolved").GetString());
+        Assert.DoesNotContain("|prefix|", mats[1].GetProperty("resolved").GetString());   // Penumbra's prefix stripped
+        Assert.EndsWith("cut.mtrl", mats[1].GetProperty("resolved").GetString());
+
+        f.Game.ResourceMap = null;
+        Assert.Empty((await f.Get("/state")).Body.GetProperty("materials").EnumerateArray());
+    }
+
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        return dir!.FullName;
+    }
+
+    [Fact]
     [Trait("Plan", "AC-dt-shader-upgrade-10")]
     [Trait("Plan", "EDGE-dt-shader-upgrade-69")]
     [Trait("Plan", "EDGE-issue-sweep-a-11")]

@@ -703,12 +703,14 @@ public class StatusWindow : Window
     /// <summary>The colour editor, as its own window — stays open until closed.</summary>
     private void DrawColorWindow()
     {
-        // No colour editor open means no highlight glow.
-        if (_colorWindowMod == null) { ClearColorHighlights(); return; }
+        // No colour editor open means no highlight glow — unless another row picker (the Matcaps tool's) drew this
+        // frame: then its hover and pinned Glow live on, and are committed here as the editor's would be.
+        bool pickerDrew = ColorTableEditor.TakePickerDrew();
+        if (_colorWindowMod == null) { KeepOrClearColorHighlights(pickerDrew); return; }
 
         compositor.RefreshDisplayNames();   // the editor's title names the mod
         var entry = compositor.LastDiscovered.FirstOrDefault(e => e.ModDirectory == _colorWindowMod);
-        if (entry == null) { _colorWindowMod = null; ClearColorHighlights(); return; }
+        if (entry == null) { _colorWindowMod = null; KeepOrClearColorHighlights(pickerDrew); return; }
 
         // A pinned Glow lives while this window draws (#82): outside Begin, so a collapsed window still renews it.
         var pinNow = RowHighlightClock.NowMs();
@@ -727,6 +729,16 @@ public class StatusWindow : Window
         ColorTableEditor.CommitRowHover(RowHighlightClock.NowMs(), config.PluginEnabled, compositor.CompositeBusy);
 
         if (!open) _colorWindowMod = null;
+    }
+
+    /// <summary>With the Colors window closed: a row picker that drew this frame keeps its pin and gets its hover
+    /// committed; otherwise every highlight is cleared, as before.</summary>
+    private void KeepOrClearColorHighlights(bool pickerDrew)
+    {
+        if (!pickerDrew) { ClearColorHighlights(); return; }
+        var now = RowHighlightClock.NowMs();
+        ColorTableEditor.Highlighter?.RenewPin(now);
+        ColorTableEditor.CommitRowHover(now, config.PluginEnabled, compositor.CompositeBusy);
     }
 
     /// <summary>Every colour highlight off: the gear Glow, the skin Glow, and any row hover.</summary>
@@ -1371,37 +1383,38 @@ public class StatusWindow : Window
                                      + "folder — its colour rows cannot be narrowed", entry.ModDirectory, mtrlRel);
                 else
                 {
-                    // The material names its index by game path; Penumbra says which file that is now.
                     var mtrlBytes = File.ReadAllBytes(mtrlPath);
                     var slots = TextureLoader.ParseMtrlBytes(mtrlBytes);
+                    // A missing index is only meaningful when the parse got as far as the samplers: a material that
+                    // failed to parse also reports no index, and must not be read as "no sampler".
                     if (!slots.Parsed)
-                        // The parser is fail-open: only Parsed separates "no index" from "unreadable", and a wrong row filter dims the working row.
-                        Plugin.Log.Warning("[Proteus] content: could not read material {0} of {1} — its colour "
-                                         + "rows cannot be narrowed", mtrlRel, entry.ModDirectory);
+                        Plugin.Log.Warning("[Proteus] content: could not parse material {0} in {1}, so the colour grid "
+                                         + "cannot tell which rows it uses", mtrlRel, entry.ModDirectory);
                     else if (!slots.HasColorTable)
-                        // No rows exist, and PatchColorTable discards whatever the grid writes. The material is published
-                        // byte-for-byte, so a hair-shader piece keeps its shader and goes on following the character's hair.
+                    {
+                        // No rows to edit. A piece left on the hair shader keeps it on purpose: it follows the hair colour.
+                        var shader = TextureLoader.GetMtrlInfo(mtrlBytes).shader;
                         result = new ContentIndex(null, null,
-                            string.Equals(TextureLoader.GetMtrlInfo(mtrlBytes).shader, HairShader,
-                                          StringComparison.OrdinalIgnoreCase)
+                            string.Equals(shader, HairShader, StringComparison.OrdinalIgnoreCase)
                                 ? ContentIndexState.FollowsHairColor
                                 : ContentIndexState.NoColorTable);
+                    }
                     else if (string.IsNullOrEmpty(slots.Index))
-                        result = new ContentIndex([DefaultContentRow], "A", ContentIndexState.NoSampler);
+                        result = new ContentIndex(new HashSet<int> { DefaultContentRow }, "A", ContentIndexState.NoSampler);
                     else
                     {
-                        var disk = ResolveContentTexture(entry, modRoot, slots.Index);
-                        if (disk != null && textureLoader.LoadTexAsRgba(disk) is { } tex)
+                        // Asked through Penumbra, since the selected option may swap the index texture itself.
+                        var indexPath = ResolveContentTexture(entry, modRoot, slots.Index);
+                        if (indexPath != null && textureLoader.LoadTexAsRgba(indexPath) is { } decoded)
                         {
-                            result = ScanContentIndex(tex.rgba);
-                            // A compressed index still narrows the grid but is flagged: a lossy codec can move a row selector across a bucket.
-                            if (result.State == ContentIndexState.Scanned
-                                && TextureLoader.IsUncompressed(disk) == false)
+                            result = ScanContentIndex(decoded.rgba);
+                            // A compressed index can blur a texel into the next row: still used, but flagged.
+                            if (result.State == ContentIndexState.Scanned && TextureLoader.IsUncompressed(indexPath) == false)
                                 result = result with { State = ContentIndexState.Compressed };
                         }
                         else
-                            Plugin.Log.Warning("[Proteus] content: {0} names index texture {1}, which could not "
-                                             + "be resolved or decoded", entry.ModDirectory, slots.Index);
+                            Plugin.Log.Warning("[Proteus] content: {0}'s index texture {1} was not found or could not be "
+                                             + "read, so its colour rows cannot be narrowed", entry.ModDirectory, slots.Index);
                     }
 
                     // Recorded whatever the index said: the glow warning and the physical values are separate questions.

@@ -62,8 +62,20 @@ public sealed class ShaderUpgradeWatcher : IDisposable
         bool Enabled = false, bool Busy = false, string Waiting = "none", bool AwaitingRedraw = false,
         string MaskGloss = "inverse-specular",
         IReadOnlyList<UpgradedEntry>? Upgraded = null, IReadOnlyList<LeftEntry>? Left = null,
-        int MemoHits = 0, int Decodes = 0, RunInfo? LastRun = null)
+        int MemoHits = 0, int Decodes = 0, RunInfo? LastRun = null, RunInfo? LastUndo = null)
     {
+        /// <summary>
+        /// The undo whose result the panel shows: kept across the automatic walks after it (the undo's own redraw starts
+        /// one at once), so its refusals — a row matcap holding a file — stay readable; replaced by the next undo, and
+        /// cleared by "Upgrade what I'm wearing now".
+        /// </summary>
+        public static RunInfo? NextUndo(RunInfo? previous, RunInfo run) => run.Kind switch
+        {
+            "undo-worn" => run,
+            "upgrade-now" => null,
+            _ => previous,
+        };
+
         public IReadOnlyList<UpgradedEntry> UpgradedList => Upgraded ?? [];
         public IReadOnlyList<LeftEntry> LeftList => Left ?? [];
     }
@@ -154,6 +166,7 @@ public sealed class ShaderUpgradeWatcher : IDisposable
         LeftReason.UnsupportedPlacement => "unsupported-placement",
         LeftReason.ProteusPack => "proteus-pack",
         LeftReason.Declined => "declined",
+        LeftReason.RowMatcap => "row-matcap",
         _ => "write-failed",
     };
 
@@ -323,8 +336,10 @@ public sealed class ShaderUpgradeWatcher : IDisposable
         if (worn == null || stopped)
         {
             if (kind != RunKind.Upgrade)
-                current = current with { LastRun = new RunInfo(KindName(kind), 0, 0, 0, 0, 0, false, false, DateTime.UtcNow,
-                                                               Strings.Settings.GearShadersWaiting) };
+            {
+                var waited = new RunInfo(KindName(kind), 0, 0, 0, 0, 0, false, false, DateTime.UtcNow, Strings.Settings.GearShadersWaiting);
+                current = current with { LastRun = waited, LastUndo = View.NextUndo(current.LastUndo, waited) };
+            }
             return;
         }
 
@@ -513,7 +528,7 @@ public sealed class ShaderUpgradeWatcher : IDisposable
         current = new View(
             Waiting: "none", AwaitingRedraw: awaiting, MaskGloss: GlossName(gloss), Upgraded: upgraded,
             Left: left.Select(l => new LeftEntry(l.GamePath, l.Source, ReasonName(l.Reason))).ToList(),
-            MemoHits: memoHits, Decodes: decodes, LastRun: run);
+            MemoHits: memoHits, Decodes: decodes, LastRun: run, LastUndo: View.NextUndo(current.LastUndo, run));
     }
 
     // ── harness and settings ────────────────────────────────────────────────
