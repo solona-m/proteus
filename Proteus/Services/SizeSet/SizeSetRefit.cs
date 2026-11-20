@@ -48,9 +48,10 @@ internal static partial class SizeSetRefit
     /// <param name="Across">What a women's piece's men's versions read from the player's collection (see
     /// <c>SizeSetRefit.CrossSex.cs</c>), asked for on the framework thread; null makes none, whatever is ticked.</param>
     /// <param name="MadeOn">The body mod's folder the author says the chest and legs were made on, for the sizes the
-    /// automatic reading cannot place (see <c>SizeSetRefit.Source.cs</c>); null reads every size automatically. A shoe's
-    /// or glove's own sizes never read it; a skinless women's one made a men's is read there first, when its cloth sits
-    /// on it (see <c>SizeSetRefit.CrossSexEnds.cs</c>).</param>
+    /// automatic reading cannot place (see <c>SizeSetRefit.Source.cs</c>); null reads every size automatically. A shoe
+    /// with no skin at all has its own sizes read on it, by where its shaft sits on that body's legs, else by their option
+    /// names (see <c>SizeSetRefit.MadeOnEnds.cs</c>); a glove's, and any shoe with skin, never read it. A skinless women's
+    /// shoe or glove made a men's is read there first, when its cloth sits on it (see <c>SizeSetRefit.CrossSexEnds.cs</c>).</param>
     /// <param name="KeepHiddenSkin">Chest and legs keep each new body's skin whole where the author deleted theirs
     /// (<see cref="BodyRetarget.Plan"/>'s cutHidden off — the Studio's "Remove hidden skin" rule, own-sex sizes and men's
     /// versions alike). A slot the piece only reaches onto, and every shoe and glove, are cut whatever this says:

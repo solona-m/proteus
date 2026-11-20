@@ -89,6 +89,7 @@ public class SuiteBudgetTests
         ("EquinoxSizeSetLocalTests", "EquinoxRun", 129),
         ("CrossSexGloveReshapeLocalTests", "HalonesMensSizeSet", 33),
         ("UvTransferMapsLocalTests", "TbseBakeFixture", 32),
+        ("SizeSetMadeOnBootsLocalTests", "OopsBootsRun", 120),   // born Diagnostic, 2026-11-20
     };
 
     /// <summary>The heaviest methods (slowest row ≥ 300 s in the 2026-11-18 full run); any one alone would break the budget.</summary>

@@ -45,6 +45,9 @@ internal static class SizeSetBatchData
     /// <summary>Tutting (KAN-6): its "Pant Size" Small/Medium/Large are loose sweatpants with no skin at all, made on
     /// Bibo+; its "Top Size" is read automatically.</summary>
     internal const string DancePack = LocalData.ModPacks + ":Dance - by Solona.pmp";
+    /// <summary>Oops I Did It Again as it shipped, v3: its "Boot Size" Small/Medium/Large are Wild Rose boots with no skin
+    /// at all, made on Bibo+ (not the "[Chaele]" add-on pack of the same name).</summary>
+    internal const string OopsPack = LocalData.ModPacks + ":Oops I Did It Again - by Solona.pmp";
 
     /// <summary>A pack unpacked into a work folder of its own.</summary>
     internal static string UnpackedPack(string pack)
