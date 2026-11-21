@@ -202,6 +202,20 @@ public class CacheMemoryPolicyTests
             "public static PhysicalMemoryStatus? Read()", "internal static long Saturate(");
         Assert.Contains("new PhysicalMemoryStatus(Saturate(s.ullTotalPhys), Saturate(s.ullAvailPhys), Saturate(s.ullAvailPageFile))", read);
     }
+
+    [Fact]
+    [Trait("Plan", "EDGE-cache-memory-1")]
+    [Trait("Plan", "EDGE-cache-memory-34")]
+    public void PhysicalMemory_LiveReadSucceeds()
+    {
+        // A wrong struct layout or dwLength makes the call fail, and the cap would silently never apply.
+        var s = PhysicalMemory.Read();
+        Assert.NotNull(s);
+        Assert.True(s!.Value.TotalPhysBytes > 0);
+        Assert.InRange(s.Value.AvailPhysBytes, 1, s.Value.TotalPhysBytes);
+        Assert.True(s.Value.AvailCommitBytes > 0);
+        Assert.Equal(Math.Min(s.Value.AvailPhysBytes, s.Value.AvailCommitBytes), s.Value.FreeBytes);
+    }
 }
 
 public class CacheMemoryDecodeCapTests
@@ -389,6 +403,25 @@ public class CacheMemoryDecodeCapTests
         m.Index++; m.Committed = 4 * E; m.Heap = 4 * E;
         loader.RefreshMemoryBudget();
         Assert.Equal(before, loader.EffectiveDecodeCacheBudgetBytes);
+        // A later GC frees other space it keeps committed: the added count was reset at the new index, so that
+        // unused space counts in full (without the reset the stale 4 E would cancel it).
+        m.Index++; m.Committed = 8 * E; m.Heap = 4 * E;
+        loader.RefreshMemoryBudget();
+        Assert.Equal(before + 2 * E, loader.EffectiveDecodeCacheBudgetBytes);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-cache-memory-31")]
+    [Trait("Plan", "EDGE-cache-memory-6")]
+    public void FirstRefreshSkipsHysteresis_LaterRefreshesKeepIt()
+    {
+        var m = new CacheMemoryFixtures.FakeMachine { Free = 2 * 2098 * MiB };   // target 2098 MiB, mid-range
+        var loader = CacheMemoryFixtures.Loader(m.Seams(DecodeCacheMemoryPolicy.FloorBytes, DecodeCacheMemoryPolicy.QuantumBytes));
+        loader.DecodeCacheBudgetBytes = 2148 * MiB;   // from the 2048 MiB field default: a 50 MiB move, under a quantum
+        Assert.Equal(2098 * MiB, loader.EffectiveDecodeCacheBudgetBytes);
+        m.Free = 2 * 1998 * MiB;   // a 100 MiB drop, still mid-range: held by the hysteresis
+        loader.RefreshMemoryBudget();
+        Assert.Equal(2098 * MiB, loader.EffectiveDecodeCacheBudgetBytes);
     }
 
     [Fact]
@@ -702,11 +735,14 @@ public class CacheMemoryStandoffTests
     [Trait("Plan", "EDGE-cache-memory-23")]
     public void SameInputs_OneKey()
     {
-        var strap = Plane(255);
+        // The diffuse and normal passes at one size: distinct strap arrays with equal content give one key.
+        var strapD = Plane(255);
+        strapD[77] = 3;
+        var strapN = (byte[])strapD.Clone();
         IReadOnlySet<string>? none = null;
-        string K() => CompositorService.BustStandoffKey("Mod", Size, 3, 1f, ["body|1"],
+        string K(byte[] strap) => CompositorService.BustStandoffKey("Mod", Size, 3, 1f, ["body|1"],
             BodyBridge.BustStandoffCoverageMark(strap, Size, Size), [none]);
-        Assert.Equal(K(), K());
+        Assert.Equal(K(strapD), K(strapN));
     }
 }
 
