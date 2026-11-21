@@ -753,6 +753,51 @@ internal static partial class BodyBridge
     }
 
     /// <summary>
+    /// What <see cref="BustStandoffMap"/> reads of a coverage plane, as a cache-key mark: "-" exactly when the map ignores
+    /// coverage, else a hash of which texels are at or above <see cref="CoverageFloor"/> (16 hex digits). Keep in step
+    /// with BustStandoffMap's <c>covered</c> test. An opacity change that crosses no floor gives the same mark.
+    /// <para/>
+    /// Allocation-free but for the per-chunk parts: the thresholded bits are packed 64 to a word on the fly, hashed in
+    /// fixed chunks in parallel and folded in chunk order, so the thread count never changes the answer.
+    /// </summary>
+    internal static string BustStandoffCoverageMark(byte[]? coverage, int covW, int covH)
+        => BustStandoffCoverageMark(coverage, covW, covH, -1);
+
+    /// <summary><see cref="BustStandoffCoverageMark(byte[], int, int)"/> with a cap on parallelism (-1: none), for tests.</summary>
+    internal static string BustStandoffCoverageMark(byte[]? coverage, int covW, int covH, int maxParallelism)
+    {
+        if (coverage == null || covW <= 0 || covH <= 0 || coverage.Length < (long)covW * covH) return "-";
+        const int Chunk = 4 << 20;   // texels; a multiple of 64
+        const ulong P1 = 0x9E3779B185EBCA87ul, P2 = 0xC2B2AE3D27D4EB4Ful, P3 = 0x165667B19E3779F9ul;
+        int n = covW * covH;
+        int chunks = Math.Max(1, (n + Chunk - 1) / Chunk);
+        var parts = new ulong[chunks];
+        System.Threading.Tasks.Parallel.For(0, chunks,
+            new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = maxParallelism }, c =>
+        {
+            int from = c * Chunk, to = Math.Min(n, from + Chunk);
+            ulong h = P3 ^ (ulong)c;
+            for (int i = from; i < to; i += 64)
+            {
+                ulong word = 0;
+                int end = Math.Min(to, i + 64);
+                for (int j = i; j < end; j++)
+                    if (coverage[j] >= CoverageFloor) word |= 1ul << (j - i);
+                h = System.Numerics.BitOperations.RotateLeft(h ^ (word * P2), 31) * P1;
+            }
+            parts[c] = h ^ (ulong)(to - from);
+        });
+        ulong acc = (ulong)n * P1;
+        foreach (var p in parts)
+        {
+            acc ^= p;
+            acc = System.Numerics.BitOperations.RotateLeft(acc, 27) * P1 + P2;
+        }
+        acc ^= acc >> 33; acc *= P2; acc ^= acc >> 29;
+        return acc.ToString("x16");
+    }
+
+    /// <summary>
     /// How far a bridged shell stands off the skin, as a body-UV map: 0 where the cloth lies on the body, 255 where it
     /// has lifted <paramref name="fullAt"/> or more. Null when this body has no bust bones, nothing is covered, or the
     /// bridge would not fire. The skin bake runs before the shell and must not dent the skin under a spanned

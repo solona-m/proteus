@@ -892,11 +892,14 @@ public sealed partial class SecondSkinService
     }
 
     /// <summary>
-    /// Remapped buffers for the composite in flight, keyed by every input the result depends on. Cleared at the top
-    /// of <see cref="Build"/>. Consumers clone before mutating. Concurrent because builds overlap on this instance.
+    /// Remapped buffers for the composite in flight, keyed by every input the result depends on. Cleared at each
+    /// build's start and when the last overlapping build leaves (<see cref="Build"/>'s scope), so a build's buffers
+    /// never outlive it. Consumers clone before mutating. Concurrent because builds overlap on this instance.
+    /// RemapPath/LoadRemapped must only be called inside Build's scope; an out-of-scope caller would leave entries
+    /// behind (AC-cache-memory-8).
     /// </summary>
     // The filter is part of the key: an index map and a mask can be the same file.
-    private readonly ConcurrentDictionary<(string Path, string? Src, string? Dst, int W, int H, ResampleFilter F), byte[]?> remapCache = new();
+    private readonly BuildScopedMemo<(string Path, string? Src, string? Dst, int W, int H, ResampleFilter F), byte[]?> remapCache = new();
 
     /// <summary>Men's routes this build found unavailable and said so; logged once per build each. Cleared with <see cref="remapCache"/>.</summary>
     private readonly ConcurrentDictionary<MensRoute, byte> mensRoutesLogged = new();
@@ -1162,8 +1165,12 @@ public sealed partial class SecondSkinService
             WearerIsMan = wearerIsMan, MenMapsReady = menMapsReady, MenAllowed = menAllowed, ToeCaps = toeCaps,
             SettingsReader = settingsOf,
         };
-        try { return build.Run(); }
-        finally { writes = build.WriteFailures(); }
+        // The last build out empties the remap memo, on every path (an abandoned or throwing build included).
+        using (remapCache.Enter())
+        {
+            try { return build.Run(); }
+            finally { writes = build.WriteFailures(); }
+        }
     }
 
     /// <summary>

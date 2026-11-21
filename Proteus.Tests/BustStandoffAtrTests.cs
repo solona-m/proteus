@@ -20,7 +20,7 @@ public class BustStandoffAtrTests
     private const int Size = 256;
 
     /// <summary>One chest (small) drawn; with <paramref name="withLarge"/>, a fuller one beside it on atrx_c_large.</summary>
-    private static byte[] Chests(bool withLarge)
+    internal static byte[] Chests(bool withLarge)
     {
         var small = SyntheticChest.Surface(0f, 0f);
         var pos = small.Pos.ToList(); var nrm = small.Nrm.ToList(); var uv = small.Uv.ToList();
@@ -133,21 +133,24 @@ public class BustStandoffAtrTests
     [Fact]
     [Trait("Plan", "AC-issue-sweep-b-1")]
     [Trait("Plan", "EDGE-issue-sweep-b-5")]
+    [Trait("Plan", "EDGE-cache-memory-15")]
     public void Cache_evicts_only_hidden_siblings()
     {
         IReadOnlySet<string>? Off(string a) => new HashSet<string> { a };
-        string Key(string ids, int w, IReadOnlySet<string>? h, int radius = 2, float strength = 1f)
-            => CompositorService.BustStandoffKey("Bralettes", w, radius, strength, [ids], [h]);
-        var cache = new ConcurrentDictionary<string, byte[]?>(StringComparer.Ordinal);
+        string Key(string ids, int w, IReadOnlySet<string>? h, int radius = 2, float strength = 1f, string cov = "-")
+            => CompositorService.BustStandoffKey("Bralettes", w, radius, strength, [ids], cov, [h]);
+        var cache = new AoBlurCache();
         string small = Key("nirae|1|2", 512, Off("atrx_c_large")), large = Key("nirae|1|2", 512, Off("atrx_c_small"));
         string otherIds = Key("rue|1|2", 512, Off("atrx_c_large")), otherSize = Key("nirae|1|2", 1024, Off("atrx_c_large"));
         Assert.NotEqual(small, large);
         string otherRadius = Key("nirae|1|2", 512, Off("atrx_c_large"), radius: 3);
         string otherStrength = Key("nirae|1|2", 512, Off("atrx_c_large"), strength: 0.5f);
-        foreach (var k in new[] { small, otherIds, otherSize, otherRadius, otherStrength }) cache[k] = [1];
+        string otherCoverage = Key("nirae|1|2", 512, Off("atrx_c_large"), cov: "0123456789abcdef");
+        foreach (var k in new[] { small, otherIds, otherSize, otherRadius, otherStrength, otherCoverage }) cache.Put(k, [1]);
         CompositorService.EvictSiblings(cache, large);
-        Assert.False(cache.ContainsKey(small));   // the same body, size and radius: replaced
-        foreach (var k in new[] { otherIds, otherSize, otherRadius, otherStrength }) Assert.True(cache.ContainsKey(k));
+        Assert.False(cache.TryGetEntry(small, out _));   // the same body, size, radius and coverage: replaced
+        foreach (var k in new[] { otherIds, otherSize, otherRadius, otherStrength, otherCoverage })
+            Assert.True(cache.TryGetEntry(k, out _));
     }
 
     [Fact]
@@ -163,7 +166,7 @@ public class BustStandoffAtrTests
         int gate2 = body.IndexOf("if (strength <= 0f) return null;", StringComparison.Ordinal);
         int hidden = body.IndexOf("StandoffHiddenList(models, sources, settingsOf)", StringComparison.Ordinal);
         Assert.True(gate1 > 0 && gate2 > gate1 && hidden > gate2, "the hidden list is worked out only past the gates");
-        Assert.Contains("ConcurrentDictionary<string, byte[]?> _bustStandoff", blend);
+        Assert.Contains("AoBlurCache _bustStandoff", blend);
         Assert.Contains("ms, ", body);
         var occ = Source("Services/CompositorService.OcclusionPass.cs");
         Assert.Equal(2, occ.Split("BustStandoff(modDir, bodyMdls, bodySources, material.run.RunModSettings").Length - 1);
