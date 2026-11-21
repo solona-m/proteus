@@ -65,6 +65,13 @@ public sealed partial class SecondSkinService
         && !IsInsideOutputRoot(sourceDisk, outputRoot)
         && !LiveBrushPreview.IsPreviewFile(sourceDisk, outputRoot);
 
+    /// <summary>
+    /// The mod file a kept copy refreshed from <paramref name="keptSrc"/> names, as the shell's length-checked read will
+    /// see it once the copy is rewritten: the source when its length is the fresh bytes', else none.
+    /// </summary>
+    internal static string? FreshKeptModFile(string? keptSrc, long freshLength)
+        => StampOf(keptSrc) is { } s && s.Length == freshLength ? keptSrc : null;
+
     /// <summary>Whether bytes read as a model to the parser the smoothing pass itself uses.</summary>
     internal static bool ParsesAsModel(byte[] bytes)
     {
@@ -94,7 +101,7 @@ public sealed partial class SecondSkinService
         var src = sourceDisk!;
         SourceStamp? now;
         try { now = stat(src); }
-        catch (Exception) { return default; }
+        catch (Exception ex) when (IsIoFailure(ex)) { return default; }
         if (now == null || now == recorded) return default;
 
         byte[]? bytes;
@@ -104,7 +111,7 @@ public sealed partial class SecondSkinService
             bytes = read(src);
             after = stat(src);
         }
-        catch (Exception) { return default; }
+        catch (Exception ex) when (IsIoFailure(ex)) { return default; }
         if (bytes == null || after != now) return default;
         if (!ParsesAsModel(bytes)) return new(null, now, Rejected: true);
         if (bytes.AsSpan().SequenceEqual(current)) return new(null, now);
@@ -118,10 +125,11 @@ public sealed partial class SecondSkinService
     internal static string? KeptSourceOf(string outputRoot, string gamePath, string? modsRoot)
     {
         var kept = UpstreamKeptPath(outputRoot, gamePath);
-        try { if (!File.Exists(kept)) return null; }
-        catch (Exception) { return null; }
-        return ShellBodyAtr.ReadSourcePath(kept, modsRoot);
+        return File.Exists(kept) ? ShellBodyAtr.ReadSourcePath(kept, modsRoot) : null;
     }
+
+    private static bool IsIoFailure(Exception ex)
+        => ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException;
 
     /// <summary>
     /// The identity (path, length, write time) of the mod file a republished part's upstream came from: the remembered
@@ -268,12 +276,13 @@ public sealed partial class SecondSkinService
                 byte[]? keptBytes = null;
                 try { keptBytes = File.ReadAllBytes(kept); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+                var keptSrc = keptBytes != null ? ShellBodyAtr.ReadSourcePath(kept, modsRoot) : null;
                 if (keptBytes != null
-                    && RefreshUpstream(keptBytes, ShellBodyAtr.ReadSourcePath(kept, modsRoot), null, gamePath, outputRoot,
-                                       StampOf, SafeReadFile).Fresh is { } freshKept)
-                    // The file the copy came from changed: read as the shell will, under the remembered-bytes identity.
+                    && RefreshUpstream(keptBytes, keptSrc, null, gamePath, outputRoot, StampOf, SafeReadFile).Fresh is { } freshKept)
+                    // The file the copy came from changed: read as the shell will, under the remembered-bytes identity, and
+                    // named by that file — the shell's length check matches the refreshed copy, so both phases name it (#56).
                     return new(BodySourceKind.Kept, kept, BodySourceId(BodySourceKind.Remembered, null, freshKept, gamePath),
-                               () => RememberedLoad(freshKept), SourceModFile(kind, kept, null, keptRecord), gamePath);
+                               () => RememberedLoad(freshKept), FreshKeptModFile(keptSrc, freshKept.Length), gamePath);
                 return new(kind, kept, BodySourceId(kind, kept, null, gamePath), () =>
                 {
                     try { return File.ReadAllBytes(kept); }

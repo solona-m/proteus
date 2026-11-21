@@ -468,6 +468,35 @@ public class SmoothFollowsEditsTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-smooth-follows-edits-19")]
+    public void Rejected_source_warns_once_per_change()
+    {
+        var service = (SecondSkinService)RuntimeHelpers.GetUninitializedObject(typeof(SecondSkinService));
+        InitStamps(service);
+        var first = new Stamp(10, 1);
+        Assert.True(service.FirstRejection(Skirt, first));
+        Assert.False(service.FirstRejection(Skirt, first));            // the same bad file: quiet
+        Assert.True(service.FirstRejection(Skirt, new Stamp(12, 2)));  // changed, still bad: warned again
+        Assert.True(service.FirstRejection(BareTop, first));           // another path is its own
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-smooth-follows-edits-4")]
+    [Trait("Plan", "EDGE-smooth-follows-edits-8")]
+    public void Seam_map_names_the_refreshed_kept_source_like_the_shell()
+    {
+        // The edit changed the file's length: the shell's length check against the rewritten copy names the file, so the
+        // seam map's fresh Kept read must name it too (#56) — not the old copy's length-checked record, which is null.
+        var b = Garment(4);
+        File.WriteAllBytes(SkirtFile, b);
+        Assert.Equal(SkirtFile, SecondSkinService.FreshKeptModFile(SkirtFile, b.Length));
+        Assert.Null(SecondSkinService.FreshKeptModFile(SkirtFile, b.Length + 1));   // moved again since: no claim
+        Assert.Null(SecondSkinService.FreshKeptModFile(null, b.Length));
+        var seam = Method(Source("Services/SecondSkinService.BodySource.cs"), "internal BodySource BodySourceFor(");
+        Assert.Contains("FreshKeptModFile(keptSrc, freshKept.Length)", seam);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-smooth-follows-edits-22")]
     public void Upstream_disks_follow_a_mod_move()
     {
