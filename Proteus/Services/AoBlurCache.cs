@@ -15,32 +15,50 @@ namespace Proteus.Services;
 /// Bounded by bytes, least-recently-used out. An entry is one byte per texel — 16 MB at 4K — so the default
 /// budget holds a few dozen garments' worth, which is more materials × mods than one look has. Entries are
 /// handed out SHARED: callers read them and never write, exactly as they already treated the fresh blur.
+/// <para/>
+/// Two caches use it: the AO blur above, and the bust standoff maps (CompositorService.BustStandoff), which may cache
+/// "no map" as a null entry. Both are dropped after a few idle minutes (<see cref="ReleaseIfIdle(TimeSpan)"/>).
 /// </summary>
 internal sealed class AoBlurCache
 {
+    /// <summary>What a null entry is charged, so "no map" entries count against the budget too.</summary>
+    internal const int NullEntryCost = 1024;
+
     private readonly object gate = new();
-    private readonly Dictionary<string, (byte[] Plane, long Access)> entries = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (byte[]? Plane, long Access)> entries = new(StringComparer.Ordinal);
     private long clock, bytes;
+    private long lastTouch;   // stamped on every get and put; an untouched cache is empty, so nothing to release
 
     public long BudgetBytes { get; init; } = 512L << 20;
 
-    public byte[]? TryGet(string key)
+    /// <summary>Milliseconds, for idle tracking; the tick count by default, a fake in tests.</summary>
+    internal Func<long> Clock { get; init; } = static () => Environment.TickCount64;
+
+    private static long Cost(byte[]? plane) => plane?.Length ?? NullEntryCost;
+
+    public byte[]? TryGet(string key) => TryGetEntry(key, out var plane) ? plane : null;
+
+    /// <summary>True when <paramref name="key"/> is cached, null entries included.</summary>
+    public bool TryGetEntry(string key, out byte[]? plane)
     {
         lock (gate)
         {
-            if (!entries.TryGetValue(key, out var e)) return null;
+            lastTouch = Clock();
+            if (!entries.TryGetValue(key, out var e)) { plane = null; return false; }
             entries[key] = (e.Plane, ++clock);
-            return e.Plane;
+            plane = e.Plane;
+            return true;
         }
     }
 
-    public void Put(string key, byte[] plane)
+    public void Put(string key, byte[]? plane)
     {
         lock (gate)
         {
-            if (entries.TryGetValue(key, out var old)) bytes -= old.Plane.Length;
+            lastTouch = Clock();
+            if (entries.TryGetValue(key, out var old)) bytes -= Cost(old.Plane);
             entries[key] = (plane, ++clock);
-            bytes += plane.Length;
+            bytes += Cost(plane);
             while (bytes > BudgetBytes && entries.Count > 1)
             {
                 string? victim = null;
@@ -48,11 +66,47 @@ internal sealed class AoBlurCache
                 foreach (var (k, v) in entries)
                     if (v.Access < oldest) { oldest = v.Access; victim = k; }
                 if (victim == null) break;
-                bytes -= entries[victim].Plane.Length;
+                bytes -= Cost(entries[victim].Plane);
                 entries.Remove(victim);
             }
         }
     }
+
+    /// <summary>Remove every entry whose key matches; returns how many went.</summary>
+    public int RemoveWhere(Func<string, bool> match)
+    {
+        lock (gate)
+        {
+            var doomed = new List<string>();
+            foreach (var k in entries.Keys)
+                if (match(k)) doomed.Add(k);
+            foreach (var k in doomed)
+            {
+                bytes -= Cost(entries[k].Plane);
+                entries.Remove(k);
+            }
+            return doomed.Count;
+        }
+    }
+
+    /// <summary>Drop everything when nothing has touched the cache for <paramref name="idle"/>; returns how many went.</summary>
+    public int ReleaseIfIdle(TimeSpan idle) => ReleaseIfIdle(idle, Clock());
+
+    internal int ReleaseIfIdle(TimeSpan idle, long nowMs)
+    {
+        lock (gate)
+        {
+            if (entries.Count == 0 || nowMs - lastTouch < idle.TotalMilliseconds) return 0;
+            int n = entries.Count;
+            entries.Clear();
+            bytes = 0;
+            return n;
+        }
+    }
+
+    public int Count { get { lock (gate) return entries.Count; } }
+
+    public long Bytes { get { lock (gate) return bytes; } }
 
     public int Clear()
     {

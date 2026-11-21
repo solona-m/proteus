@@ -558,7 +558,8 @@ public partial class CompositorService : IDisposable
         Plugin.Framework.Update += OnBootPoll;
         Plugin.Framework.Update += OnRedrawHoldPoll;
 
-        // The decode cache is only trimmed when over budget, so release it on an idle timer (30s cadence, any thread).
+        // The decode cache is only trimmed when over budget, so release it on an idle timer (30s cadence, any thread),
+        // with the AO blur and bust standoff caches beside it.
         idleCacheTimer = new Timer(_ =>
         {
             try
@@ -566,8 +567,15 @@ public partial class CompositorService : IDisposable
                 Io?.MaybeSummarise();   // a quiet tail of counts is written within a minute too
                 int dropped = textureLoader.ReleaseIfIdle(DecodeCacheIdleRelease);
                 if (dropped > 0)
-                    log.Debug("[Proteus] decode cache: released {0} entries after {1:F0}s idle",
-                              dropped, DecodeCacheIdleRelease.TotalSeconds);
+                    log.Debug("[Proteus] decode cache: released {0} entries after {1:F0}s idle ({2})",
+                              dropped, DecodeCacheIdleRelease.TotalSeconds, MemoryFootprint.Describe());
+                // Free memory moves while the game sits idle (other apps), so the cap follows it between composites too.
+                textureLoader.RefreshMemoryBudget();
+                int aoDropped = aoBlurCache.ReleaseIfIdle(DecodeCacheIdleRelease);
+                int standoffDropped = _bustStandoff.ReleaseIfIdle(DecodeCacheIdleRelease);
+                if (aoDropped > 0 || standoffDropped > 0)
+                    log.Debug("[Proteus] AO caches: released {0} blur and {1} bust standoff entries after {2:F0}s idle ({3})",
+                              aoDropped, standoffDropped, DecodeCacheIdleRelease.TotalSeconds, MemoryFootprint.Describe());
             }
             catch (Exception ex) { log.Warning(ex, "[Proteus] decode cache idle release failed"); }
         }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));

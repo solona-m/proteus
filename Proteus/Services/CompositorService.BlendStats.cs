@@ -75,8 +75,13 @@ public partial class CompositorService
     /// <summary>
     /// Where a bridged garment has lifted clear of the bust, as a body-UV suppression map for the skindent
     /// (<see cref="BodyBridge.BustStandoffMap"/>). Null for a mod with no bust bridge. Blurred by the indent's own radius,
-    /// since the raw map's edge follows the triangulation. Cached by mod, body model identity, size and radius; the
-    /// garment silhouette is deliberately not in the key.
+    /// since the raw map's edge follows the triangulation. Cached by mod, body model identity, size, radius, strength,
+    /// the garment's thresholded coverage, then the hidden sets, in a bounded cache dropped after a few idle minutes.
+    /// <para/>
+    /// The coverage was once left out on purpose (hashing a 4K buffer per mod per material was judged not worth it for
+    /// a coarse gate), but the map's solve does read it — which vertices are covered — so a mask or option change on the
+    /// same mod was served a stale map. Only what the solve reads is keyed (<see cref="BodyBridge.BustStandoffCoverageMark"/>:
+    /// texels at or above the coverage floor), so an opacity-only edit still hits.
     /// </summary>
     /// <param name="sources">Each model's body source (<see cref="SecondSkinService.BodySourceFor"/>), parallel to
     /// <paramref name="models"/>: which body mod it comes from, so its option-switched chests are left out (#55).</param>
@@ -95,8 +100,9 @@ public partial class CompositorService
 
         // Only past the gates: a mod without a bust bridge never reads settings.
         var hidden = StandoffHiddenList(models, sources, settingsOf);
-        var key = BustStandoffKey(modDir, w, radius, strength, models.Select(m => m.Id), hidden);
-        if (_bustStandoff.TryGetValue(key, out var hit)) return hit;
+        var key = BustStandoffKey(modDir, w, radius, strength, models.Select(m => m.Id),
+                                  BodyBridge.BustStandoffCoverageMark(coverage, w, h), hidden);
+        if (_bustStandoff.TryGetEntry(key, out var hit)) return hit;
 
         // The bodies actually loaded, each with its hidden set.
         var bodies = new List<byte[]>(models.Count);
@@ -120,7 +126,7 @@ public partial class CompositorService
             map = BlurCoverage(map, w, h, radius, iterations: 1);
         }
         EvictSiblings(_bustStandoff, key);
-        _bustStandoff[key] = map;
+        _bustStandoff.Put(key, map);
         log.Debug("[Proteus] bust standoff: {0} for {1} at {2}, feathered by {3} ({4} body model(s), {5} ms, "
                 + "hidden [{6}])", map == null ? "no map" : "built", modDir, w, radius, bodies.Count, solveMs,
                   string.Join("; ", hidden.Select(ShellBodyAtr.Key)));
@@ -191,23 +197,26 @@ public partial class CompositorService
     internal static string? StandoffBodyKey(string? bodyModFolder, string part, ushort? race)
         => bodyModFolder == null ? null : $"{bodyModFolder.ToLowerInvariant()}|{part}|{race}";
 
-    /// <summary>The standoff's cache key: mod, size, radius, strength, the body models — then the hidden sets, last.</summary>
+    /// <summary>The standoff's cache key: mod, size, radius, strength, the body models, the coverage mark — then the
+    /// hidden sets, last.</summary>
     internal static string BustStandoffKey(string modDir, int w, int radius, float strength, IEnumerable<string> ids,
-                                           IReadOnlyList<IReadOnlySet<string>?> hidden)
-        => $"{modDir}\0{w}\0{radius}\0{strength}\0{string.Join("|", ids)}{HiddenMark}{string.Join(";", hidden.Select(ShellBodyAtr.Key))}";
+                                           string coverageMark, IReadOnlyList<IReadOnlySet<string>?> hidden)
+        => $"{modDir}\0{w}\0{radius}\0{strength}\0{string.Join("|", ids)}\0cov={coverageMark}{HiddenMark}{string.Join(";", hidden.Select(ShellBodyAtr.Key))}";
 
     private const string HiddenMark = "\0hidden=";
 
     /// <summary>Drop the cached maps that differ from <paramref name="key"/> only in their hidden sets: one map per mod,
-    /// body, size and radius, not one per chest ever worn.</summary>
-    internal static void EvictSiblings(System.Collections.Concurrent.ConcurrentDictionary<string, byte[]?> cache, string key)
+    /// body, size, radius and coverage, not one per chest ever worn.</summary>
+    internal static void EvictSiblings(AoBlurCache cache, string key)
     {
         int cut = key.IndexOf(HiddenMark, StringComparison.Ordinal);
         if (cut < 0) return;
         var prefix = key[..(cut + HiddenMark.Length)];
-        foreach (var k in cache.Keys)
-            if (k != key && k.StartsWith(prefix, StringComparison.Ordinal)) cache.TryRemove(k, out _);
+        cache.RemoveWhere(k => k != key && k.StartsWith(prefix, StringComparison.Ordinal));
     }
+
+    /// <summary>The bust standoff cache's ceiling: sixteen 4K maps.</summary>
+    internal const long BustStandoffBudgetBytes = 256L << 20;
 
     /// <summary>The last good hidden set per body mod, part and race (<see cref="StandoffBodyKey"/>).</summary>
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, IReadOnlySet<string>?> _standoffLastHidden =
@@ -219,7 +228,7 @@ public partial class CompositorService
     /// </summary>
     private const float BustStandoffFull = 0.0015f;
 
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte[]?> _bustStandoff = new(StringComparer.Ordinal);
+    private readonly AoBlurCache _bustStandoff = new AoBlurCache { BudgetBytes = BustStandoffBudgetBytes };
 
     /// <summary>
     /// Blur the AO silhouette at half resolution and interpolate back: the halo carries nothing at texel scale.
@@ -405,7 +414,7 @@ public partial class CompositorService
             "maskrelief {43:F0} | maskdiffuse {44:F0} | rest {45:F0}) | " +
             "swizzle {46:F0}ms | encode {60:F0}ms ({61} surface(s)) | " +
             "write {47:F0}ms ({48} files, {49:F0} MB) | composite {50:F0}ms | total {51:F0}ms | " +
-            "{52} material(s) | cache {53} entries, {54:F0} MB, {55} evicted (budget {56:F0} MB) | setup steps: {64}",
+            "{52} material(s) | cache {53} entries, {54:F0} MB, {55} evicted (budget {56}) | setup steps: {64}",
             setupMs, wait.Ms, decode.Calls, hits.Calls, blocked.Calls,
             prefetch.Ms, decode.Ms, nativeD.Calls, decode.Calls, remap.Ms, remap.Calls,
             blendText, blendIslandStats.Ms, blendSeamStats.Ms, blendSeamStats.Calls, aoMs,
@@ -422,8 +431,14 @@ public partial class CompositorService
             swizzle.Ms, write.Ms, write.Calls, write.Bytes / (1024.0 * 1024.0),
             compositeMs, totalMs, materialCount,
             cacheEntries, cacheBytes / (1024.0 * 1024.0), textureLoader.Evictions,
-            textureLoader.DecodeCacheBudgetBytes / (1024.0 * 1024.0),
+            DecodeBudgetText(textureLoader.EffectiveDecodeCacheBudgetBytes, textureLoader.DecodeCacheBudgetBytes,
+                             textureLoader.LastFreeBytes),
             blendGen2Stats.Ms, blendGen2Stats.Calls, blendBlurCacheHits.Calls,
             encode.Ms, encode.Calls, blendMenStats.Ms, blendMenStats.Calls, setupSteps);
     }
+
+    /// <summary>The phases line's budget: what the cache may hold now, what is set, and the free memory behind it.</summary>
+    internal static string DecodeBudgetText(long effective, long configured, long? free)
+        => $"{effective / (1024 * 1024)} MB of {configured / (1024 * 1024)} MB set, "
+         + $"{(free is { } f ? (f / (1024 * 1024)).ToString() : "?")} MB free";
 }

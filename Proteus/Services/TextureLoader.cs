@@ -48,13 +48,19 @@ public class TextureLoader
     /// <summary>Bytes per entry in a material's sampler table: id, flags, texture index, padding.</summary>
     private const int SamplerStride = 12;
 
-    public TextureLoader(IDataManager dataManager, IPluginLog log)
+    public TextureLoader(IDataManager dataManager, IPluginLog log) : this(dataManager, log, DecodeCacheMemorySeams.Live) { }
+
+    /// <summary>The seams are in place before any initializer assigns the budget (which reads them).</summary>
+    internal TextureLoader(IDataManager dataManager, IPluginLog log, DecodeCacheMemorySeams seams)
     {
         this.dataManager = dataManager;
         this.log = log;
+        this.seams = seams;
         EnsureNativeCompressor(log);
         PreloadImageCodec(log);
     }
+
+    private readonly DecodeCacheMemorySeams seams;
 
     /// <summary>
     /// Resolve StbImageSharp now, while the plugin's AssemblyLoadContext is certainly alive, so a composite running
@@ -270,6 +276,7 @@ public class TextureLoader
     {
         // One recomposite = one generation; entries it touches are protected from the trim — see runGeneration.
         Interlocked.Increment(ref runGeneration);
+        RefreshMemoryBudget();   // once per composite: the machine's free memory, never per access
         DecodeStats.Reset();
         DecodeHitStats.Reset();
         DecodeBlockedStats.Reset();
@@ -310,9 +317,10 @@ public class TextureLoader
     private int evictions;
 
     /// <summary>
-    /// Ceiling on decoded bytes held (one 4K RGBA entry is 64 MB). Must exceed a composite's whole working set,
-    /// since the cyclic access pattern defeats LRU. Set from Configuration.DecodeCacheBudgetMb; lowering it
-    /// reclaims immediately.
+    /// The CONFIGURED ceiling on decoded bytes held (one 4K RGBA entry is 64 MB). Must exceed a composite's whole
+    /// working set, since the cyclic access pattern defeats LRU. Set from Configuration.DecodeCacheBudgetMb. The cache
+    /// actually holds <see cref="EffectiveDecodeCacheBudgetBytes"/>: this, unless the machine is short of memory.
+    /// Assigning it re-reads free memory and reclaims at once when the budget went down.
     /// </summary>
     public long DecodeCacheBudgetBytes
     {
@@ -320,12 +328,70 @@ public class TextureLoader
         set
         {
             Volatile.Write(ref decodeCacheBudgetBytes, value);
-            TrimCache();   // no-op when raising (the scan early-outs under budget); reclaims when lowering
+            RefreshMemoryBudget();
         }
     }
 
     // Default until Plugin's constructor pushes the configured value; modest so tests and tooling don't reserve gigabytes.
     private long decodeCacheBudgetBytes = 2048L * 1024 * 1024;
+
+    /// <summary>
+    /// What the cache may hold now: the configured budget, capped by what the machine has free
+    /// (<see cref="DecodeCacheMemoryPolicy"/>). Re-read at each composite start, on the 30 s idle timer and when the
+    /// configured budget changes — never on a cache access, so <see cref="TrimCache"/> stays syscall-free.
+    /// </summary>
+    public long EffectiveDecodeCacheBudgetBytes => Volatile.Read(ref effectiveBudgetBytes);
+
+    private long effectiveBudgetBytes = 2048L * 1024 * 1024;
+
+    /// <summary>The free memory (lesser of physical and commit) the last refresh read; null when unreadable.</summary>
+    public long? LastFreeBytes { get { lock (memoryGate) return lastFreeBytes; } }
+
+    private readonly object memoryGate = new();   // RefreshMemoryBudget only; never taken on the access path
+    private long? lastFreeBytes;
+    private long lastConfigured = long.MinValue;  // sentinel: the first refresh counts as a configured change
+    private int lastGen2 = -1;
+    private long lastGcIndex = -1;
+    /// <summary>Bytes the cache dropped since the last gen2: dead LOH arrays still inside the GC's heap until one runs.</summary>
+    private long evictedSinceGen2;
+    /// <summary>Bytes decoded since the GC snapshot the last refresh saw: they sit in what that GC reported as unused.</summary>
+    private long addedSinceGcSnapshot;
+
+    /// <summary>
+    /// Re-read the machine's free memory and GC state, and set <see cref="EffectiveDecodeCacheBudgetBytes"/> from them
+    /// (<see cref="DecodeCacheMemoryPolicy"/>); trims when it went down. Cheap: one OS call and one GC-info read.
+    /// </summary>
+    public void RefreshMemoryBudget()
+    {
+        long before, after, configured;
+        long? free;
+        lock (memoryGate)
+        {
+            var gc = seams.ReadGc();
+            if (gc.Gen2Count != lastGen2) { lastGen2 = gc.Gen2Count; Interlocked.Exchange(ref evictedSinceGen2, 0); }
+            if (gc.Index != lastGcIndex) { lastGcIndex = gc.Index; Interlocked.Exchange(ref addedSinceGcSnapshot, 0); }
+            long held = CacheState().Bytes;
+            var mem = seams.ReadMemory();
+            free = mem?.FreeBytes;
+            lastFreeBytes = free;
+            configured = DecodeCacheBudgetBytes;
+            bool changed = configured != lastConfigured;
+            lastConfigured = configured;
+            before = EffectiveDecodeCacheBudgetBytes;
+            after = free is not { } f
+                ? configured
+                : DecodeCacheMemoryPolicy.Next(before,
+                    DecodeCacheMemoryPolicy.Target(configured, f, held, Volatile.Read(ref evictedSinceGen2),
+                        gc.CommittedBytes - gc.HeapSizeBytes, Volatile.Read(ref addedSinceGcSnapshot), seams.FloorBytes),
+                    configured, changed, seams.FloorBytes, seams.QuantumBytes);
+            Volatile.Write(ref effectiveBudgetBytes, after);
+        }
+        if (after != before)
+            log.Debug("[Proteus] decode cache: budget {0} MB of {1} MB set ({2} MB free; {3})",
+                      after / (1024 * 1024), configured / (1024 * 1024),
+                      free is { } fr ? (fr / (1024 * 1024)).ToString() : "?", MemoryFootprint.Describe());
+        if (after < before) TrimCache();
+    }
 
     /// <summary>Entries currently materialized, and the bytes they hold, for the phases log.</summary>
     public (int Entries, long Bytes) CacheState()
@@ -334,6 +400,21 @@ public class TextureLoader
         foreach (var kv in decodeCache)
             if (kv.Value.IsValueCreated && kv.Value.Value is { } d) { n++; b += d.Rgba.Length; }
         return (n, b);
+    }
+
+    /// <summary>The keys of the materialized entries, for tests.</summary>
+    internal IReadOnlyCollection<string> CachedKeysForTests()
+    {
+        var keys = new List<string>();
+        foreach (var kv in decodeCache)
+            if (kv.Value.IsValueCreated && kv.Value.Value != null) keys.Add(kv.Key);
+        return keys;
+    }
+
+    /// <summary>Count bytes of removed entries toward <see cref="evictedSinceGen2"/>.</summary>
+    private void NoteRemoved(Lazy<DecodedTex?> lazy)
+    {
+        if (lazy.IsValueCreated && lazy.Value is { } d) Interlocked.Add(ref evictedSinceGen2, d.Rgba.Length);
     }
 
     /// <summary>Entries dropped by the budget since the last <see cref="ResetStats"/>.</summary>
@@ -346,10 +427,8 @@ public class TextureLoader
     public int ReleaseIfIdle(TimeSpan idle)
     {
         if (Environment.TickCount64 - Volatile.Read(ref lastTouchTick) < idle.TotalMilliseconds) return 0;
-        int n = decodeCache.Count;
-        if (n == 0) return 0;
-        decodeCache.Clear();
-        return n;
+        if (decodeCache.IsEmpty) return 0;
+        return ClearCache();
     }
 
     // Cache key for an on-disk file: prefix + path + write-time + length. Null (bypass the cache) if the file is
@@ -416,6 +495,11 @@ public class TextureLoader
             if (wasMaterialized) DecodeHitStats.Count();
             else DecodeBlockedStats.Count();
         }
+        else
+        {
+            // Lands in space the last GC reported unused; the budget refresh discounts it (miss path only, no OS call).
+            Interlocked.Add(ref addedSinceGcSnapshot, entry.Rgba.Length);
+        }
 
         entry.Generation = Volatile.Read(ref runGeneration);
         entry.LastAccess = Interlocked.Increment(ref accessClock);
@@ -436,8 +520,11 @@ public class TextureLoader
         int removed = 0;
         foreach (var key in decodeCache.Keys)   // Keys is a snapshot; safe to remove while iterating
             if (key.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0 &&
-                decodeCache.TryRemove(key, out _))
+                decodeCache.TryRemove(key, out var gone))
+            {
+                NoteRemoved(gone);
                 removed++;
+            }
         return removed;
     }
 
@@ -446,20 +533,23 @@ public class TextureLoader
     /// </summary>
     public int ClearCache()
     {
-        int n = decodeCache.Count;
-        decodeCache.Clear();
+        int n = 0;
+        foreach (var key in decodeCache.Keys)
+            if (decodeCache.TryRemove(key, out var gone)) { NoteRemoved(gone); n++; }
         return n;
     }
 
-    // Evict materialized entries until under the byte budget: oldest generation first, least-recently accessed
-    // within a generation. The current run's entries go only as a last resort — see runGeneration.
+    // Evict materialized entries until under the effective byte budget: oldest generation first, least-recently
+    // accessed within a generation. The current run's entries go only as a last resort — see runGeneration.
+    // Runs on every access, so it reads only the stored budget (no OS or GC call).
     private void TrimCache()
     {
+        long budget = EffectiveDecodeCacheBudgetBytes;
         long total = 0;
         foreach (var kv in decodeCache)
             if (kv.Value.IsValueCreated && kv.Value.Value is { } d)
                 total += d.Rgba.Length;
-        if (total <= DecodeCacheBudgetBytes) return;
+        if (total <= budget) return;
 
         var live = new List<(string key, Lazy<DecodedTex?> lazy, DecodedTex d)>();
         foreach (var kv in decodeCache)
@@ -471,10 +561,11 @@ public class TextureLoader
 
         foreach (var (k, lz, d) in live)
         {
-            if (total <= DecodeCacheBudgetBytes) break;
+            if (total <= budget) break;
             if (decodeCache.TryRemove(new KeyValuePair<string, Lazy<DecodedTex?>>(k, lz)))
             {
                 total -= d.Rgba.Length;
+                Interlocked.Add(ref evictedSinceGen2, d.Rgba.Length);
                 Interlocked.Increment(ref evictions);
             }
         }
