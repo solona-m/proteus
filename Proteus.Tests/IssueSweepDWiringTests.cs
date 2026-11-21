@@ -363,8 +363,11 @@ public class IssueSweepDWiringTests
         foreach (var f in new[] { "CompositeRun", "Publish", "Trigger", "PostRedraw" })
             Assert.DoesNotContain("config.AutoRedraw", Source($"Services/CompositorService.{f}.cs"));
         const string definition = "internal bool AutoRedrawOn => HarnessAutoRedrawOverride ?? config.AutoRedraw;";
+        // A build without the harness (CI's) has no override to read, and no Harness* member (HarnessBuildFlagTests).
+        const string withoutHarness = "internal bool AutoRedrawOn => config.AutoRedraw;";
         Assert.Contains(definition, Recovery);
-        Assert.DoesNotContain("config.AutoRedraw", Recovery.Replace(definition, ""));
+        Assert.Contains(withoutHarness, Recovery);
+        Assert.DoesNotContain("config.AutoRedraw", Recovery.Replace(definition, "").Replace(withoutHarness, ""));
     }
 
     [Fact]

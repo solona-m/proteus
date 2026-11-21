@@ -47,13 +47,13 @@ public partial class CompositorService
 
     /// <summary>
     /// Whether Proteus redraws on its own: the setting, or the test harness's session-only override (ADR 0002). Every
-    /// compositor read goes through here; the shader-upgrade and variant watchers keep reading the setting.
+    /// compositor read goes through here; the shader-upgrade and variant watchers keep reading the setting. A build
+    /// without the harness reads the setting alone: it has no override, nor any Harness* member (HarnessBuildFlagTests).
     /// </summary>
+#if PROTEUS_TEST_HARNESS
     internal bool AutoRedrawOn => HarnessAutoRedrawOverride ?? config.AutoRedraw;
-
-#if !PROTEUS_TEST_HARNESS
-    /// <summary>No harness in this build: never overridden.</summary>
-    private static bool? HarnessAutoRedrawOverride => null;
+#else
+    internal bool AutoRedrawOn => config.AutoRedraw;
 #endif
 
     /// <summary>Something Copy Logs should wait for before it reads the log: a composite pending or running, a
