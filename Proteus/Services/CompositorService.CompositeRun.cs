@@ -134,6 +134,7 @@ public partial class CompositorService
         private Dictionary<string, HashSet<string>>? nextContentMaterials;
         private Dictionary<string, HashSet<string>>? nextContentModels;
         private Dictionary<string, string>? nextAppendHostSources;
+        private Dictionary<string, string>? nextSmoothedBodySources;
         private ShellDrawnProbe? nextShellDrawnCheck;
         private bool shellBuilt;
         private IReadOnlyList<ShellBodyAtr.Use> nextBodyAtrUses = [];
@@ -1255,6 +1256,7 @@ public partial class CompositorService
             compositor._contentMaterials = compositor.Ledgered(nextContentMaterials ?? new(StringComparer.OrdinalIgnoreCase));
             compositor._contentModels    = compositor.Ledgered(nextContentModels ?? new(StringComparer.OrdinalIgnoreCase));
             compositor._appendHostSources = compositor.LedgeredPaths(nextAppendHostSources ?? new(StringComparer.OrdinalIgnoreCase));
+            compositor._smoothedBodySources = compositor.LedgeredPaths(nextSmoothedBodySources ?? new(StringComparer.OrdinalIgnoreCase));
             compositor._shellLight       = nextShellLight ?? new(StringComparer.OrdinalIgnoreCase);
             compositor._shellDrawnCheck  = nextShellDrawnCheck;
 

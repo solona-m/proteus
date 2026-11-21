@@ -144,6 +144,7 @@ public partial class CompositorService
         Swap(ref _lastBaseUpstreams, u => u == null || !u.Values.Any(v => ModMoveMigration.Same(ModFolderOf(v), oldDir)) ? u
             : ModMoveLedger.RemapPathValues(new Dictionary<string, string>(u, StringComparer.OrdinalIgnoreCase), one, modsRoot));
         Swap(ref _appendHostSources, m => ModMoveLedger.RemapPathValues(m, one, modsRoot));
+        Swap(ref _smoothedBodySources, m => ModMoveLedger.RemapPathValues(m, one, modsRoot));
         Swap(ref _inertMods, m => !m.Keys.Any(k => ModMoveMigration.Same(k, oldDir)) ? m
             : ModMoveLedger.RemapKeys(new Dictionary<string, InertModDiagnosis.InertReason>(m, StringComparer.OrdinalIgnoreCase), one));
         Swap(ref _contentMaterials, m => ModMoveLedger.RemapKeys(m, one));
@@ -155,6 +156,8 @@ public partial class CompositorService
         ModMoveMigration.RekeyKey(_bodyModCache, oldDir, newDir);
         ModMoveMigration.RekeyKey(_knownDisabled, oldDir, newDir);
         ModMoveMigration.RekeyKey(_ownModEditUntil, oldDir, newDir);
+        // The shell's own record of where each remembered upstream came from, so its refresh and credit follow the mod.
+        if (!string.IsNullOrEmpty(modsRoot)) secondSkin.RemapUpstreamDisks(one, modsRoot);
 
         textureLoader.EvictMod(oldDir);
         InvalidateUpstreamCache($"ModMoved:{oldDir}->{newDir}");

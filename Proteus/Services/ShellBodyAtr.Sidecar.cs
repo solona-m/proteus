@@ -38,6 +38,24 @@ internal static partial class ShellBodyAtr
     /// </summary>
     internal static string? ReadSource(string upstreamDisk, string? modsRoot, long expectedLength)
     {
+        var full = ReadSourcePath(upstreamDisk, modsRoot);
+        try
+        {
+            return full != null && new FileInfo(full).Length == expectedLength ? full : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The mod file a kept upstream copy's record names, when it exists, whatever its length now: what an edited source
+    /// is re-read from (<see cref="SecondSkinService.RefreshUpstream"/>). Null for no record, a rooted record or one
+    /// leaving the mods root, or a file that is gone. Never throws.
+    /// </summary>
+    internal static string? ReadSourcePath(string upstreamDisk, string? modsRoot)
+    {
         try
         {
             if (string.IsNullOrEmpty(modsRoot)) return null;
@@ -47,8 +65,7 @@ internal static partial class ShellBodyAtr
             if (rel.Length == 0 || Path.IsPathRooted(rel)
                 || rel.Split('/', '\\').Any(s => s == "..")) return null;
             var full = Path.Combine(modsRoot, rel.Replace('/', Path.DirectorySeparatorChar));
-            var info = new FileInfo(full);
-            return info.Exists && info.Length == expectedLength ? full : null;
+            return File.Exists(full) ? full : null;
         }
         catch (Exception)
         {

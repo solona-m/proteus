@@ -1368,7 +1368,8 @@ public sealed partial class PartsPanel
             return gamePaths != null && gamePaths.TryGetValue(BodyShapeReader.PathKey(file), out var g) ? g : null;
         }
 
-        var found = WornModelCredit.Credit(files, root, GamePathOf, compositor.GetAppendHostSource);
+        // A ring we append into, or a garment we republish smoothed, is credited to the mod it really comes from.
+        var found = WornModelCredit.Credit(files, root, GamePathOf, compositor.GetManagedModelSource);
 
         // Imported models worn through our shell, which the walk above cannot see. See CompositorService.GetLiveContentModels.
         if (modDir != null && compositor.GetLiveContentModels(modDir) is { } content)
