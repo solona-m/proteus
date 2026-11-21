@@ -19,17 +19,18 @@ internal static class WornModelCredit
 {
     /// <summary>
     /// Every drawn model file as (mod folder, path inside it with forward slashes) — the spelling a mod's redirects are
-    /// compared in — plus, for a file our output mod draws for an append host, the mod that supplied the host's model.
+    /// compared in — plus, for a file our output mod draws in place of another mod's model (an append host, or a part
+    /// second skin republished smoothed), the mod that supplied that model.
     /// </summary>
     /// <param name="drawnFiles">The resolved model files the character is drawing.</param>
     /// <param name="modsRoot">Penumbra's mod folder.</param>
     /// <param name="gamePathOf">A drawn file's model game path, or null when it is not known. Asked only for files in our
     /// output mod, so a character Proteus draws nothing for costs no lookup.</param>
-    /// <param name="appendHostSource">The file an append host's model was read from, by game path; null when that game
-    /// path is not an append host.</param>
+    /// <param name="managedModelSource">The file the model our output mod draws at a game path was read from (an append
+    /// host's base, a smoothed part's upstream); null when it draws nothing in another mod's place there.</param>
     internal static List<(string Mod, string Rel)> Credit(IEnumerable<string> drawnFiles, string modsRoot,
                                                           Func<string, string?> gamePathOf,
-                                                          Func<string, string?> appendHostSource)
+                                                          Func<string, string?> managedModelSource)
     {
         var found = new List<(string, string)>();
         foreach (var file in drawnFiles)
@@ -39,7 +40,7 @@ internal static class WornModelCredit
             found.Add((mod, rel));
 
             if (!IsManaged(mod) || gamePathOf(file) is not { } gamePath) continue;
-            if (appendHostSource(gamePath) is not { Length: > 0 } source || !Path.IsPathRooted(source)) continue;
+            if (managedModelSource(gamePath) is not { Length: > 0 } source || !Path.IsPathRooted(source)) continue;
             if (!HatCompatService.InMods(source, modsRoot, out var sourceRoot, out var sourceRel)) continue;
 
             // A source in our own folder is a live-preview copy the composite read while a brush was open: crediting it

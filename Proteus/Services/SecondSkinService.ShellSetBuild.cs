@@ -62,6 +62,10 @@ public sealed partial class SecondSkinService
         private IReadOnlyList<ShellBodyAtr.Use> bodyAtrUses = [];
         private HashSet<string> bodySettled = null!;
         private HashSet<string> smoothable = null!;
+        // Body game path → the mod file its bytes came from (when known), and the subset smoothing republished or held:
+        // what credits a part the game draws out of our output back to its own mod.
+        private readonly Dictionary<string, string> partSources = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> smoothedSources = new(StringComparer.OrdinalIgnoreCase);
         private string? modelType;
         private int barePartsTried;
         private int barePartsMissing;
@@ -429,6 +433,34 @@ public sealed partial class SecondSkinService
                               + "bare slot the live walk missed is rebuilt in c{1}", charCode, modelCode);
         }
 
+        /// <summary>
+        /// Keep a part's upstream on disk with the record of which mod file it is, after it was re-read from that file.
+        /// Class-level, not inside <see cref="HarvestParts"/>, whose own two inline kept-copy writes are pinned.
+        /// </summary>
+        private void KeepUpstream(string upstreamDisk, byte[] bytes, string? sourceDisk, string? modsRoot, string gamePath)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(upstreamDisk)!);
+                WriteIfChanged(upstreamDisk, bytes); ShellBodyAtr.WriteSource(upstreamDisk, sourceDisk, modsRoot);
+            }
+            catch (Exception ex)
+            { service.log.Warning(ex, "[Proteus] second skin: could not keep the upstream {0}", gamePath); }
+        }
+
+        private void LogRefresh(string gamePath, string sourceDisk)
+        {
+            service.log.Information("[Proteus] second skin: {0} — {1} changed since it was read; using the file as it "
+                                  + "is now", gamePath, sourceDisk);
+        }
+
+        private void LogRejected(string gamePath, string sourceDisk, SourceStamp stamp)
+        {
+            if (service.FirstRejection(gamePath, stamp))
+                service.log.Warning("[Proteus] second skin: {0} — {1} changed but does not read as a model; keeping the "
+                                  + "body read before", gamePath, sourceDisk);
+        }
+
         private void HarvestParts()
         {
             // Each kept part carries its bytes, the shape keys enabled on that body model, and the game path it was cut from
@@ -495,6 +527,8 @@ public sealed partial class SecondSkinService
                 // A SETTLED upstream outranks both remembered copies: those freeze the body at whatever it was before the first
                 // publish, while the prime reflects the body the user has selected now.
                 var settledDisk = bodyIsOurs ? service.settledUpstream?.Invoke(bodyGamePath) : null;
+                // Stamped before the read, so a write landing during it is seen as a change next time.
+                var settledStamp = StampOf(settledDisk);
                 var settledBytes = settledDisk != null ? service.textureLoader.LoadRawFile(settledDisk, bodyGamePath) : null;
 
                 byte[]? bytes;
@@ -512,6 +546,7 @@ public sealed partial class SecondSkinService
                                 || !had.AsSpan().SequenceEqual(settledBytes);
                     service._upstreamBodies[bodyGamePath] = settledBytes;
                     service._upstreamBodyDisks[bodyGamePath] = settledDisk!;
+                    service.NoteStamp(bodyGamePath, settledBytes, settledStamp);
                     try
                     {
                         Directory.CreateDirectory(upstreamDir);
@@ -530,11 +565,34 @@ public sealed partial class SecondSkinService
                 {
                     bytes = remembered;
                     sourceDisk = service._upstreamBodyDisks.GetValueOrDefault(bodyGamePath);
+                    // The file these bytes came from may have been edited since (a Studio save, a repack): read it again.
+                    var refresh = RefreshUpstream(remembered, sourceDisk, service.StampFor(bodyGamePath, remembered),
+                                                  bodyGamePath, outputRoot, StampOf, SafeReadFile);
+                    if (refresh.Fresh is { } fresh)
+                    {
+                        bytes = fresh;
+                        service._upstreamBodies[bodyGamePath] = fresh;
+                        KeepUpstream(upstreamDisk, fresh, sourceDisk, modsRoot, bodyGamePath);
+                        LogRefresh(bodyGamePath, sourceDisk!);
+                    }
+                    else if (refresh.Rejected) LogRejected(bodyGamePath, sourceDisk!, refresh.Stamp!.Value);
+                    if (refresh.Stamp != null) service.NoteStamp(bodyGamePath, bytes, refresh.Stamp);
                 }
                 else if (source == BodySourceKind.Kept)
                 {
                     bytes = File.ReadAllBytes(upstreamDisk);
+                    // The mod file the copy came from, whatever its length now, may have been edited since: read it again.
+                    var keptSrc = ShellBodyAtr.ReadSourcePath(upstreamDisk, modsRoot);
+                    var refresh = RefreshUpstream(bytes, keptSrc, null, bodyGamePath, outputRoot, StampOf, SafeReadFile);
+                    if (refresh.Fresh is { } fresh)
+                    {
+                        bytes = fresh;
+                        KeepUpstream(upstreamDisk, fresh, keptSrc, modsRoot, bodyGamePath);
+                        LogRefresh(bodyGamePath, keptSrc!);
+                    }
+                    else if (refresh.Rejected) LogRejected(bodyGamePath, keptSrc!, refresh.Stamp!.Value);
                     service._upstreamBodies[bodyGamePath] = bytes;
+                    if (refresh.Stamp != null) service.NoteStamp(bodyGamePath, bytes, refresh.Stamp);
                     // Which mod the kept copy came from, recorded beside it: after a restart, the only way to know. Bare parts
                     // only: for a garment it would also change what smoothing may republish (IsProteusModFile below).
                     if (isBarePart)
@@ -557,10 +615,14 @@ public sealed partial class SecondSkinService
                 }
                 else
                 {
+                    var resolvedStamp = StampOf(bodyDisk);
                     bytes = service.textureLoader.LoadRawFile(bodyDisk, bodyGamePath);
                     sourceDisk = bodyDisk;
-                    if (bytes != null)
+                    // A live-brush preview is cut from but never remembered as the part's upstream: the record stays on the
+                    // mod file, so the save that ends the brush session is caught.
+                    if (bytes != null && !(bodyDisk != null && LiveBrushPreview.IsPreviewFile(bodyDisk, outputRoot)))
                     {
+                        service.NoteStamp(bodyGamePath, bytes, resolvedStamp);
                         service._upstreamBodies[bodyGamePath] = bytes;
                         if (bodyDisk != null) service._upstreamBodyDisks[bodyGamePath] = bodyDisk;
                         else service._upstreamBodyDisks.TryRemove(bodyGamePath, out _);
@@ -622,6 +684,7 @@ public sealed partial class SecondSkinService
                 var partShapes = LiveModelState(enabledBodyShapes, bodyGamePath, bodyDisk);
 
                 bodies.Add((bytes, partShapes, bodyGamePath, partType));
+                if (sourceDisk != null) partSources[bodyGamePath] = sourceDisk;
                 if (isBarePart || IsProteusModFile(sourceDisk, outputRoot)) smoothable.Add(bodyGamePath);
 
                 // A body mod that draws one of several shapes by its options (NIRÆ's chests): the shell covers only the
@@ -1719,6 +1782,7 @@ public sealed partial class SecondSkinService
                         {
                             redirects[bPath] = Rel(outputRoot, held);
                             smoothedBody[bPath] = bBytes;
+                            if (partSources.TryGetValue(bPath, out var heldSrc)) smoothedSources[bPath] = heldSrc;
                         }
                         continue;
                     }
@@ -1754,6 +1818,7 @@ public sealed partial class SecondSkinService
                     bool changed = WriteIfChanged(disk, smoothed);
                     service.statsBodySmooth.Stop(tSmooth);
                     redirects[bPath] = Rel(outputRoot, disk);
+                    if (partSources.TryGetValue(bPath, out var pubSrc)) smoothedSources[bPath] = pubSrc;
                     modelChangedAny |= changed;
                     smoothedBody[bPath] = smoothed;
                     if (changed)
@@ -1822,7 +1887,7 @@ public sealed partial class SecondSkinService
 
             return new Result(redirects, manipulations, shellChanged, shellMaterials, modelChangedAny,
                               hostModelPaths, appendHostModelPaths, contentMaterials, shellLight, contentModels,
-                              appendHostSources) { BodyAtrUses = bodyAtrUses };
+                              appendHostSources) { BodyAtrUses = bodyAtrUses, SmoothedBodySources = smoothedSources };
         }
 
         private string VariantFolderFor(HostAccessory h)

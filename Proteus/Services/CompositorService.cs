@@ -237,6 +237,22 @@ public partial class CompositorService : IDisposable
     public string? GetAppendHostSource(string modelGamePath)
         => _appendHostSources.TryGetValue(modelGamePath, out var source) ? source : null;
 
+    // Game path second skin republished (or held) smoothed → the mod file its bytes came from. Published on the same
+    // terms as _appendHostSources: the only record of which mod supplies a garment the game draws out of our output.
+    private volatile Dictionary<string, string> _smoothedBodySources = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The mod file a part the game draws smoothed out of our output was read from, or null.</summary>
+    public string? GetSmoothedBodySource(string modelGamePath)
+        => _smoothedBodySources.TryGetValue(modelGamePath, out var source) ? source : null;
+
+    /// <summary>The mod file behind a model the game draws out of our output: an append host's first, then a smoothed part's.</summary>
+    internal static string? ManagedModelSource(Func<string, string?> appendHost, Func<string, string?> smoothed, string gamePath)
+        => appendHost(gamePath) ?? smoothed(gamePath);
+
+    /// <summary><see cref="ManagedModelSource"/> from the last composite's records.</summary>
+    public string? GetManagedModelSource(string modelGamePath)
+        => ManagedModelSource(GetAppendHostSource, GetSmoothedBodySource, modelGamePath);
+
     /// <summary>
     /// Why none of <paramref name="modDir"/>'s content pieces can be worn by this character, or null when
     /// they can. Recorded by the shell builder even on runs that host nothing.
@@ -300,6 +316,7 @@ public partial class CompositorService : IDisposable
         _contentMaterials = new(StringComparer.OrdinalIgnoreCase);
         _contentModels    = new(StringComparer.OrdinalIgnoreCase);
         _appendHostSources = new(StringComparer.OrdinalIgnoreCase);
+        _smoothedBodySources = new(StringComparer.OrdinalIgnoreCase);
         _shellLight       = new(StringComparer.OrdinalIgnoreCase);
         _shellDrawnCheck  = null;
         // The shell is gone, so the next one to be drawn is news even if it lands on the same materials.

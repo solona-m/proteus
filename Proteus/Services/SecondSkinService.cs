@@ -357,6 +357,11 @@ public sealed partial class SecondSkinService
         /// <summary>The bare body parts this shell was cut from whose body mod switches shapes by option (NIRÆ's
         /// chests), with what each left out: what a later settings change is compared against.</summary>
         internal IReadOnlyList<ShellBodyAtr.Use> BodyAtrUses { get; init; } = [];
+
+        /// <summary>Game path republished (or held) smoothed → the mod file its bytes came from: what credits a part the
+        /// game draws out of our output to its own mod (Studio's picker, worn mods).</summary>
+        internal IReadOnlyDictionary<string, string> SmoothedBodySources { get; init; } =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -409,6 +414,57 @@ public sealed partial class SecondSkinService
     /// smoothing may touch it. Concurrent because composites overlap.
     /// </summary>
     private readonly ConcurrentDictionary<string, string> _upstreamBodyDisks = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The source file's stamp recorded for exactly the bytes in <see cref="_upstreamBodies"/>, by game path: the entry
+    /// holds the array it describes, so an overlapping composite's stamp for other bytes never vouches for these (a
+    /// mismatch costs one content comparison, never a hidden change).
+    /// </summary>
+    private readonly ConcurrentDictionary<string, (byte[] Bytes, SourceStamp Stamp)> _upstreamBodyStamps =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The last stamp of each game path's source warned about as not reading as a model, so it warns once per change.</summary>
+    private readonly ConcurrentDictionary<string, SourceStamp> _upstreamRejectedWarned = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The stamp recorded for <paramref name="bytes"/> (the same array), or null.</summary>
+    internal SourceStamp? StampFor(string gamePath, byte[] bytes)
+        => _upstreamBodyStamps.TryGetValue(gamePath, out var e) && ReferenceEquals(e.Bytes, bytes) ? e.Stamp : null;
+
+    /// <summary>Record the source stamp of the bytes now remembered for a path; null forgets it.</summary>
+    internal void NoteStamp(string gamePath, byte[] bytes, SourceStamp? stamp)
+    {
+        if (stamp is { } s) _upstreamBodyStamps[gamePath] = (bytes, s);
+        else _upstreamBodyStamps.TryRemove(gamePath, out _);
+    }
+
+    /// <summary>Whether a rejected source's warning is new for this stamp (and remember it).</summary>
+    internal bool FirstRejection(string gamePath, SourceStamp stamp)
+    {
+        if (_upstreamRejectedWarned.TryGetValue(gamePath, out var had) && had == stamp) return false;
+        _upstreamRejectedWarned[gamePath] = stamp;
+        return true;
+    }
+
+    /// <summary>Point each remembered upstream file under a moved mod into its new folder.</summary>
+    internal void RemapUpstreamDisks(IReadOnlyDictionary<string, ModMoveLedger.MoveRecord> moves, string modsRoot)
+        => RemapUpstreamDisks(_upstreamBodyDisks, moves, modsRoot);
+
+    /// <summary>
+    /// The body of <see cref="RemapUpstreamDisks(IReadOnlyDictionary{string, ModMoveLedger.MoveRecord}, string)"/>: a
+    /// snapshot remapped, each change applied only if the entry is still what was read, so a composite's newer write
+    /// wins. A composite already running when the move lands can still write the old path back; the composite the move
+    /// triggers re-primes the path (its cache is invalidated) and reads it as Settled from the new folder.
+    /// </summary>
+    internal static void RemapUpstreamDisks(ConcurrentDictionary<string, string> disks,
+                                            IReadOnlyDictionary<string, ModMoveLedger.MoveRecord> moves, string modsRoot)
+    {
+        var snapshot = new Dictionary<string, string>(disks, StringComparer.OrdinalIgnoreCase);
+        var moved = ModMoveLedger.RemapPathValues(snapshot, moves, modsRoot);
+        if (ReferenceEquals(moved, snapshot)) return;
+        foreach (var (k, v) in moved)
+            if (snapshot.TryGetValue(k, out var old) && !string.Equals(old, v, StringComparison.Ordinal))
+                disks.TryUpdate(k, v, old);
+    }
 
     /// <summary>Garments already reported as left unsmoothed, so a recomposite doesn't repeat the line.</summary>
     private readonly ConcurrentDictionary<string, byte> _smoothSkippedLogged = new(StringComparer.OrdinalIgnoreCase);
@@ -518,7 +574,7 @@ public sealed partial class SecondSkinService
     /// <summary>
     /// Where a smoothed body is published: content-addressed, because the game caches models by resolved path.
     /// </summary>
-    private static string SmoothedBodyPath(string modelsDir, string gamePath, byte[] content)
+    internal static string SmoothedBodyPath(string modelsDir, string gamePath, byte[] content)
         => Path.Combine(modelsDir,
                         $"smoothed_{CompositorService.SanitizeName(gamePath)}_{Hash(content):x16}.mdl");
 

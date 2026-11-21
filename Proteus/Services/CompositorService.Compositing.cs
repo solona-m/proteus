@@ -164,6 +164,14 @@ public partial class CompositorService
                 $"chara/equipment/e0000/model/c{code}e0000_sho.mdl"];
     }
 
+    /// <summary>Whether a model is one of the bare body parts <see cref="BodyModelPathsFor"/> returns — the only models
+    /// the seam map reads.</summary>
+    internal static bool IsBareBodyPartModel(string gamePath)
+        => !string.IsNullOrEmpty(gamePath) && BareBodyPartModel.IsMatch(gamePath.Replace('\\', '/'));
+
+    private static readonly Regex BareBodyPartModel =
+        new(@"^chara/equipment/e0000/model/c\d{4}e0000_(top|dwn|glv|sho)\.mdl$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     private static readonly Regex BodyMaterialPath =
         new(@"^chara/human/c(\d{4})/obj/body/b(\d{4})/material/", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 

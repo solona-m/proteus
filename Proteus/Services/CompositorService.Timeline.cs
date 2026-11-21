@@ -304,18 +304,37 @@ public partial class CompositorService
         // baseKeys comes from PrimeUpstreamCache, not _upstreamByGamePath's keys, which churn and would never settle.
         foreach (var gamePath in baseKeys)
         {
-            sb.Append("base:").Append(gamePath).Append('=')
-              .Append(_upstreamByGamePath.TryGetValue(gamePath, out var disk) ? disk : "(game data)");
-            if (disk == null) { sb.Append('\n'); continue; }
+            // A model we republish (smoothed) also names the file the shell's own record says it came from, so a write
+            // to it (a Studio save, a repack) is never gated away; the memo may name an older winner.
+            var sourceId = gamePath.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)
+                ? secondSkin.UpstreamSourceId(gamePath, managedModDir, modsRoot) : null;
+            sb.Append(FingerprintBaseLine(gamePath, _upstreamByGamePath.TryGetValue(gamePath, out var disk) ? disk : null,
+                                          sourceId, skinOnly)).Append('\n');
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// One base path's fingerprint line: the file the memo names (or game data) with its size and write time, then the
+    /// republished part's own source identity — in the full fingerprint always, in the skin fingerprint only for a bare
+    /// body part, the only models the seam map reads (a garment edit rebuilds the shell, not the skin).
+    /// </summary>
+    internal static string FingerprintBaseLine(string gamePath, string? memoDisk, string? sourceId, bool skinOnly)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("base:").Append(gamePath).Append('=').Append(memoDisk ?? "(game data)");
+        if (memoDisk != null)
+        {
             try
             {
-                var fi = new FileInfo(disk);
+                var fi = new FileInfo(memoDisk);
                 if (fi.Exists) sb.Append('|').Append(fi.Length).Append('|').Append(fi.LastWriteTimeUtc.Ticks);
             }
             catch { /* unreadable — the path alone still distinguishes a different mod */ }
-            sb.Append('\n');
         }
-
+        if (sourceId != null && (!skinOnly || IsBareBodyPartModel(gamePath)))
+            sb.Append("|src=").Append(sourceId);
         return sb.ToString();
     }
 

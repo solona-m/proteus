@@ -67,6 +67,7 @@ public partial class CompositorService
                 run.nextContentMaterials = null;
                 run.nextContentModels = null;
                 run.nextAppendHostSources = null;
+                run.nextSmoothedBodySources = null;
                 run.nextShellDrawnCheck = null;
                 run.shellBuilt = false;   // a gear shell was produced this composite (drives glasses reconcile)
                 // The shell was built for invisible glasses not yet equipped (ChooseHost's pending branch); the equip's redraw lands on it.
@@ -418,6 +419,8 @@ public partial class CompositorService
                     run.nextContentMaterials = shells.ContentMaterials;
                     run.nextContentModels = shells.ContentModels;
                     run.nextAppendHostSources = shells.AppendHostSources;
+                    run.nextSmoothedBodySources = new Dictionary<string, string>(shells.SmoothedBodySources,
+                                                                                 StringComparer.OrdinalIgnoreCase);
                     run.nextShellLight = shells.ShellLight;
 
                     // Materials to test, models to anchor the test against (see ShellDrawnProbe).
