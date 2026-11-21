@@ -630,6 +630,40 @@ public class SmoothFollowsEditsTests : IDisposable
         Assert.Contains(("Bibo+", "body/c0201e0000_top.mdl"), Credit(drawn, BareTop, bodyFile));
     }
 
+    // ── the brush and Move tools find the smoothed copy on the character ────────────────────────────────
+
+    [Fact]
+    [Trait("Plan", "AC-smooth-follows-edits-5")]
+    public void Brush_takes_the_smoothed_copy_of_the_open_model_as_its_target()
+    {
+        var target = Proteus.Interop.BodyShapeReader.PathKey(SkirtFile);
+        var smoothed = Path.Combine(Managed, "models", "smoothed_chara_equipment_e6087_model_c0201e6087_dwn_cd83.mdl");
+        Func<string, string?> source = g => g == Skirt ? SkirtFile : null;
+
+        Assert.True(Proteus.Gui.LiveBrush.SmoothedCopyOf(smoothed, () => Skirt, target, source));
+        // Another garment's smoothed copy, or one whose source is unknown, is not the open model.
+        Assert.False(Proteus.Gui.LiveBrush.SmoothedCopyOf(smoothed, () => BareTop, target, source));
+        Assert.False(Proteus.Gui.LiveBrush.SmoothedCopyOf(smoothed, () => null, target, source));
+        Assert.False(Proteus.Gui.LiveBrush.SmoothedCopyOf(smoothed, () => Skirt, target, null));
+        Assert.False(Proteus.Gui.LiveBrush.SmoothedCopyOf(smoothed, () => Skirt,
+                                                          Proteus.Interop.BodyShapeReader.PathKey(Path.Combine(Mods, "Other", "x.mdl")), source));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-smooth-follows-edits-5")]
+    public void Only_a_smoothed_file_costs_a_game_path_lookup()
+    {
+        int lookups = 0;
+        var shell = Path.Combine(Managed, "models", "secondskin_1.mdl");
+        Assert.False(Proteus.Gui.LiveBrush.SmoothedCopyOf(shell, () => { lookups++; return Skirt; },
+                                                          Proteus.Interop.BodyShapeReader.PathKey(SkirtFile), _ => SkirtFile));
+        Assert.Equal(0, lookups);
+
+        var brush = Source("Gui/LiveBrush.cs");
+        Assert.Contains("SmoothedCopyOf(LiveCharacter.FilePath(name)", Method(brush, "private bool EnsureTarget("));
+        Assert.Contains("liveBrush.ManagedModelSource = compositor.GetManagedModelSource", Source("Gui/PartsPanel.cs"));
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────────────────────────────────
 
     private static void InitStamps(SecondSkinService service)

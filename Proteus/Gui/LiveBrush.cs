@@ -588,10 +588,12 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             var handle = model->ModelResourceHandle;
             var name = handle->FileName.ToString();
             // While painting, the character draws the brush's preview in place of the mod's file — the same
-            // garment, same vertex order, under a different name.
+            // garment, same vertex order, under a different name. So does second skin's smoothed copy of it.
             if (string.IsNullOrEmpty(name)
                 || (!SameFile(BodyShapeReader.PathKey(name), targetKey)
-                    && !LiveBrushPreview.IsPreviewFile(LiveCharacter.FilePath(name))))
+                    && !LiveBrushPreview.IsPreviewFile(LiveCharacter.FilePath(name))
+                    && !SmoothedCopyOf(LiveCharacter.FilePath(name), () => LiveCharacter.GamePathOf(penumbra, name),
+                                       targetKey, ManagedModelSource)))
                 continue;
 
             var shapes = EnabledShapes(model, handle);
@@ -615,6 +617,27 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
 
         Problem = Strings.Parts.LiveNotWorn;
         return false;
+    }
+
+    /// <summary>
+    /// The mod file behind a model the game draws out of Proteus's own output, by game path (an append host's base, a
+    /// smoothed part's upstream; <see cref="CompositorService.GetManagedModelSource"/>). Set by the Studio tab.
+    /// </summary>
+    public Func<string, string?>? ManagedModelSource { get; set; }
+
+    /// <summary>
+    /// Whether a drawn file is second skin's smoothed copy of the target: a <c>smoothed_…</c> file whose game path the
+    /// composite records as republished from the target's own file. Smoothing moves positions and normals in place, so
+    /// the copy keeps the target's vertex order, as a brush preview does. The game path is asked only for such a file.
+    /// </summary>
+    internal static bool SmoothedCopyOf(string drawnFile, Func<string?> gamePathOf, string? targetKey,
+                                        Func<string, string?>? sourceOf)
+    {
+        if (targetKey == null || sourceOf == null
+            || !Path.GetFileName(drawnFile).StartsWith("smoothed_", StringComparison.OrdinalIgnoreCase))
+            return false;
+        return gamePathOf() is { } gamePath && sourceOf(gamePath) is { Length: > 0 } source
+            && SameFile(BodyShapeReader.PathKey(source), targetKey);
     }
 
     /// <summary>

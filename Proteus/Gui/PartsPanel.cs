@@ -377,6 +377,8 @@ public sealed partial class PartsPanel
         this.compositor = compositor;
         this.viewport = viewport;
         this.liveBrush = liveBrush;
+        // A garment second skin draws smoothed out of our output is still the open model to the brush and Move tools.
+        liveBrush.ManagedModelSource = compositor.GetManagedModelSource;
         preview = new LiveBrushPreview(penumbra, compositor, log);
         retarget = new BodyRetargetPanel(penumbra, uvRemap, path => textureLoader.LoadRawFile(null, path),
                                          config, log, GameFileExists);
