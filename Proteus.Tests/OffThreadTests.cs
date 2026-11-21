@@ -12,7 +12,7 @@ namespace Proteus.Tests;
 /// frame later, so every refit after its first hop ran inside the game's frame. Here a dedicated thread stands in for the
 /// framework thread.
 /// </summary>
-[Collection(Proteus.Tests.TestHarness.HarnessTimingCollection.Name)]
+[Collection(HarnessTimingCollection.Name)]
 public class OffThreadTests
 {
     /// <summary>

@@ -8,12 +8,11 @@ using Proteus.Gui;
 using Proteus.Localization;
 using Proteus.Services;
 using Proteus.Services.Matcap;
-using Proteus.TestHarness;
 using Xunit;
 
 namespace Proteus.Tests;
 
-/// <summary>Row matcaps, the pure pieces: names, the pool, triangle footprints, staleness, scheduling, panel rules, preview pick, harness fields.</summary>
+/// <summary>Row matcaps, the pure pieces: names, the pool, triangle footprints, staleness, scheduling, panel rules, preview pick.</summary>
 public class MatcapRowUnitTests
 {
     private static ModelPart Part(string material, string label = "1.1", int island = -1, int mesh = 0) => new()
@@ -337,24 +336,8 @@ public class MatcapRowUnitTests
         Assert.Contains(Assert.Single(guessed).Bytes, new[] { red.Bytes, blue.Bytes });
     }
 
-    // ── harness fields ────────────────────────────────────────────────────
-
-    [Theory]
-    [Trait("Plan", "AC-matcap-row-10")]
-    [InlineData("{\"row\":15,\"sub\":\"B\"}", 15, true)]
-    [InlineData("{\"row\":17}", 0, false)]
-    [InlineData("{\"row\":\"x\"}", 0, false)]
-    [InlineData("{\"sub\":\"A\"}", 0, false)]
-    [InlineData("{\"material\":\"/mt_a.mtrl\"}", 0, false)]
-    [InlineData("{\"row\":3,\"sub\":\"C\"}", 0, false)]
-    [InlineData("{\"row\":3,\"material\":\"/mt_a.mtrl\"}", 3, true)]
-    public void Matcap_route_validates_row_sub_material(string json, int row, bool ok)
-    {
-        using var doc = JsonDocument.Parse(json);
-        var (r, _, _, bad) = HarnessRouter.RowFields(doc.RootElement);
-        Assert.Equal(ok, bad == null);
-        if (ok) Assert.Equal(row, r);
-    }
+    // The harness route's row fields are tested in TestHarness/HarnessMatcapRowFieldsTests.cs: that folder is
+    // compiled only where the harness is, and HarnessRouter is not there under CI.
 
     // ── wiring ────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 using Xunit;
 
-namespace Proteus.Tests.TestHarness;
+namespace Proteus.Tests;
 
 /// <summary>
 /// Tests that run a live loopback harness, a fake framework dispatcher or a thread hop against short timeouts, run
@@ -8,7 +8,8 @@ namespace Proteus.Tests.TestHarness;
 /// beside ~6,000 other tests running in parallel the thread pool starved them and a different two or three failed on
 /// every quick-suite run (#49). xunit runs a collection that disables parallelisation after every parallel one has
 /// finished, so nothing else is alive while these run. <c>HarnessTimingCollectionTests</c> holds the membership: every
-/// class using <c>HarnessFixture</c> or <c>FakeFrameworkDispatcher</c>, plus <c>OffThreadTests</c>.
+/// class using <c>HarnessFixture</c> or <c>FakeFrameworkDispatcher</c>, plus <c>OffThreadTests</c>. It lives outside
+/// <c>TestHarness/</c>: that folder is compiled out under CI with the harness, and <c>OffThreadTests</c> is not.
 /// </summary>
 [CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class HarnessTimingCollection
