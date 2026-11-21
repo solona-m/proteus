@@ -647,6 +647,47 @@ public class SmoothFollowsEditsTests : IDisposable
         Assert.False(Proteus.Gui.LiveBrush.SmoothedCopyOf(smoothed, () => Skirt, target, null));
         Assert.False(Proteus.Gui.LiveBrush.SmoothedCopyOf(smoothed, () => Skirt,
                                                           Proteus.Interop.BodyShapeReader.PathKey(Path.Combine(Mods, "Other", "x.mdl")), source));
+        Assert.False(Proteus.Gui.LiveBrush.SmoothedCopyOf(smoothed, () => Skirt, null, source));     // no target open
+        Assert.False(Proteus.Gui.LiveBrush.SmoothedCopyOf(smoothed, () => Skirt, target, _ => ""));  // an empty record
+        var upper = Path.Combine(Managed, "models", "Smoothed_chara_equipment_e6087_model_c0201e6087_dwn_cd83.mdl");
+        Assert.True(Proteus.Gui.LiveBrush.SmoothedCopyOf(upper, () => Skirt, target, source));       // any case
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-smooth-follows-edits-5")]
+    public void Smoothed_copy_lookup_is_not_paid_every_frame()
+    {
+        var target = Proteus.Interop.BodyShapeReader.PathKey(SkirtFile);
+        var smoothed = Path.Combine(Managed, "models", "smoothed_chara_equipment_e6087_model_c0201e6087_dwn_cd83.mdl");
+        var torso = Path.Combine(Managed, "models", "smoothed_chara_equipment_e0000_model_c0201e0000_top_ab.mdl");
+        var memo = new Proteus.Gui.LiveBrush.SmoothedCopyMemo();
+        int lookups = 0;
+        Func<string?> skirtPath = () => { lookups++; return Skirt; };
+        Func<string?> torsoPath = () => { lookups++; return BareTop; };
+        Func<string, string?> source = g => g == Skirt ? SkirtFile : null;
+
+        // A match: asked once, then remembered.
+        Assert.True(memo.Check("a", smoothed, target, skirtPath, source, 0));
+        Assert.True(memo.Check("a", smoothed, target, skirtPath, source, 10_000));
+        Assert.Equal(1, lookups);
+
+        // A miss: remembered for a while, then asked again (the composite's record may land later).
+        Assert.False(memo.Check("b", torso, target, torsoPath, source, 0));
+        Assert.False(memo.Check("b", torso, target, torsoPath, source, 100));
+        Assert.Equal(2, lookups);
+        Assert.False(memo.Check("b", torso, target, torsoPath, source, Proteus.Gui.LiveBrush.SmoothedCopyMemo.RecheckMs));
+        Assert.Equal(3, lookups);
+
+        // Penumbra could not say: nothing kept, asked again next frame.
+        int busy = 0;
+        Assert.False(memo.Check("c", smoothed, target, () => { busy++; return null; }, source, 0));
+        Assert.False(memo.Check("c", smoothed, target, () => { busy++; return null; }, source, 1));
+        Assert.Equal(2, busy);
+
+        // Another open model forgets every answer.
+        var other = Proteus.Interop.BodyShapeReader.PathKey(Path.Combine(Mods, "Other", "x.mdl"));
+        Assert.False(memo.Check("a", smoothed, other, skirtPath, source, 20_000));
+        Assert.Equal(4, lookups);
     }
 
     [Fact]
@@ -660,7 +701,7 @@ public class SmoothFollowsEditsTests : IDisposable
         Assert.Equal(0, lookups);
 
         var brush = Source("Gui/LiveBrush.cs");
-        Assert.Contains("SmoothedCopyOf(LiveCharacter.FilePath(name)", Method(brush, "private bool EnsureTarget("));
+        Assert.Contains("smoothedCopies.Check(name, LiveCharacter.FilePath(name)", Method(brush, "private bool EnsureTarget("));
         Assert.Contains("liveBrush.ManagedModelSource = compositor.GetManagedModelSource", Source("Gui/PartsPanel.cs"));
     }
 

@@ -592,8 +592,9 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             if (string.IsNullOrEmpty(name)
                 || (!SameFile(BodyShapeReader.PathKey(name), targetKey)
                     && !LiveBrushPreview.IsPreviewFile(LiveCharacter.FilePath(name))
-                    && !SmoothedCopyOf(LiveCharacter.FilePath(name), () => LiveCharacter.GamePathOf(penumbra, name),
-                                       targetKey, ManagedModelSource)))
+                    && !smoothedCopies.Check(name, LiveCharacter.FilePath(name), targetKey,
+                                             () => LiveCharacter.GamePathOf(penumbra, name), ManagedModelSource,
+                                             Environment.TickCount64)))
                 continue;
 
             var shapes = EnabledShapes(model, handle);
@@ -624,6 +625,34 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     /// smoothed part's upstream; <see cref="CompositorService.GetManagedModelSource"/>). Set by the Studio tab.
     /// </summary>
     public Func<string, string?>? ManagedModelSource { get; set; }
+
+    /// <summary>Which drawn files are the target's smoothed copy, so the game-path lookup is not paid every frame.</summary>
+    private readonly SmoothedCopyMemo smoothedCopies = new();
+
+    /// <summary>
+    /// <see cref="SmoothedCopyOf"/> remembered per drawn resource name: the game-path lookup behind it is a Penumbra round
+    /// trip over every loaded resource, and the brush asks every frame. A match is kept until the target changes (a
+    /// smoothed name is content-addressed, so it names one copy); a miss is asked again after <see cref="RecheckMs"/>,
+    /// since the composite's record may land after the file is drawn; an unknown game path (Penumbra busy) is not kept.
+    /// </summary>
+    internal sealed class SmoothedCopyMemo
+    {
+        internal const long RecheckMs = 2000;
+        private readonly Dictionary<string, (bool Is, long At)> known = new(StringComparer.Ordinal);
+        private string? target;
+
+        internal bool Check(string name, string drawnFile, string? targetKey, Func<string?> gamePathOf,
+                            Func<string, string?>? sourceOf, long nowMs)
+        {
+            if (!string.Equals(target, targetKey, StringComparison.Ordinal)) { known.Clear(); target = targetKey; }
+            if (known.TryGetValue(name, out var k) && (k.Is || nowMs - k.At < RecheckMs)) return k.Is;
+            bool asked = false;
+            string? gamePath = null;
+            var result = SmoothedCopyOf(drawnFile, () => { asked = true; return gamePath = gamePathOf(); }, targetKey, sourceOf);
+            if (!asked || gamePath != null) known[name] = (result, nowMs);
+            return result;
+        }
+    }
 
     /// <summary>
     /// Whether a drawn file is second skin's smoothed copy of the target: a <c>smoothed_…</c> file whose game path the
