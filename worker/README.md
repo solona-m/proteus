@@ -200,8 +200,10 @@ keeps it current. It runs on a push to `main` that touches `repo.json`, after ev
 1. If the live `/repo.json` is byte-identical to `main`'s and says `X-Proteus-Mirror: asset`, it stops.
 2. Otherwise it reads the **live** version's tag (the Proteus commit `npm run deploy` recorded), checks out
    exactly that commit's `worker/`, runs `npm ci --ignore-scripts`, and `npm run deploy`s it with `main`'s
-   repo.json. It never deploys a branch head, so it can't roll worker code back or forward: a hand deploy from
-   `test` stays live, a dashboard rollback is followed.
+   repo.json. It never deploys a branch head, so worker code goes live only when the owner deploys it, and a
+   dashboard rollback is followed. It re-reads the live tag just before deploying and stops if a hand deploy
+   landed during the run; if one lands in the seconds between that check and the upload, the run fails loudly
+   afterwards ("… was replaced by …; redeploy it with npm run deploy").
 3. It checks the live file again and fails the run (GitHub emails) if it still differs. The next run heals a
    failed one; Sync runs daily.
 

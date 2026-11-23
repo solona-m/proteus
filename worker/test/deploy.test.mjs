@@ -165,6 +165,37 @@ console.log('deploy:');
       args?.[1] === 'dev' && args.includes('8799') && !(await exists(s.target)));
     await rm(s.dir, { recursive: true, force: true });
   }
+  // [EDGE-static-repo-json-2] [EDGE-static-repo-json-25] dev cleans up whatever wrangler did, like deploy.
+  for (const [label, spawn] of [['wrangler failure', async () => 1], ['spawn throws', async () => { throw new Error('ENOENT'); }]]) {
+    const s = await scratch();
+    await dev({ workerDir: s.dir, staticDir: s.staticDir, repoJsonPath: s.repoJson, spawn }).catch(() => {});
+    t(`dev cleans up after ${label}`, !(await exists(s.target)));
+    await rm(s.dir, { recursive: true, force: true });
+  }
+
+  // [AC-static-repo-json-6] Ctrl+C before wrangler starts reaches no child: the deploy must not ship anyway.
+  for (const [label, run] of [
+    ['deploy', (s, spawn) => deploy({ workerDir: s.dir, staticDir: s.staticDir, repoJsonPath: s.repoJson,
+      git: stubGit().git, spawn, cancelled: () => true })],
+    ['dev', (s, spawn) => dev({ workerDir: s.dir, staticDir: s.staticDir, repoJsonPath: s.repoJson, spawn,
+      cancelled: () => true })],
+  ]) {
+    const s = await scratch();
+    let spawned = false;
+    const threw = await rejects(run(s, async () => { spawned = true; return 0; }));
+    t(`${label} cancelled before wrangler starts: no spawn, no repo.json left`, threw && !spawned && !(await exists(s.target)));
+    await rm(s.dir, { recursive: true, force: true });
+  }
+
+  // [AC-static-repo-json-6] A commit id git didn't give as 40 lowercase hex would make a tag CI refuses.
+  {
+    const s = await scratch();
+    let spawned = false;
+    const threw = await rejects(deploy({ workerDir: s.dir, staticDir: s.staticDir, repoJsonPath: s.repoJson,
+      git: stubGit({ sha: 'fatal: not a git repository' }).git, spawn: async () => { spawned = true; return 0; } }));
+    t('refuses a commit id that is not 40-hex', threw && !spawned);
+    await rm(s.dir, { recursive: true, force: true });
+  }
 }
 
 console.log('helpers:');
@@ -172,11 +203,18 @@ t('deployArgs is deterministic', JSON.stringify(deployArgs({ sha: SHA, repoJsonB
   === JSON.stringify(deployArgs({ sha: SHA, repoJsonBytes: FIXTURE })));
 t('wranglerCommand runs through node', wranglerCommand('/w')[0] === process.execPath);
 t('parseArgs reads --repo-json', parseArgs(['deploy', '--repo-json', 'x.json']).repoJsonPath === 'x.json');
-{
+for (const [label, argv] of [
+  ['unknown deploy arguments', ['deploy', '--dry-run']],
+  ['--repo-json without a path', ['deploy', '--repo-json']],
+  ['an unknown command', ['publish']],
+  ['no command', []],
+]) {
   let threw = false;
-  try { parseArgs(['deploy', '--dry-run']); } catch { threw = true; }
-  t('parseArgs refuses unknown deploy arguments', threw);
+  try { parseArgs(argv); } catch { threw = true; }
+  t(`parseArgs refuses ${label}`, threw);
 }
+t('parseArgs passes dev arguments through to wrangler',
+  JSON.stringify(parseArgs(['dev', '--port', '1']).extraArgs) === JSON.stringify(['--port', '1']));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

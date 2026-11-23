@@ -80,7 +80,7 @@ const defaultSpawn = (cmd, args, opts) => new Promise((ok, fail) => {
 /** Refuses an untaggable tree, then prepares, deploys and cleans up. Resolves to wrangler's exit code. */
 export async function deploy({
   workerDir = WORKER_DIR, staticDir = join(workerDir, 'static'), repoJsonPath, fetchImpl,
-  git = defaultGit(workerDir), spawn = defaultSpawn,
+  git = defaultGit(workerDir), spawn = defaultSpawn, cancelled = () => false,
 } = {}) {
   // Ignored files (static/repo.json, node_modules) never show in porcelain output.
   if (git(['status', '--porcelain', '--', '.']).trim() !== '') {
@@ -95,6 +95,8 @@ export async function deploy({
 
   try {
     const repoJsonBytes = await prepare({ staticDir, repoJsonPath, fetchImpl });
+    // Ctrl+C before wrangler started reached no child: honour it here, or a deploy the owner aborted still ships.
+    if (cancelled()) throw new Error('cancelled; nothing deployed');
     const [cmd, bin] = wranglerCommand(workerDir);
     return await spawn(cmd, [bin, ...deployArgs({ sha, repoJsonBytes })], { cwd: workerDir });
   } finally {
@@ -105,10 +107,11 @@ export async function deploy({
 /** `wrangler dev` with the asset in place, removed again when dev exits. */
 export async function dev({
   workerDir = WORKER_DIR, staticDir = join(workerDir, 'static'), repoJsonPath, fetchImpl, extraArgs = [],
-  spawn = defaultSpawn,
+  spawn = defaultSpawn, cancelled = () => false,
 } = {}) {
   try {
     await prepare({ staticDir, repoJsonPath, fetchImpl });
+    if (cancelled()) throw new Error('cancelled');
     const [cmd, bin] = wranglerCommand(workerDir);
     return await spawn(cmd, [bin, 'dev', ...extraArgs], { cwd: workerDir });
   } finally {
@@ -137,10 +140,13 @@ async function main() {
     await prepare({ repoJsonPath });
     return 0;
   }
-  // Ctrl+C, a closed console or a polite kill reach wrangler too; stay alive until it exits so the cleanup in
-  // `finally` runs. A hard kill cannot be caught: the leftover copy is then deleted by the next prepare/deploy/dev.
-  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => {});
-  return command === 'deploy' ? deploy({ repoJsonPath }) : dev({ repoJsonPath, extraArgs });
+  // Ctrl+C, a closed console or a polite kill: once wrangler runs it gets the signal too, and this process stays
+  // alive until it exits so the cleanup in `finally` runs. Before wrangler starts, the signal cancels: nothing is
+  // spawned. A hard kill cannot be caught; the leftover copy is then deleted by the next prepare/deploy/dev.
+  let aborted = false;
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => { aborted = true; });
+  const cancelled = () => aborted;
+  return command === 'deploy' ? deploy({ repoJsonPath, cancelled }) : dev({ repoJsonPath, extraArgs, cancelled });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
