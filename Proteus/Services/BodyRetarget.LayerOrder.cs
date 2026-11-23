@@ -340,7 +340,7 @@ internal static partial class BodyRetarget
                 // the lift runs along a curved skin sinks into it — on Rue+ Yiggle Large's underbust, 4 mm along it sank
                 // 3.2 mm. A point only pulled back keeps its move as before.
                 var p = Now(n);
-                if (raise[n] > 0f && drawn!.Deepest(p + d, PushProbeRange, out var end))
+                if (raise[n] > 0f && way[n] != default && drawn!.Deepest(p + d, PushProbeRange, out var end))
                 {
                     float stood = MathF.Min(stoodAt![n], 0f);
                     float now = Vector3.Dot(p + d - end.Point, end.Normal);

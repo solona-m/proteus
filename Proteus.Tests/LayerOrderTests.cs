@@ -306,6 +306,28 @@ public class LayerOrderTests
         Assert.True(floored[sets.NodeOf[Middle]].Z < 0.015f, "the covered point should still have gone back behind");
     }
 
+    [Theory]
+    [InlineData(8f, 0.009f)]      // a dome, the bra's middle carried to 15 mm standing ~6 mm off it
+    [InlineData(-100f, 0.0115f)]  // a bowl rising round the bra's middle to its edges
+    [Trait("Plan", "EDGE-bodice-nipple-clip-6")]
+    public void A_pull_alone_over_curved_skin_is_unchanged_by_the_floor(float curve, float height)
+    {
+        // A bra brought through its top and pulled back behind it over a curved skin: the floor and its read where a
+        // lifted point's move ends leave a pull alone as it was, however the skin curves under it.
+        var garment = Layered("/mt_c0201e6143_top_a.mtrl", "/mt_c0201e6143_top_b.mtrl");
+        var sets = BodyRetarget.Sets.From(garment);
+        var layered = BodyRetarget.GarmentCloth(garment, sets);
+        var covered = BodyRetarget.CoveredPoints(sets, layered);
+        var drawn = Skin(curve, height);
+        var floored = ThroughTheTop(sets);
+        BodyRetarget.KeepLayerOrder(sets, covered, floored, null, layered, drawn, floor: true);
+        var unfloored = ThroughTheTop(sets);
+        BodyRetarget.WithTuning(BodyRetarget.Tuned with { NoLayerFloor = true },
+                                () => BodyRetarget.KeepLayerOrder(sets, covered, unfloored, null, layered, drawn, floor: true));
+        Assert.Equal(unfloored, floored);
+        Assert.NotEqual(ThroughTheTop(sets), floored);   // it did pull
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-bodice-nipple-clip-3")]
     public void Without_a_drawn_skin_or_the_flag_the_floor_does_nothing()
