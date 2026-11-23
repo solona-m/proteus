@@ -98,6 +98,14 @@ internal static class LocalData
     /// <summary>"Rue+" 2.2.7 (y0f), installed: the body of Sarelle's Rue waist. Only ever read.</summary>
     internal const string RueMod = Mods + ":hs-Rue+-2.2.7-y0f";
 
+    /// <summary>"Neolithe [ALL IN ONE]", installed: the body Slay Ride's top was made on (SFW Almond XS). Only ever
+    /// read.</summary>
+    internal const string NeolitheMod = Mods + ":Neolithe [ALL IN ONE]";
+
+    /// <summary>"Slay Ride", installed: a strapless bodice with a fur trim of alpha cards rooted in the chest, made on
+    /// Neolithe SFW Almond XS — the layer order sank its bodice into Rue+'s bigger breasts. Only ever read.</summary>
+    internal const string SlayRideMod = Mods + ":Slay Ride";
+
     /// <summary>"charmed - by solona", installed: the Enaretos bracelet (a0153 wrs). A Single group "Enaretos Bracelet" /
     /// "Everything" ships <c>mt_c0201a0153_wrs_a.mtrl</c> (moved to character.shpk by the gear shader upgrade, index/mask
     /// form, no mask) with its <c>_n</c>/<c>_id</c>/<c>_m</c>, the still-legacy <c>mt_c0101a0153_wrs_a.mtrl</c> and

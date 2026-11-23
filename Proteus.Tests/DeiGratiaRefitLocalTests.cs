@@ -382,6 +382,51 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
         Assert.Equal(bibo.Fitted, on.Fitted);
     }
 
+    public static TheoryData<string, string> FloorBodies => new()
+    {
+        { Bibo, NudeM }, { Rue, SmallclothesM }, { Yab, SmallclothesM }, { Neolithe, NeolitheSfwM },
+    };
+
+    /// <summary>
+    /// The layer order's skin floor (bodice-nipple-clip) reads the skin without the open-edge rule, so on the blouse points
+    /// taken in by the made-on body's reading it can read an open edge as "inside". The blouse refit with the floor and
+    /// without it: no more of the bust inside, nothing deeper, no more folds — and how far the floor moved the points
+    /// taken in, printed.
+    /// </summary>
+    [LocalDataTheory(LocalData.GameData, Bibo, Rue, Yab, Neolithe, LocalData.DeiGratiaPack)]
+    [MemberData(nameof(FloorBodies))]
+    [Trait("Plan", "EDGE-bodice-nipple-clip-10")]
+    [Trait("Suite", "Diagnostic")]
+    public void Dei_Gratia_with_the_layer_floor_is_no_worse(string modNeed, string rel)
+    {
+        var i = Read(modNeed, rel);
+        var off = Plan(i, "studio", new BodyRetarget.Tuning(NoLayerFloor: true));
+        var on = Plan(i, "studio");
+        var body = new BodySurface(ModelPartReader.Read(File.ReadAllBytes(i.Target))!, 0.01f);
+        var bust = BustFront(i.Garment, on.Sets);
+        var depthOff = Depths(off, bust, body).Values.Where(d => !float.IsNaN(d)).ToList();
+        var depthOn = Depths(on, bust, body).Values.Where(d => !float.IsNaN(d)).ToList();
+        int overOff = depthOff.Count(d => d > 0.005f), overOn = depthOn.Count(d => d > 0.005f);
+        int foldedOff = BodyRetarget.FoldedTriangles(off.Sets, off.Final), foldedOn = BodyRetarget.FoldedTriangles(on.Sets, on.Final);
+        float fittedMoved = 0f;
+        int fittedChanged = 0;
+        for (int n = 0; n < on.Sets.NodeCount; n++)
+        {
+            if (!on.Fitted[n]) continue;
+            float d = Vector3.Distance(At(on.Sets, on.Final, n), At(off.Sets, off.Final, n));
+            if (d > 0f) fittedChanged++;
+            fittedMoved = MathF.Max(fittedMoved, d);
+        }
+        output.WriteLine($"{Path.GetFileName(LocalData.Path(modNeed))}: bust >5 mm inside {overOff} -> {overOn}, deepest " +
+                         $"{depthOff.Max() * 1000:0.0} -> {depthOn.Max() * 1000:0.0} mm; folded {foldedOff} -> {foldedOn}; " +
+                         $"fitted points {on.Fitted.Count(f => f)}, moved by the floor {fittedChanged}, up to {fittedMoved * 1000:0.00} mm");
+        Assert.True(overOn <= overOff, $"{overOn} bust points >5 mm inside against {overOff}");
+        Assert.True(depthOn.Max() <= depthOff.Max() + 1e-4f, $"deepest {depthOn.Max() * 1000:0.0} mm against {depthOff.Max() * 1000:0.0}");
+        Assert.True(foldedOn <= foldedOff, $"{foldedOn} folded against {foldedOff}");
+        // The open-edge reading the floor skips takes none of the points taken in by the made-on body: it never moves them.
+        Assert.Equal(0, fittedChanged);
+    }
+
     [LocalDataFact(LocalData.GameData, Bibo, LocalData.DeiGratiaPack)]
     [Trait("Plan", "AC-open-patch-authored-5")]
     [Trait("Plan", "EDGE-open-patch-authored-9")]

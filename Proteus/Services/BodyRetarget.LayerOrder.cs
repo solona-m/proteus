@@ -194,12 +194,25 @@ internal static partial class BodyRetarget
     /// <param name="drawn">The skin drawn under the garment, or null when the refit did not push out: a covered point is
     /// pulled back no further than it stands off this skin, and the cover is lifted by the rest. Hidden only while its
     /// cover is drawn, and Proteus's own part switches can hide the cover: a bra sunk into the breast showed the skin
-    /// through it the moment the top was switched off.</param>
+    /// through it the moment the top was switched off.
+    /// <para/>
+    /// With <paramref name="floor"/>, no move of this pass — the pull or the cover's lift — takes a point deeper into
+    /// this skin than it stood. The lift is faded onto the neighbours in the lifting point's own direction (see
+    /// <see cref="Spread"/>), and on a neighbour that can point into the body: Slay Ride's fur trim, lifted off the fur
+    /// beneath it, drove the bodice beside it up to 19 mm into Rue+ Yiggle Large's breast (18.6 mm of skin through the
+    /// bodice around each nipple; 2.2 mm with the floor). Only the inward part of a move is taken back, along the skin's
+    /// normal where the point landed at the round's start, and then, for a point the lift moved, along the skin's normal
+    /// where the move ends, should what runs along a curved skin have sunk it: the rest of the move stands, a point only
+    /// pulled back keeps its move as before (its pull is held to its room), and a point with no skin within
+    /// <see cref="PushProbeRange"/> is not floored.</param>
     /// <param name="liftOnly">Pull no covered point back; lift the cover by the whole shortfall. For after
     /// <see cref="KeepOutfitOrder"/>, which has just lifted the garment off another piece: a lining pulled back toward
     /// the skin would go back under that piece.</param>
+    /// <param name="floor">Hold every move to the skin <paramref name="drawn"/> (see there). Off for a game top's refit,
+    /// which clears its body and buries its own cloth 6-15 mm.</param>
     internal static int KeepLayerOrder(Sets sets, IReadOnlyList<Covered> covered, Vec3[] nodeDelta, bool[]? stay,
-                                       bool[] layered, TargetBody? drawn = null, bool liftOnly = false)
+                                       bool[] layered, TargetBody? drawn = null, bool liftOnly = false,
+                                       bool floor = false)
     {
         if (covered.Count == 0) return 0;
         var movable = new bool[sets.NodeCount];
@@ -212,18 +225,24 @@ internal static partial class BodyRetarget
         var walls = Tuned.NoWallCover ? null : WallPartners(sets, layered);
         for (int round = 0; round < LayerOrderRounds; round++)
         {
-            int now = KeepLayerOrderOnce(sets, covered, nodeDelta, movable, drawn, liftOnly, walls);
+            int now = KeepLayerOrderOnce(sets, covered, nodeDelta, movable, drawn, liftOnly, walls,
+                                         floor && !Tuned.NoLayerFloor);
             if (now == 0) break;
             moved += now;
         }
         return moved;
     }
 
+    /// <summary>Whether a refit's layer order holds its moves to the skin (see <see cref="KeepLayerOrder"/>): not a game
+    /// top's, which clears its body — that refit keeps the order as it was.</summary>
+    internal static bool LayerFloorFor(bool clearBody) => !clearBody;
+
     /// <summary>Rounds <see cref="KeepLayerOrder"/> measures and moves again, at most (3).</summary>
     private const int LayerOrderRounds = 3;
 
     private static int KeepLayerOrderOnce(Sets sets, IReadOnlyList<Covered> covered, Vec3[] nodeDelta, bool[] movable,
-                                          TargetBody? drawn, bool liftOnly = false, int[]? walls = null)
+                                          TargetBody? drawn, bool liftOnly = false, int[]? walls = null,
+                                          bool floor = false)
     {
         Vector3 Now(int n) => ToVector(sets.NodeAt[n]) + ToVector(nodeDelta[n]);
         bool Finite(Vector3 v) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);
@@ -257,13 +276,20 @@ internal static partial class BodyRetarget
         // How far each point may go back before it reaches the skin.
         var room = new float[sets.NodeCount];
         Array.Fill(room, liftOnly ? 0f : float.PositiveInfinity);
+        // The skin's way out where each point landed: the floor no move of this pass goes through (see KeepLayerOrder).
+        var skinOut = floor && drawn != null && !liftOnly ? new Vector3[sets.NodeCount] : null;
+        var stoodAt = skinOut != null ? new float[sets.NodeCount] : null;
         if (drawn != null && !liftOnly)
             for (int n = 0; n < sets.NodeCount; n++)
             {
                 if (!movable[n]) continue;
                 var p = Now(n);
                 if (Finite(p) && drawn.Deepest(p, PushProbeRange, out var hit))
-                    room[n] = MathF.Max(0f, Vector3.Dot(p - hit.Point, hit.Normal));
+                {
+                    float s = Vector3.Dot(p - hit.Point, hit.Normal);
+                    room[n] = MathF.Max(0f, s);
+                    if (skinOut != null) { skinOut[n] = hit.Normal; stoodAt![n] = s; }
+                }
             }
 
         // Back behind the cover, faded onto the neighbours, no further than the skin allows.
@@ -304,6 +330,24 @@ internal static partial class BodyRetarget
             if (pull[n] > 0f && dir[n] != default) d += dir[n] * pull[n];
             if (raise[n] > 0f && way[n] != default) d += way[n] * raise[n];
             if (d == Vector3.Zero || !movable[n]) continue;
+            // Never deeper into the skin than the point stood: the pull is held to its room already, and the lift takes
+            // back whatever of the room the pull left (see KeepLayerOrder).
+            if (skinOut != null && skinOut[n] != default)
+            {
+                float excess = -Vector3.Dot(d, skinOut[n]) - room[n];
+                if (excess > 0f) d += skinOut[n] * excess;
+                // Read again where a lifted point's move ends: the plane at the start is the skin only there, and what of
+                // the lift runs along a curved skin sinks into it — on Rue+ Yiggle Large's underbust, 4 mm along it sank
+                // 3.2 mm. A point only pulled back keeps its move as before.
+                var p = Now(n);
+                if (raise[n] > 0f && way[n] != default && drawn!.Deepest(p + d, PushProbeRange, out var end))
+                {
+                    float stood = MathF.Min(stoodAt![n], 0f);
+                    float now = Vector3.Dot(p + d - end.Point, end.Normal);
+                    if (now < stood) d += end.Normal * (stood - now);
+                }
+                if (d == Vector3.Zero) continue;
+            }
             nodeDelta[n] = new Vec3(nodeDelta[n].X + d.X, nodeDelta[n].Y + d.Y, nodeDelta[n].Z + d.Z);
             moved++;
         }
