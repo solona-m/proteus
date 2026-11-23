@@ -7,6 +7,9 @@
  * working exactly as before.
  *
  * Run with `npm test` from worker/. No network, no wrangler, no account needed.
+ *
+ * [AC-static-repo-json-3] Every route suite below is unchanged by the static-asset move of /repo.json: the release,
+ * Camera Tools, Milieu and Pickles routes and the documents still resolve to the same upstreams through the Worker.
  */
 import worker, { pickLanguage } from '../src/index.js';
 import { renderMarkdown, stripTags } from '../src/render.js';
@@ -766,6 +769,56 @@ console.log('heading ids:');
     if (got === want && !/<[^>]*>/.test(got)) { pass++; console.log(`  ok   stripTags ${JSON.stringify(input)}`); }
     else { fail++; console.log(`  FAIL stripTags ${JSON.stringify(input)}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`); }
   }
+}
+
+// repo.json is normally a static asset (worker/static/, see assets.test.mjs) and never reaches this code. When a deploy
+// shipped no repo.json, the request falls through to the Worker, which must answer exactly as it did before assets.
+console.log('repo.json fallback through the Worker:');
+{
+  const t = (name, ok, detail = '') => {
+    if (ok) { pass++; console.log(`  ok   ${name}`); }
+    else { fail++; console.log(`  FAIL ${name}${detail ? ': ' + detail : ''}`); }
+  };
+  const UP = 'https://raw.githubusercontent.com/solona-m/plugins/main/repo.json';
+
+  // [AC-static-repo-json-2] [EDGE-static-repo-json-1]
+  store.clear();
+  fetched = [];
+  const res = await worker.fetch(new Request('https://dl.example.com/repo.json'), {}, ctx);
+  t('fallback proxies plugins main with the same headers as before',
+    res.status === 200 && fetched[0] === UP
+      && res.headers.get('content-type') === 'application/json; charset=utf-8'
+      && res.headers.get('cache-control') === 'public, max-age=300'
+      && res.headers.get('x-proteus-mirror') === 'raw',
+    `${res.status} ${fetched[0]} ${res.headers.get('content-type')} ${res.headers.get('cache-control')} ` +
+    `${res.headers.get('x-proteus-mirror')}`);
+
+  // [AC-static-repo-json-2] An upstream failure passes through, uncached, and the next request asks again.
+  for (const status of [404, 503]) {
+    store.clear();
+    const saved = globalThis.fetch;
+    globalThis.fetch = async (url) => { fetched.push(url); return new Response('down', { status }); };
+    fetched = [];
+    const first = await worker.fetch(new Request('https://dl.example.com/repo.json'), {}, ctx);
+    await worker.fetch(new Request('https://dl.example.com/repo.json'), {}, ctx);
+    globalThis.fetch = saved;
+    t(`fallback upstream ${status} passes through uncached`,
+      first.status === status && (first.headers.get('cache-control') ?? '').includes('no-store') && fetched.length === 2,
+      `${first.status} ${first.headers.get('cache-control')} fetched ${fetched.length}`);
+  }
+  store.clear();
+}
+
+// Paths the assets layer must never answer either reach a route here or get this Worker's own 404. `/_headers` is
+// Cloudflare's config file for the assets: it is parsed, never served, so it falls through to here like any unknown path.
+console.log('paths next to the assets reach the Worker 404:');
+// [AC-static-repo-json-3] [EDGE-static-repo-json-4] [EDGE-static-repo-json-7] [EDGE-static-repo-json-8]
+for (const p of ['/_headers', '/index.html', '/404.html', '/nope', '/repo', '/repo.json/', '/REPO.JSON']) {
+  fetched = [];
+  const res = await worker.fetch(new Request('https://dl.example.com' + p), {}, ctx);
+  const body = await res.text();
+  if (res.status === 404 && body === 'Not found' && fetched.length === 0) { pass++; console.log(`  ok   ${p} -> Not found`); }
+  else { fail++; console.log(`  FAIL ${p}: ${res.status} "${body}" fetched ${fetched[0]}`); }
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

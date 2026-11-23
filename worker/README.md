@@ -50,11 +50,15 @@ binding together. Note it takes **no `/*`** — a custom domain is a hostname, n
 
 ```sh
 cd worker
-npm install
-npm test               # routing/caching tests — no network or account needed
-npx wrangler login     # opens a browser once
-npm run deploy         # NOT `npx wrangler deploy` — see "Paths" below
+npm ci                 # the committed package-lock.json, exactly
+npm test               # routing/caching/assets/deploy tests — no network or account needed
+npm run deploy         # NEVER `npx wrangler deploy` — see "repo.json is a static asset" below
 ```
+
+`npm run deploy` needs a Cloudflare token that can deploy Workers in `CLOUDFLARE_API_TOKEN` and the account
+in `CLOUDFLARE_ACCOUNT_ID` (or a `npx wrangler login` session). It refuses to run with uncommitted changes
+under `worker/` or from a commit no remote branch contains: it tags the deployed version with the commit,
+and the plugins repo's redeploy checks that commit out (see below). Push first, then deploy.
 
 ### 3. Verify before you point the plugin at it
 
@@ -154,6 +158,61 @@ about.
 | `/TROUBLESHOOTING.md`, `/For%20Creators.md`, `/TERMS.md` | the docs the README links to (TERMS.md is the Terms of Service) |
 | `/milieu`, `/milieu/`, `/milieu/README.md` | Milieu's user README, from the milieu repo's `test` branch |
 | `/milieu/icon.png` | Milieu's icon, same branch |
+| `/repo.json` | a **static asset** (see below); the worker proxies `solona-m/plugins` `main` only if the asset is missing |
+
+### repo.json is a static asset
+
+Every Dalamud client fetches `/repo.json` on every startup and every list refresh: about 79% of this
+worker's requests in November 2026 (103,894 of 131,943 in one day). Every request to a worker runs it, even
+a cache hit, and the free plan's 100,000 Worker requests a day are shared by every worker on the account. A
+**Workers static asset** is served by Cloudflare without running the worker, and static asset requests are
+free and unlimited.
+
+- `static/` is the assets directory (`[assets]` in `wrangler.toml`). It holds `_headers`, committed, and
+  `repo.json`, which `scripts/deploy.mjs` writes for the length of a deploy (from the GitHub contents API, or
+  `--repo-json <path>`), validates (a non-empty JSON array) and deletes again afterwards.
+- `_headers` gives it `Content-Type: application/json; charset=utf-8`, `Cache-Control: public, max-age=300`
+  (the proxy's old TTL) and `X-Proteus-Mirror: asset`. `_headers` itself is never served: `/_headers` is a 404
+  from the worker.
+- Only the exact path matches (`html_handling = "none"`); anything else reaches the worker as before
+  (`not_found_handling = "none"`, never an asset 404 page). There is **no `run_worker_first`**: it would run,
+  and bill, the worker for every request again.
+- **Fallback.** A deploy that shipped no `repo.json` falls through to the worker, which proxies it from
+  `solona-m/plugins` `main` exactly as it always did (`X-Proteus-Mirror: raw`). A failed sync can never break
+  installs.
+- **Never `npx wrangler deploy`.** It ships whatever is in `static/` (normally no `repo.json`, so the fallback
+  answers and costs Worker requests again) and leaves the version untagged, so the plugins repo's next
+  redeploy fails until `npm run deploy` is run.
+- `npm run dev` does the same as deploy, locally: writes `repo.json`, runs `wrangler dev`, deletes it on exit.
+
+Which one answered, after any deploy:
+
+```powershell
+curl.exe -sI https://dl.solona.info/repo.json | findstr /i x-proteus-mirror   # asset = static; raw = the worker
+```
+
+### Redeployed from solona-m/plugins
+
+A static asset only changes on a deploy, so `solona-m/plugins`' `.github/workflows/deploy-repo-json.yml`
+keeps it current. It runs on a push to `main` that touches `repo.json`, after every Sync run (Sync pushes with
+`GITHUB_TOKEN`, which triggers no push workflow) and by hand:
+
+1. If the live `/repo.json` is byte-identical to `main`'s and says `X-Proteus-Mirror: asset`, it stops.
+2. Otherwise it reads the **live** version's tag (the Proteus commit `npm run deploy` recorded), checks out
+   exactly that commit's `worker/`, runs `npm ci --ignore-scripts`, and `npm run deploy`s it with `main`'s
+   repo.json. It never deploys a branch head, so it can't roll worker code back or forward: a hand deploy from
+   `test` stays live, a dashboard rollback is followed.
+3. It checks the live file again and fails the run (GitHub emails) if it still differs. The next run heals a
+   failed one; Sync runs daily.
+
+It needs the repository secret **`CLOUDFLARE_API_TOKEN`** in `solona-m/plugins`: a custom Cloudflare token
+with *Account → Workers Scripts → Edit* on this account and *Zone → Workers Routes → Edit* on `solona.info`
+(not the "Edit Cloudflare Workers" template as-is, which adds KV and R2). Workers Scripts is account-wide, so
+the token can overwrite every worker on the account: keep it in that one secret. Give it no expiry, or set a
+reminder: an expired token freezes `/repo.json` at its last deploy.
+
+The first `npm run deploy` with this setup must come from the owner, so the live version carries a tag; until
+then the workflow fails, saying so.
 
 ### A second plugin
 
@@ -286,8 +345,9 @@ will show the truth. Either wait out the negative TTL or test through it:
 curl.exe -s --resolve dl.YOURDOMAIN.com:443:<cloudflare-ip> -o NUL -w "%{http_code}`n" https://dl.YOURDOMAIN.com/...
 ```
 
-**Cost and scale.** Free-plan Workers cover 100k requests/day, and objects up to 512 MB are cacheable
-(the maps are 128 MB). The plugin-side fix — maps in the config directory, effects out of the plugin
+**Cost and scale.** Free-plan Workers cover 100k requests/day, shared by every worker on the account, and
+objects up to 512 MB are cacheable (the maps are 128 MB). `/repo.json`, the bulk of the traffic, is a static
+asset and does not count against that limit. The plugin-side fix — maps in the config directory, effects out of the plugin
 zip — is what keeps this in ordinary territory: steady-state is roughly `new installs × 267 MB`
 instead of the ~12 TB that the pre-fix re-download loop was generating. Serving that much in binaries
 through a free zone is what [Cloudflare ToS §2.8](https://www.cloudflare.com/terms/) discourages, so
