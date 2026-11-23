@@ -84,6 +84,8 @@ internal static partial class BodyRetarget
     /// builds before 1413 did, never swapped for the men's arm and hand (tests only; see <c>CrossSexRefitJob</c>).</param>
     /// <param name="NoSharedSeam">Refit a garment split at the waist as if the other piece shared no seam with it, as
     /// builds before the shared seam did (see <see cref="PinSharedSeam"/>).</param>
+    /// <param name="NoLayerFloor">Let the layer order's lift, faded onto a neighbour, take that point deeper into the
+    /// drawn skin than it stood, as builds before 1495 did (see <see cref="KeepLayerOrder"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -101,7 +103,7 @@ internal static partial class BodyRetarget
                                   bool NoCutOpenSkin = false, bool CutOpenSkinUnderCloth = false,
                                   bool CutOpenSkinAnyFacing = false, bool NoCutInside = false,
                                   bool NoReshapeEnds = false, bool NoSharedSeam = false, bool NoBulge = false,
-                                  bool BulgeFault = false, bool BulgeForceGuard = false);
+                                  bool BulgeFault = false, bool BulgeForceGuard = false, bool NoLayerFloor = false);
 
     private static readonly Tuning DefaultTuning = new();
 

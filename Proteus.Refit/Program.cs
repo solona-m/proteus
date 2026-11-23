@@ -1196,6 +1196,7 @@ internal static class Program
                     "NoLayerKnit" => tuning with { NoLayerKnit = true },
                     "NoFollow" => tuning with { NoFollow = true },
                     "NoLayerOrder" => tuning with { NoLayerOrder = true },
+                    "NoLayerFloor" => tuning with { NoLayerFloor = true },
                     "NoRelease" => tuning with { NoRelease = true },
                     "NoNippleSmooth" => tuning with { NoNippleSmooth = true },
                     "NoSnapPush" => tuning with { NoSnapPush = true },

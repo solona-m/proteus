@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -120,6 +121,204 @@ public class LayerOrderTests
 
         var outer = Enumerable.Range(Side * Side, Side * Side).Select(v => sets.NodeOf[v]).ToHashSet();
         Assert.DoesNotContain(covered, c => outer.Contains(c.Node));
+    }
+
+    // ── the skin floor: no move of the layer order takes cloth deeper into the drawn skin than it stood ────────────────
+    // Slay Ride on Rue+ Yiggle Large: the fur trim's lifts, faded onto the bodice beside it, drove the bodice up to 19 mm
+    // into the breast — the pull is held to the skin, the lift was not.
+
+    /// <summary>The drawn skin under the sheets, facing +Z, <see cref="SkinBelow"/> under the inner sheet's middle.</summary>
+    private static BodyRetarget.TargetBody FlatSkin() => Skin(0f);
+
+    /// <summary>
+    /// The drawn skin under the sheets, <see cref="SkinBelow"/> under the inner sheet's middle and falling away from it by
+    /// <paramref name="curve"/> times the squared distance (per metre): a dome, as a breast is under the bodice.
+    /// </summary>
+    private static BodyRetarget.TargetBody Skin(float curve)
+    {
+        const int count = 49;
+        const float step = 0.00125f, from = -0.02f;
+        const float mid = (Side - 1) * Step / 2f;
+        var pos = new List<float>();
+        var nrm = new List<float>();
+        var tris = new List<int>();
+        for (int i = 0; i < count; i++)
+        for (int k = 0; k < count; k++)
+        {
+            float x = from + i * step, y = from + k * step, dx = x - mid, dy = y - mid;
+            pos.AddRange([x, y, -SkinBelow - curve * (dx * dx + dy * dy)]);
+            var n = Vector3.Normalize(new Vector3(2f * curve * dx, 2f * curve * dy, 1f));
+            nrm.AddRange([n.X, n.Y, n.Z]);
+        }
+        for (int i = 0; i + 1 < count; i++)
+        for (int k = 0; k + 1 < count; k++)
+        {
+            int a = i * count + k, b = a + count, c = a + 1, d = b + 1;
+            tris.AddRange([a, b, d, a, d, c]);
+        }
+        var p = pos.ToArray();
+        var min = new Vector3(from, from, -0.02f);
+        var max = new Vector3(from + (count - 1) * step, from + (count - 1) * step, -SkinBelow);
+        var body = new ModelParts
+        {
+            Positions = p,
+            Normals = nrm.ToArray(),
+            MeshSpans = [new MeshSpan(0, 0, p.Length / 3)],
+            Parts =
+            [
+                new ModelPart
+                {
+                    Mesh = 0, Submesh = 0, Island = -1, Label = "0.0", Material = "/mt_c0201b0001_bibo.mtrl",
+                    Triangles = tris.ToArray(), Ordinals = Enumerable.Range(0, tris.Count / 3).ToArray(),
+                    AttributeMask = 0, Min = min, Max = max, Toggleable = true,
+                },
+            ],
+            AttributeNames = [],
+            Min = min,
+            Max = max,
+            ShatteredSubmeshes = new Dictionary<string, int>(),
+        };
+        Assert.True(IdentityCorrespondence.TryBuild(body, body, "chest", out var same, out string why), why);
+        return BodyRetarget.TargetBody.Build([new BodyRetarget.SlotPair("_top", same!, body)], null, null, before: false);
+    }
+
+    private const float SkinBelow = 0.0005f;
+
+    /// <summary>
+    /// The outer sheet's middle point taken for covered by the inner sheet's face under it, and dragged 5 mm down through
+    /// that face into the skin: it has no room to go back, so the whole shortfall lifts the inner sheet away from it —
+    /// which here is into the body, as the fur trim's lift was on the bodice beside it.
+    /// </summary>
+    private static (BodyRetarget.Sets Sets, bool[] Layered, List<BodyRetarget.Covered> Covered, Vec3[] Delta) LiftedInward()
+    {
+        var garment = Layered("/mt_c0201e6143_top_a.mtrl", "/mt_c0201e6143_top_b.mtrl");
+        var sets = BodyRetarget.Sets.From(garment);
+        var layered = BodyRetarget.GarmentCloth(garment, sets);
+        int a = Middle, b = Middle + 1, c = Middle + Side + 1;   // the inner face under the outer middle, wound +Z
+        // Facing -1: away from the covered point as authored, which lay above the face.
+        var covered = new List<BodyRetarget.Covered>
+        {
+            new(sets.NodeOf[Side * Side + Middle], sets.NodeOf[a], sets.NodeOf[b], sets.NodeOf[c], 0f, 0f, Gap, -1f),
+        };
+        var delta = new Vec3[sets.NodeCount];
+        delta[sets.NodeOf[Side * Side + Middle]] = new Vec3(0f, 0f, -0.005f);
+        return (sets, layered, covered, delta);
+    }
+
+    private static float Standoff(BodyRetarget.Sets sets, Vec3[] delta, int vertex)
+        => sets.NodeAt[sets.NodeOf[vertex]].Z + delta[sets.NodeOf[vertex]].Z + SkinBelow;
+
+    /// <summary>How far a vertex stands off the drawn skin, signed: negative inside.</summary>
+    private static float Off(BodyRetarget.TargetBody drawn, BodyRetarget.Sets sets, Vec3[] delta, int vertex)
+    {
+        int n = sets.NodeOf[vertex];
+        var p = new Vector3(sets.NodeAt[n].X + delta[n].X, sets.NodeAt[n].Y + delta[n].Y, sets.NodeAt[n].Z + delta[n].Z);
+        Assert.True(drawn.Deepest(p, 0.03f, out var hit), $"vertex {vertex} found no skin");
+        return Vector3.Dot(p - hit.Point, hit.Normal);
+    }
+
+    [Theory]
+    [InlineData(0f)]    // flat
+    [InlineData(8f)]    // a dome falling 1.6 mm over the sheet's half-width, as a breast under a bodice
+    [Trait("Plan", "AC-bodice-nipple-clip-5")]
+    [Trait("Plan", "EDGE-bodice-nipple-clip-5")]
+    public void A_cover_lift_spread_inward_never_sinks_cloth_into_the_skin(float curve)
+    {
+        var drawn = Skin(curve);
+        var (_, _, _, start) = LiftedInward();
+
+        // Without the floor, the inner sheet is lifted into the skin: the mechanism, reproduced.
+        var (sets, layered, covered, delta) = LiftedInward();
+        var startOff = Enumerable.Range(0, Side * Side).Select(v => Off(drawn, sets, start, v)).ToArray();
+        BodyRetarget.WithTuning(BodyRetarget.Tuned with { NoLayerFloor = true },
+                                () => BodyRetarget.KeepLayerOrder(sets, covered, delta, null, layered, drawn, floor: true));
+        float sunk = Enumerable.Range(0, Side * Side).Min(v => Off(drawn, sets, delta, v));
+        Assert.True(sunk < -0.001f, $"without the floor the inner sheet should sink into the skin, lowest {sunk * 1000:F2} mm");
+
+        // With it, over all three rounds, no inner point ends deeper than it stood or the skin, whichever is less deep.
+        (sets, layered, covered, delta) = LiftedInward();
+        BodyRetarget.KeepLayerOrder(sets, covered, delta, null, layered, drawn, floor: true);
+        for (int v = 0; v < Side * Side; v++)
+        {
+            float off = Off(drawn, sets, delta, v);
+            Assert.True(off >= MathF.Min(startOff[v], 0f) - 0.0001f,
+                        $"inner vertex {v} at {off * 1000:F2} mm off the skin, from {startOff[v] * 1000:F2}");
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-bodice-nipple-clip-2")]
+    public void A_node_without_a_skin_reading_is_not_floored()
+    {
+        // The skin 50 mm below the sheets, past the push-out's probe: no reading anywhere, so nothing to floor.
+        var (sets, layered, covered, floored) = LiftedInward();
+        for (int n = 0; n < sets.NodeCount; n++) floored[n] = new Vec3(floored[n].X, floored[n].Y, floored[n].Z + 0.05f);
+        var unfloored = (Vec3[])floored.Clone();
+        var drawn = FlatSkin();
+        BodyRetarget.KeepLayerOrder(sets, covered, floored, null, layered, drawn, floor: true);
+        BodyRetarget.KeepLayerOrder(sets, covered, unfloored, null, layered, drawn, floor: false);
+        Assert.Equal(unfloored, floored);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-bodice-nipple-clip-6")]
+    public void The_floor_turns_no_triangle_over()
+    {
+        var (sets, layered, covered, delta) = LiftedInward();
+        BodyRetarget.KeepLayerOrder(sets, covered, delta, null, layered, FlatSkin(), floor: true);
+        Assert.Equal(0, BodyRetarget.FoldedTriangles(sets, delta));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-bodice-nipple-clip-1")]
+    public void A_point_already_inside_is_never_moved_further_in()
+    {
+        // The inner middle — a corner of the lifted face — already 2 mm inside the skin when the pass begins.
+        var (sets, layered, covered, delta) = LiftedInward();
+        delta[sets.NodeOf[Middle]] = new Vec3(0f, 0f, -0.0025f);
+        float start = Standoff(sets, delta, Middle);
+        Assert.True(start < 0f);
+
+        BodyRetarget.KeepLayerOrder(sets, covered, delta, null, layered, FlatSkin(), floor: true);
+        Assert.True(Standoff(sets, delta, Middle) >= start - 1e-5f,
+                    $"moved from {start * 1000:F2} to {Standoff(sets, delta, Middle) * 1000:F2} mm off the skin");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-bodice-nipple-clip-6")]
+    [Trait("Plan", "AC-bodice-nipple-clip-8")]
+    public void A_pull_within_room_is_unchanged_by_the_floor()
+    {
+        // A covered point brought through its cover and pulled back behind it, far off the skin: no lift, nothing to floor.
+        var garment = Layered("/mt_c0201e6143_top_a.mtrl", "/mt_c0201e6143_top_b.mtrl");
+        var sets = BodyRetarget.Sets.From(garment);
+        var layered = BodyRetarget.GarmentCloth(garment, sets);
+        var covered = BodyRetarget.CoveredPoints(sets, layered);
+        var drawn = FlatSkin();
+
+        var floored = ThroughTheTop(sets);
+        BodyRetarget.KeepLayerOrder(sets, covered, floored, null, layered, drawn, floor: true);
+        var unfloored = ThroughTheTop(sets);
+        BodyRetarget.WithTuning(BodyRetarget.Tuned with { NoLayerFloor = true },
+                                () => BodyRetarget.KeepLayerOrder(sets, covered, unfloored, null, layered, drawn, floor: true));
+        Assert.Equal(unfloored, floored);
+        Assert.True(floored[sets.NodeOf[Middle]].Z < 0.015f, "the covered point should still have gone back behind");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-bodice-nipple-clip-3")]
+    public void Without_a_drawn_skin_the_floor_does_nothing()
+    {
+        // No skin to floor against (no push-out), and the outfit order's lift-only call: both as before.
+        foreach (bool liftOnly in new[] { false, true })
+        {
+            var (sets, layered, covered, floored) = LiftedInward();
+            BodyRetarget.KeepLayerOrder(sets, covered, floored, null, layered, null, liftOnly, floor: true);
+            var (_, _, _, unfloored) = LiftedInward();
+            BodyRetarget.WithTuning(BodyRetarget.Tuned with { NoLayerFloor = true },
+                                    () => BodyRetarget.KeepLayerOrder(sets, covered, unfloored, null, layered, null, liftOnly, floor: true));
+            Assert.Equal(unfloored, floored);
+        }
     }
 
     [Fact]

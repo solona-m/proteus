@@ -1163,7 +1163,7 @@ internal static partial class BodyRetarget
             Stage("shared-seam");
         }
 
-        if (covered != null) KeepLayerOrder(sets, covered, nodeDelta, stay, layered!, drawn);
+        if (covered != null) KeepLayerOrder(sets, covered, nodeDelta, stay, layered!, drawn, floor: !clearBody);
         Stage("layer-order");
 
         // The worst push as the report says it: how far a pushed point now lies from where the push-out found it — the
