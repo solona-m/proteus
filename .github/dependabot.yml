@@ -32,7 +32,8 @@ updates:
       default-days: 3
     ignore:
       # The Dalamud SDK (global.json) is tied to DalamudApiLevel and is bumped by hand with the game;
-      # the other two are injected by that SDK and versioned with it.
+      # the other two are injected by that SDK and versioned with it (Proteus.csproj raises
+      # DotNet.ReproducibleBuilds above the SDK's pin by hand, with an Update item).
       - dependency-name: "Dalamud.NET.Sdk"
       - dependency-name: "DalamudPackager"
       - dependency-name: "DotNet.ReproducibleBuilds"

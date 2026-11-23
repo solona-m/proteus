@@ -71,22 +71,64 @@ public class HarnessReleaseGuardTests
         {
             if (file.StartsWith(harness, StringComparison.OrdinalIgnoreCase)) continue;
             if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)) continue;
-            // One entry per open #if: whether its current branch is compiled only with the harness.
-            var stack = new System.Collections.Generic.Stack<bool>();
-            foreach (var line in File.ReadAllLines(file))
+            foreach (var (line, harnessOnly) in WithHarnessGuard(file))
             {
-                var t = line.Trim();
-                if (t.StartsWith("#if", StringComparison.Ordinal))
-                    stack.Push(System.Text.RegularExpressions.Regex.IsMatch(t, @"^#if\s+PROTEUS_TEST_HARNESS\s*(//.*)?$"));
-                else if (t.StartsWith("#elif", StringComparison.Ordinal) || t.StartsWith("#else", StringComparison.Ordinal))
-                { if (stack.Count > 0) { stack.Pop(); stack.Push(false); } }
-                else if (t.StartsWith("#endif", StringComparison.Ordinal) && stack.Count > 0) stack.Pop();
                 if (!line.Contains(marker, StringComparison.Ordinal)) continue;
                 seen++;
-                Assert.True(stack.Contains(true), $"{Path.GetRelativePath(RepoRoot, file)} names {marker} outside #if PROTEUS_TEST_HARNESS");
+                Assert.True(harnessOnly, $"{Path.GetRelativePath(RepoRoot, file)} names {marker} outside #if PROTEUS_TEST_HARNESS");
             }
         }
         Assert.True(seen > 0, $"{marker} is defined nowhere: the release guard's second marker would never match");
+    }
+
+    [Fact]
+    public void TestsOutsideHarnessFolder_NameHarnessNamespacesOnlyInsideGuards()
+    {
+        // CI compiles Proteus/TestHarness/ and Proteus.Tests/TestHarness/ out, so a test file outside the latter that names
+        // either namespace (a using, or a qualified name such as Proteus.Tests.TestHarness.X) broke CI's build of the whole
+        // test project for weeks while every local build, which has the harness, compiled. Such a reference belongs in
+        // Proteus.Tests/TestHarness/ or between #if PROTEUS_TEST_HARNESS and #endif. Strings and comments don't count:
+        // tests that look the harness up by name at run time are how a root-level test checks it is compiled out.
+        var tests = Path.Combine(RepoRoot, "Proteus.Tests");
+        var harness = Path.Combine(tests, "TestHarness") + Path.DirectorySeparatorChar;
+        var sep = Path.DirectorySeparatorChar;
+        var reference = new System.Text.RegularExpressions.Regex(
+            @"\busing\s+(static\s+)?(\w+\s*=\s*)?(Proteus\.(Tests\.)?)?TestHarness\b|(?<![\w.])(Proteus\.(Tests\.)?)?TestHarness\s*\.");
+        var literal = new System.Text.RegularExpressions.Regex(@"@?""(?:\\.|""""|[^""\\])*""|'(?:\\.|[^'\\])'");
+        int files = 0;
+        foreach (var file in Directory.EnumerateFiles(tests, "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.StartsWith(harness, StringComparison.OrdinalIgnoreCase)) continue;
+            if (file.Contains($"{sep}obj{sep}", StringComparison.Ordinal) || file.Contains($"{sep}bin{sep}", StringComparison.Ordinal)) continue;
+            files++;
+            foreach (var (line, harnessOnly) in WithHarnessGuard(file))
+            {
+                var code = literal.Replace(line, "\"\"");
+                int comment = code.IndexOf("//", StringComparison.Ordinal);
+                if (comment >= 0) code = code[..comment];
+                if (code.TrimStart().StartsWith("///", StringComparison.Ordinal) || !reference.IsMatch(code)) continue;
+                Assert.True(harnessOnly,
+                    $"{Path.GetRelativePath(RepoRoot, file)} names the harness outside #if PROTEUS_TEST_HARNESS (CI compiles it out): {line.Trim()}");
+            }
+        }
+        Assert.True(files > 100, "the scan found the test project's files");
+    }
+
+    /// <summary>Each line of <paramref name="file"/>, and whether it is compiled only with the harness (inside #if PROTEUS_TEST_HARNESS).</summary>
+    private static System.Collections.Generic.IEnumerable<(string Line, bool HarnessOnly)> WithHarnessGuard(string file)
+    {
+        // One entry per open #if: whether its current branch is compiled only with the harness.
+        var stack = new System.Collections.Generic.Stack<bool>();
+        foreach (var line in File.ReadAllLines(file))
+        {
+            var t = line.Trim();
+            if (t.StartsWith("#if", StringComparison.Ordinal))
+                stack.Push(System.Text.RegularExpressions.Regex.IsMatch(t, @"^#if\s+PROTEUS_TEST_HARNESS\s*(//.*)?$"));
+            else if (t.StartsWith("#elif", StringComparison.Ordinal) || t.StartsWith("#else", StringComparison.Ordinal))
+            { if (stack.Count > 0) { stack.Pop(); stack.Push(false); } }
+            else if (t.StartsWith("#endif", StringComparison.Ordinal) && stack.Count > 0) stack.Pop();
+            yield return (line, stack.Contains(true));
+        }
     }
 
     [Fact]
