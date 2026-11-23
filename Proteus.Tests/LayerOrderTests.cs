@@ -157,8 +157,8 @@ public class LayerOrderTests
             tris.AddRange([a, b, d, a, d, c]);
         }
         var p = pos.ToArray();
-        var min = new Vector3(from, from, height - 0.02f);
-        var max = new Vector3(from + (count - 1) * step, from + (count - 1) * step, height);
+        var min = new Vector3(from, from, MathF.Min(height, height - curve * 0.0008f));
+        var max = new Vector3(from + (count - 1) * step, from + (count - 1) * step, MathF.Max(height, height - curve * 0.0008f));
         var body = new ModelParts
         {
             Positions = p,

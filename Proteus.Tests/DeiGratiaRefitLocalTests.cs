@@ -423,6 +423,8 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
         Assert.True(overOn <= overOff, $"{overOn} bust points >5 mm inside against {overOff}");
         Assert.True(depthOn.Max() <= depthOff.Max() + 1e-4f, $"deepest {depthOn.Max() * 1000:0.0} mm against {depthOff.Max() * 1000:0.0}");
         Assert.True(foldedOn <= foldedOff, $"{foldedOn} folded against {foldedOff}");
+        // The open-edge reading the floor skips takes none of the points taken in by the made-on body: it never moves them.
+        Assert.Equal(0, fittedChanged);
     }
 
     [LocalDataFact(LocalData.GameData, Bibo, LocalData.DeiGratiaPack)]

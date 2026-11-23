@@ -132,33 +132,46 @@ public sealed class SlayRideNippleClipDiagnosticTests(ITestOutputHelper o) : IDi
                             $"{Standoff(noLayer, sinkAt) * 1000f:F2} -> {Standoff(floored, sinkAt) * 1000f:F2} mm), part " +
                             $"{NippleClipMeasure.Cloth(floored).First(p => p.Triangles.Contains(sinkAt)).Label}");
             }
-            // [AC-7] The fur that shows — its points outside the skin with the floor and without — within 1 mm of where it lay
-            // without the floor. (A point the floor kept out of the skin shows only because of it, and is not compared.)
-            int furMoved = 0, furSeen = 0;
-            float furWorst = 0f;
+            // [AC-7] The fur that shows — its points outside the skin with the floor and without — against where it lay without
+            // the floor. (A point the floor kept out of the skin shows only because of it, and is not compared.)
+            // The bodice under it, and how far the floor moved each of its points: the fur lying on the bodice rides with it.
+            Vector3 At(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
+            var under = NippleClipMeasure.Cloth(floored).Where(p => p.Label == "1.1").SelectMany(p => p.Triangles).Distinct()
+                                         .Select(v => (At: At(before, v), Moved: Vector3.Distance(At(floored, v), At(before, v))))
+                                         .ToArray();
+            int furMoved = 0, furSeen = 0, furAstray = 0;
+            float furWorst = 0f, astrayWorst = 0f;
             foreach (int v in NippleClipMeasure.Cloth(floored).Where(p => p.Label is "1.2" or "1.3").SelectMany(p => p.Triangles).Distinct())
             {
                 float s1 = Standoff(floored, v), s0 = Standoff(before, v);
                 if (float.IsNaN(s1) || s1 < 0f || float.IsNaN(s0) || s0 < 0f) continue;
                 furSeen++;
-                float d = Vector3.Distance(new Vector3(floored.Positions[v * 3], floored.Positions[v * 3 + 1], floored.Positions[v * 3 + 2]),
-                                           new Vector3(before.Positions[v * 3], before.Positions[v * 3 + 1], before.Positions[v * 3 + 2]));
+                float d = Vector3.Distance(At(floored, v), At(before, v));
                 furWorst = MathF.Max(furWorst, d);
                 if (d > 0.001f) furMoved++;
+                if (d <= 0.003f) continue;
+                // Past 3 mm, only as far as the nearest bodice point moved, and 1 mm more.
+                var p0 = At(before, v);
+                float nearest = float.MaxValue, carried = 0f;
+                foreach (var (at, moved) in under)
+                {
+                    float r = Vector3.DistanceSquared(at, p0);
+                    if (r < nearest) { nearest = r; carried = moved; }
+                }
+                if (d > carried + 0.001f) { furAstray++; astrayWorst = MathF.Max(astrayWorst, d - carried); }
             }
-            // How far the floor moved the bodice: the fur lying on it rides with it.
-            float bodiceWorst = NippleClipMeasure.Cloth(floored).Where(p => p.Label == "1.1").SelectMany(p => p.Triangles).Distinct()
-                .Max(v => Vector3.Distance(new Vector3(floored.Positions[v * 3], floored.Positions[v * 3 + 1], floored.Positions[v * 3 + 2]),
-                                           new Vector3(before.Positions[v * 3], before.Positions[v * 3 + 1], before.Positions[v * 3 + 2])));
+            float bodiceWorst = under.Max(u => u.Moved);
             o.WriteLine($"   worst sink {sink * 1000f:F2} mm; visible fur {furSeen} points, {furMoved} moved > 1 mm by the floor, " +
-                        $"worst {furWorst * 1000f:F1} mm; the bodice moved up to {bodiceWorst * 1000f:F1} mm");
+                        $"worst {furWorst * 1000f:F1} mm; the bodice moved up to {bodiceWorst * 1000f:F1} mm; fur further than " +
+                        $"the bodice under it {furAstray} (by up to {astrayWorst * 1000f:F1} mm)");
             Assert.True(sink <= 0.0001f, $"{label}: a bodice point ended {sink * 1000f:F2} mm deeper than it stood");
-            // The fur that shows moves where the bodice under it moves — the floor keeps the bodice out of the breast, and
-            // the fur lying on it comes out with it (on Rue+ Yiggle Medium 121 of 11,735 points, up to 6.7 mm) — and where
-            // the floor stops a fur strand's own lift into the skin (on Rue+ Yiggle Small 22 points, up to 2.0 mm, the
-            // bodice 0.4): no further than the bodice moved, or 3 mm.
+            // The fur that shows moves where the bodice moves — the floor keeps the bodice out of the breast, and the fur lying
+            // on it comes out with it (on Rue+ Yiggle Medium 125 of 11,735 points, up to 6.7 mm) — and where the floor stops a
+            // fur strand's own lift into the skin, which the later rounds carry on (on Rue+ Yiggle Small 22 points, up to
+            // 2.0 mm, the bodice 0.4; on Rue+ Yiggle Medium 28 points further than the bodice point nearest them, by up to
+            // 6.7 mm): within 3 mm, or no further than the bodice moved anywhere, and 1 mm more.
             Assert.True(furWorst <= MathF.Max(bodiceWorst + 0.001f, 0.003f),
-                        $"{label}: a visible fur point moved {furWorst * 1000f:F1} mm, the bodice {bodiceWorst * 1000f:F1}");
+                        $"{label}: a visible fur point moved {furWorst * 1000f:F1} mm, the bodice at most {bodiceWorst * 1000f:F1}");
         }
     }
 
@@ -208,8 +221,8 @@ public sealed class SlayRideNippleClipDiagnosticTests(ITestOutputHelper o) : IDi
                 var p = new Vector3(on.Positions[v * 3], on.Positions[v * 3 + 1], on.Positions[v * 3 + 2]);
                 return MathF.Min(Vector3.Distance(p, left), Vector3.Distance(p, right));
             });
-            float low = moved.Count == 0 ? float.MaxValue : moved.Min(v => runs(v));
-            float runs(int v) => on.Positions[v * 3 + 1];
+            float low = moved.Count == 0 ? float.MaxValue : moved.Min(Height);
+            float Height(int v) => on.Positions[v * 3 + 1];
             o.WriteLine($"  {part.Label}: {moved.Count} of {verts.Count} moved by the floor, the farthest {far * 1000f:F0} mm from a " +
                         $"nipple, the lowest at y {low:F3}");
             changed += moved.Count;

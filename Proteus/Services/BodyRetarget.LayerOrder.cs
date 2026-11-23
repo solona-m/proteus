@@ -201,8 +201,9 @@ internal static partial class BodyRetarget
     /// <see cref="Spread"/>), and on a neighbour that can point into the body: Slay Ride's fur trim, lifted off the fur
     /// beneath it, drove the bodice beside it up to 19 mm into Rue+ Yiggle Large's breast (18.6 mm of skin through the
     /// bodice around each nipple; 2.2 mm with the floor). Only the inward part of a move is taken back, along the skin's
-    /// normal where the point landed at the round's start, and then along the skin's normal where the move ends, should
-    /// what runs along a curved skin have sunk it: the rest of the move stands, and a point with no skin within
+    /// normal where the point landed at the round's start, and then, for a point the lift moved, along the skin's normal
+    /// where the move ends, should what runs along a curved skin have sunk it: the rest of the move stands, a point only
+    /// pulled back keeps its move as before (its pull is held to its room), and a point with no skin within
     /// <see cref="PushProbeRange"/> is not floored.</param>
     /// <param name="liftOnly">Pull no covered point back; lift the cover by the whole shortfall. For after
     /// <see cref="KeepOutfitOrder"/>, which has just lifted the garment off another piece: a lining pulled back toward
@@ -335,10 +336,11 @@ internal static partial class BodyRetarget
             {
                 float excess = -Vector3.Dot(d, skinOut[n]) - room[n];
                 if (excess > 0f) d += skinOut[n] * excess;
-                // Read again where the move ends: the plane at the start is the skin only there, and what of the move runs
-                // along a curved skin sinks into it — on Rue+ Yiggle Large's underbust, 4 mm along it sank 3.2 mm.
+                // Read again where a lifted point's move ends: the plane at the start is the skin only there, and what of
+                // the lift runs along a curved skin sinks into it — on Rue+ Yiggle Large's underbust, 4 mm along it sank
+                // 3.2 mm. A point only pulled back keeps its move as before.
                 var p = Now(n);
-                if (drawn!.Deepest(p + d, PushProbeRange, out var end))
+                if (raise[n] > 0f && drawn!.Deepest(p + d, PushProbeRange, out var end))
                 {
                     float stood = MathF.Min(stoodAt![n], 0f);
                     float now = Vector3.Dot(p + d - end.Point, end.Normal);
