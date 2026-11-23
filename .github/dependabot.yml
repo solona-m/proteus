@@ -49,8 +49,9 @@ updates:
     # A version is proposed only once it has been public for 3 days: most hijacked releases are pulled by then.
     cooldown:
       default-days: 3
-    # worker/ deliberately has no lockfile, so a PR that only raises a ^ floor changes nothing at deploy
-    # time. increase-if-necessary proposes only versions outside the range, i.e. majors.
+    # worker/package-lock.json is committed and every deploy installs it with `npm ci` (solona-m/plugins'
+    # CI redeploys the worker unattended). increase-if-necessary moves only the lock for an in-range
+    # update and raises the package.json range only for a major.
     versioning-strategy: increase-if-necessary
     groups:
       npm-minor-patch:

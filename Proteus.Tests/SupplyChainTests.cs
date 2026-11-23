@@ -458,15 +458,50 @@ public sealed class SupplyChainTests
                 "DalamudApiLevel and bumped by hand with the game; the other two come with it.");
     }
 
-    // [AC-security-scans-1] [EDGE-security-scans-9]
+    // [AC-security-scans-1] [EDGE-security-scans-9] [AC-static-repo-json-8]
     [Fact]
     public void Dependabot_NpmUsesWorkerAndIncreaseIfNecessary()
     {
         var npm = DependabotEntries()["npm"];
         Assert.Equal("/worker", Value(npm, "directory"));
         Assert.True(Value(npm, "versioning-strategy") == "increase-if-necessary",
-            "worker/ has no lockfile, so the default strategy opens PRs that only raise a ^ floor and " +
-            "change nothing at deploy time. Keep versioning-strategy: increase-if-necessary.");
+            "worker/package-lock.json is committed and is what every deploy installs (npm ci), so an " +
+            "in-range update only needs to move the lock. increase-if-necessary does exactly that and raises " +
+            "the package.json range only for a version outside it, i.e. a major. Keep it.");
+    }
+
+    /// <summary>
+    /// The worker is redeployed unattended from solona-m/plugins' CI, with a token that can deploy any Worker on the
+    /// account, so what that job installs must be exactly what was reviewed: the committed lock, through
+    /// <c>npm ci --ignore-scripts</c>. A lock that drifted from package.json makes <c>npm ci</c> fail in CI, on the
+    /// day of a release; this fails it here instead. [AC-static-repo-json-8] [EDGE-static-repo-json-23]
+    /// [EDGE-static-repo-json-26]
+    /// </summary>
+    [Fact]
+    public void Worker_LockfileIsCommittedAndInSync()
+    {
+        var worker = Path.Combine(RepoRoot, "worker");
+        var lockPath = Path.Combine(worker, "package-lock.json");
+        Assert.True(File.Exists(lockPath), "worker/package-lock.json is missing: run npm install in worker/ and commit it.");
+
+        var ignored = File.ReadAllLines(Path.Combine(worker, ".gitignore"))
+            .Any(l => l.Trim().TrimStart('/') == "package-lock.json");
+        Assert.False(ignored, "worker/.gitignore must not ignore package-lock.json: CI deploys from the committed lock.");
+
+        using var pkg = JsonDocument.Parse(File.ReadAllText(Path.Combine(worker, "package.json")));
+        using var lck = JsonDocument.Parse(File.ReadAllText(lockPath));
+        var root = lck.RootElement.GetProperty("packages").GetProperty("");
+        foreach (var section in new[] { "dependencies", "devDependencies" })
+        {
+            Assert.True(Deps(pkg.RootElement, section) == Deps(root, section),
+                $"worker/package-lock.json's {section} ({Deps(root, section)}) differ from package.json's " +
+                $"({Deps(pkg.RootElement, section)}): run npm install in worker/ and commit the lock.");
+        }
+
+        static string Deps(JsonElement e, string section) => e.TryGetProperty(section, out var d)
+            ? string.Join(", ", d.EnumerateObject().OrderBy(p => p.Name, StringComparer.Ordinal)
+                .Select(p => $"{p.Name}@{p.Value.GetString()}"))
+            : "";
     }
 
     // [AC-security-scans-1]

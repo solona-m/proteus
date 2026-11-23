@@ -5,9 +5,9 @@
   "type": "module",
   "description": "Cloudflare Worker that edge-caches Proteus's GitHub release assets.",
   "scripts": {
-    "test": "node test/routes.test.mjs",
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "test": "node test/routes.test.mjs && node test/assets.test.mjs && node test/deploy.test.mjs",
+    "dev": "node scripts/deploy.mjs dev",
+    "deploy": "node scripts/deploy.mjs deploy",
     "tail": "wrangler tail"
   },
   "devDependencies": {

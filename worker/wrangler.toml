@@ -25,6 +25,29 @@ routes = [
   { pattern = "dl.solona.info", custom_domain = true }
 ]
 
-# Deliberately no bindings, no KV, no R2, no secrets: this worker only caches public release assets
-# and holds nothing of its own. If the traffic ever outgrows a cached proxy, the swap is to point the
-# origin at an R2 bucket — no plugin change, because the plugin only ever knows the dl.* URL.
+# ── Static assets: /repo.json ────────────────────────────────────────────────────────────────────
+# Every Dalamud client fetches /repo.json on every startup and list refresh: about 79% of this
+# worker's requests (Nov 2026). A request that matches a file in ./static is answered by Cloudflare
+# WITHOUT running the worker, and static asset requests are free and unlimited, so they no longer
+# count against the account's shared 100k Worker requests a day. Anything that matches no file
+# falls through to the worker exactly as before.
+#
+# - static/ holds `_headers` (committed: content type, max-age 300, `X-Proteus-Mirror: asset`) and
+#   repo.json, which scripts/deploy.mjs writes for the length of a deploy and then deletes. Deploy
+#   ONLY with `npm run deploy`; see README.md.
+# - html_handling = "none": only the exact path matches. No /repo.json/ or index.html rewrites.
+# - not_found_handling = "none": a miss reaches the worker, never an asset 404 page.
+# - NO run_worker_first, anywhere: it would run the worker (and bill it) for every request again.
+# - No binding: the worker never reads the assets. When a deploy shipped no repo.json, the request
+#   reaches the worker, whose STATIC_PROXIES entry proxies it from plugins main as it always did.
+#
+# A static asset only changes on a deploy, so solona-m/plugins' deploy-repo-json workflow redeploys
+# this worker whenever the live /repo.json differs from that repo's main: the SAME Proteus commit
+# that is live (read from the live version's tag), with the new repo.json. See README.md.
+#
+# Still no KV, no R2, no secrets. If the release traffic ever outgrows a cached proxy, the swap is
+# to point the origin at an R2 bucket — no plugin change, the plugin only ever knows the dl.* URL.
+[assets]
+directory = "./static"
+html_handling = "none"
+not_found_handling = "none"

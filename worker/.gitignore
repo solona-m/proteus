@@ -1,4 +1,6 @@
 node_modules/
-package-lock.json
 .wrangler/
+# Written by scripts/deploy.mjs for the length of a deploy or a dev session, then deleted. Never commit it:
+# a committed copy would ship a stale listing whenever the fetch is skipped.
+static/repo.json
 

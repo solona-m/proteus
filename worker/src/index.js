@@ -114,6 +114,11 @@ const rawUrl = (repoPath) =>
  *
  * Both are MUTABLE, so neither can take the assets' immutable one-year TTL: the manifest changes on
  * every release, and a stale one would hide a new version from everybody for the length of the TTL.
+ *
+ * /repo.json normally never reaches this code: it is a Workers static asset (static/, wrangler.toml), served by
+ * Cloudflare without running the worker, because it alone was ~79% of this worker's requests. The entry below is the
+ * FALLBACK for a deploy that shipped no repo.json, so a failed sync or a hand deploy can never break installs. Keep its
+ * content type and max-age equal to static/_headers (assets.test.mjs checks).
  */
 const STATIC_PROXIES = {
   '/repo.json': {
