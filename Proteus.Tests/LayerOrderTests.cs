@@ -134,7 +134,7 @@ public class LayerOrderTests
     /// The drawn skin under the sheets, <see cref="SkinBelow"/> under the inner sheet's middle and falling away from it by
     /// <paramref name="curve"/> times the squared distance (per metre): a dome, as a breast is under the bodice.
     /// </summary>
-    private static BodyRetarget.TargetBody Skin(float curve)
+    private static BodyRetarget.TargetBody Skin(float curve, float height = -SkinBelow)
     {
         const int count = 49;
         const float step = 0.00125f, from = -0.02f;
@@ -146,7 +146,7 @@ public class LayerOrderTests
         for (int k = 0; k < count; k++)
         {
             float x = from + i * step, y = from + k * step, dx = x - mid, dy = y - mid;
-            pos.AddRange([x, y, -SkinBelow - curve * (dx * dx + dy * dy)]);
+            pos.AddRange([x, y, height - curve * (dx * dx + dy * dy)]);
             var n = Vector3.Normalize(new Vector3(2f * curve * dx, 2f * curve * dy, 1f));
             nrm.AddRange([n.X, n.Y, n.Z]);
         }
@@ -157,8 +157,8 @@ public class LayerOrderTests
             tris.AddRange([a, b, d, a, d, c]);
         }
         var p = pos.ToArray();
-        var min = new Vector3(from, from, -0.02f);
-        var max = new Vector3(from + (count - 1) * step, from + (count - 1) * step, -SkinBelow);
+        var min = new Vector3(from, from, height - 0.02f);
+        var max = new Vector3(from + (count - 1) * step, from + (count - 1) * step, height);
         var body = new ModelParts
         {
             Positions = p,
@@ -219,7 +219,8 @@ public class LayerOrderTests
 
     [Theory]
     [InlineData(0f)]    // flat
-    [InlineData(8f)]    // a dome falling 1.6 mm over the sheet's half-width, as a breast under a bodice
+    [InlineData(8f)]    // a dome falling 0.8 mm to the sheet's edges (1.6 mm to its corners), as a breast under a bodice
+    [InlineData(-100f)] // a bowl, as the crease under a breast: a move along it, held only by the plane at its start, sinks
     [Trait("Plan", "AC-bodice-nipple-clip-5")]
     [Trait("Plan", "EDGE-bodice-nipple-clip-5")]
     public void A_cover_lift_spread_inward_never_sinks_cloth_into_the_skin(float curve)
@@ -307,18 +308,63 @@ public class LayerOrderTests
 
     [Fact]
     [Trait("Plan", "EDGE-bodice-nipple-clip-3")]
-    public void Without_a_drawn_skin_the_floor_does_nothing()
+    public void Without_a_drawn_skin_or_the_flag_the_floor_does_nothing()
     {
-        // No skin to floor against (no push-out), and the outfit order's lift-only call: both as before.
-        foreach (bool liftOnly in new[] { false, true })
+        // No skin to floor against (no push-out); the outfit order's lift-only call, even over skin; the flag off: as before.
+        foreach (var (drawn, liftOnly, floor) in new (BodyRetarget.TargetBody? Drawn, bool LiftOnly, bool Floor)[]
+                 { (null, false, true), (FlatSkin(), true, true), (FlatSkin(), false, false) })
         {
             var (sets, layered, covered, floored) = LiftedInward();
-            BodyRetarget.KeepLayerOrder(sets, covered, floored, null, layered, null, liftOnly, floor: true);
+            BodyRetarget.KeepLayerOrder(sets, covered, floored, null, layered, drawn, liftOnly, floor);
             var (_, _, _, unfloored) = LiftedInward();
             BodyRetarget.WithTuning(BodyRetarget.Tuned with { NoLayerFloor = true },
-                                    () => BodyRetarget.KeepLayerOrder(sets, covered, unfloored, null, layered, null, liftOnly, floor: true));
+                                    () => BodyRetarget.KeepLayerOrder(sets, covered, unfloored, null, layered, drawn, liftOnly, floor));
             Assert.Equal(unfloored, floored);
         }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-bodice-nipple-clip-4")]
+    [Trait("Plan", "AC-bodice-nipple-clip-9")]
+    public void A_game_tops_refit_keeps_the_layer_order_as_it_was()
+    {
+        // A game top's refit clears its body (clearBody): Solve passes the floor off, and the inward lift is as before.
+        Assert.False(BodyRetarget.LayerFloorFor(clearBody: true));
+        Assert.True(BodyRetarget.LayerFloorFor(clearBody: false));
+        var drawn = FlatSkin();
+        var (sets, layered, covered, cleared) = LiftedInward();
+        BodyRetarget.KeepLayerOrder(sets, covered, cleared, null, layered, drawn, floor: BodyRetarget.LayerFloorFor(clearBody: true));
+        var (_, _, _, before) = LiftedInward();
+        BodyRetarget.WithTuning(BodyRetarget.Tuned with { NoLayerFloor = true },
+                                () => BodyRetarget.KeepLayerOrder(sets, covered, before, null, layered, drawn, floor: true));
+        Assert.Equal(before, cleared);
+        Assert.True(Enumerable.Range(0, Side * Side).Min(v => Off(drawn, sets, cleared, v)) < -0.001f,
+                    "the inward lift should have run unfloored, or this proves nothing");
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-bodice-nipple-clip-8")]
+    public void A_cover_lifted_outward_is_not_held_back_by_the_floor()
+    {
+        // A bra under a top, brought through it by the refit, its middle a hair off the skin: it cannot go back, so the
+        // top is lifted off it — outward, which the floor never takes back.
+        var garment = Layered("/mt_c0201e6143_top_a.mtrl", "/mt_c0201e6143_top_b.mtrl");
+        var sets = BodyRetarget.Sets.From(garment);
+        var layered = BodyRetarget.GarmentCloth(garment, sets);
+        var covered = BodyRetarget.CoveredPoints(sets, layered);
+        var drawn = Skin(0f, 0.0149f);   // 0.1 mm under the bra's middle, carried to 15 mm
+
+        var floored = ThroughTheTop(sets);
+        BodyRetarget.KeepLayerOrder(sets, covered, floored, null, layered, drawn, floor: true);
+        var unfloored = ThroughTheTop(sets);
+        BodyRetarget.WithTuning(BodyRetarget.Tuned with { NoLayerFloor = true },
+                                () => BodyRetarget.KeepLayerOrder(sets, covered, unfloored, null, layered, drawn, floor: true));
+        Assert.Equal(unfloored, floored);
+        // The top over the bra's middle was lifted: in front of the bra again.
+        int topOverMiddle = sets.NodeOf[Side * Side + Middle];
+        Assert.True(floored[topOverMiddle].Z + Gap > floored[sets.NodeOf[Middle]].Z,
+                    "the top should have been lifted in front of the bra");
+        Assert.True(floored[topOverMiddle].Z > 0.01f + 1e-5f, "the top should have been lifted");
     }
 
     [Fact]

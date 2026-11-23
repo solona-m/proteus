@@ -200,8 +200,9 @@ internal static partial class BodyRetarget
     /// this skin than it stood. The lift is faded onto the neighbours in the lifting point's own direction (see
     /// <see cref="Spread"/>), and on a neighbour that can point into the body: Slay Ride's fur trim, lifted off the fur
     /// beneath it, drove the bodice beside it up to 19 mm into Rue+ Yiggle Large's breast (18.6 mm of skin through the
-    /// bodice around each nipple; 2.6 mm with the floor). Only the inward part of a move is taken back, along the skin's
-    /// normal where the point landed at the round's start: the rest of it stands, and a point with no skin within
+    /// bodice around each nipple; 2.2 mm with the floor). Only the inward part of a move is taken back, along the skin's
+    /// normal where the point landed at the round's start, and then along the skin's normal where the move ends, should
+    /// what runs along a curved skin have sunk it: the rest of the move stands, and a point with no skin within
     /// <see cref="PushProbeRange"/> is not floored.</param>
     /// <param name="liftOnly">Pull no covered point back; lift the cover by the whole shortfall. For after
     /// <see cref="KeepOutfitOrder"/>, which has just lifted the garment off another piece: a lining pulled back toward
@@ -230,6 +231,10 @@ internal static partial class BodyRetarget
         }
         return moved;
     }
+
+    /// <summary>Whether a refit's layer order holds its moves to the skin (see <see cref="KeepLayerOrder"/>): not a game
+    /// top's, which clears its body — that refit keeps the order as it was.</summary>
+    internal static bool LayerFloorFor(bool clearBody) => !clearBody;
 
     /// <summary>Rounds <see cref="KeepLayerOrder"/> measures and moves again, at most (3).</summary>
     private const int LayerOrderRounds = 3;
@@ -272,6 +277,7 @@ internal static partial class BodyRetarget
         Array.Fill(room, liftOnly ? 0f : float.PositiveInfinity);
         // The skin's way out where each point landed: the floor no move of this pass goes through (see KeepLayerOrder).
         var skinOut = floor && drawn != null && !liftOnly ? new Vector3[sets.NodeCount] : null;
+        var stoodAt = skinOut != null ? new float[sets.NodeCount] : null;
         if (drawn != null && !liftOnly)
             for (int n = 0; n < sets.NodeCount; n++)
             {
@@ -279,8 +285,9 @@ internal static partial class BodyRetarget
                 var p = Now(n);
                 if (Finite(p) && drawn.Deepest(p, PushProbeRange, out var hit))
                 {
-                    room[n] = MathF.Max(0f, Vector3.Dot(p - hit.Point, hit.Normal));
-                    if (skinOut != null) skinOut[n] = hit.Normal;
+                    float s = Vector3.Dot(p - hit.Point, hit.Normal);
+                    room[n] = MathF.Max(0f, s);
+                    if (skinOut != null) { skinOut[n] = hit.Normal; stoodAt![n] = s; }
                 }
             }
 
@@ -328,6 +335,15 @@ internal static partial class BodyRetarget
             {
                 float excess = -Vector3.Dot(d, skinOut[n]) - room[n];
                 if (excess > 0f) d += skinOut[n] * excess;
+                // Read again where the move ends: the plane at the start is the skin only there, and what of the move runs
+                // along a curved skin sinks into it — on Rue+ Yiggle Large's underbust, 4 mm along it sank 3.2 mm.
+                var p = Now(n);
+                if (drawn!.Deepest(p + d, PushProbeRange, out var end))
+                {
+                    float stood = MathF.Min(stoodAt![n], 0f);
+                    float now = Vector3.Dot(p + d - end.Point, end.Normal);
+                    if (now < stood) d += end.Normal * (stood - now);
+                }
                 if (d == Vector3.Zero) continue;
             }
             nodeDelta[n] = new Vec3(nodeDelta[n].X + d.X, nodeDelta[n].Y + d.Y, nodeDelta[n].Z + d.Z);

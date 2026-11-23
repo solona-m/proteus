@@ -41,7 +41,7 @@ public sealed class SlayRideNippleClipLocalTests(SlayRideNippleClipLocalTests.Ru
     /// the builds before this fix): the deepest skin in front of the bodice parts (mm); turned-over triangles of the
     /// bodice (1.1) and of the fur roll it ends in (1.3); the 332 fur-over-bodice card pairs whose card ended more than
     /// 0.5 mm behind the cloth, and the worst card behind (mm). With the floor (2026-11-23): RueS 1.1 mm, RueM 1.6,
-    /// RueL 2.6, NeoL 2.6.
+    /// RueL 2.2, NeoL 2.4.
     /// </summary>
     internal static readonly Dictionary<string, (float NoLayerOrder, float Before, int BodiceTurnedBefore, int RollTurnedBefore,
                                                  int CardsBehindBefore, float WorstCardBefore)> References = new()
@@ -52,9 +52,9 @@ public sealed class SlayRideNippleClipLocalTests(SlayRideNippleClipLocalTests.Ru
         ["NeoL"] = (3.4f, 4.1f, 12, 1464, 91, 14.9f),
     };
 
-    /// <summary>The fur roll (1.3) is a crumpled volume that already turns thousands of its triangles in every refit; the
-    /// floor may add up to this share of them (it added 5-17: 0.3-1.2%). The bodice gets none.</summary>
-    internal const float RollTurnSlack = 0.02f;
+    /// <summary>The fur roll (1.3) is a crumpled volume that already turns 650-3600 of its triangles in every refit; the
+    /// floor may add this many of them (it added 5-17, 0.3-1.2%). The bodice gets none.</summary>
+    internal const int RollTurnSlack = 20;
 
     /// <summary>Card pairs, of 332, that may newly end behind the cloth (the floor moved 1-2).</summary>
     internal const int CardSlack = 2;
@@ -77,9 +77,9 @@ public sealed class SlayRideNippleClipLocalTests(SlayRideNippleClipLocalTests.Ru
             Original = ModelPartReader.Read(File.ReadAllBytes(Path.Combine(LocalData.Path(LocalData.SlayRideMod), Garment)))!;
         }
 
-        /// <summary>Rue+ Yiggle Medium and Large refit once, with the given --tune knobs (none for the build as it is).
-        /// Rue+ Yiggle Small and Neolithe L, which were clear or nearly so, are measured on demand (see
-        /// <see cref="SlayRideNippleClipDiagnosticTests"/>): the full suite has no room for two more refits.</summary>
+        /// <summary>Rue+ Yiggle Small, Medium and Large refit once, in one call, with the given --tune knobs (none for
+        /// the build as it is). Neolithe L, a second body mod and a second call, is measured on demand (see
+        /// <see cref="SlayRideNippleClipDiagnosticTests"/>): the full suite has no room for it.</summary>
         public ModelParts Model(string label, string tune = "")
         {
             string key = tune + "|" + label;
@@ -100,8 +100,8 @@ public sealed class SlayRideNippleClipLocalTests(SlayRideNippleClipLocalTests.Ru
             };
             if (tune.Length > 0) common.AddRange(["--tune", tune]);
             Run([.. common, "--body-root", LocalData.Path(LocalData.RueMod),
-                 "--to", $"{Rue("medium")}=RueM,{Rue("large")}=RueL"], "rue");
-            foreach (var label in new[] { "RueM", "RueL" })
+                 "--to", $"{Rue("small")}=RueS,{Rue("medium")}=RueM,{Rue("large")}=RueL"], "rue");
+            foreach (var label in new[] { "RueS", "RueM", "RueL" })
                 models[tune + "|" + label] = ModelPartReader.Read(File.ReadAllBytes(Path.Combine(outDir, label + ".mdl")))!;
 
             void Run(string[] args, string name)
@@ -145,6 +145,7 @@ public sealed class SlayRideNippleClipLocalTests(SlayRideNippleClipLocalTests.Ru
         var bodice = Bodice(original);
         // The bodice itself and the fur roll it ends in are what is measured — never vacuously.
         Assert.Contains("1.1", bodice);
+        Assert.Contains("1.3", bodice);   // the fur roll, whose centre-front island (1.3.1) the fur cards cover too
         Assert.DoesNotContain(Cards, bodice);
         var r = NippleClipMeasure.Measure(refit);
         Assert.True(r.SkinVerticesRead > 100, $"only {r.SkinVerticesRead} skin vertices read around the nipples");
@@ -167,7 +168,7 @@ public sealed class SlayRideNippleClipLocalTests(SlayRideNippleClipLocalTests.Ru
             $"fur roll {turned["1.3"]} (before {reference.RollTurnedBefore})");
         Assert.True(turned["1.1"] <= reference.BodiceTurnedBefore,
                     $"{size}: {turned["1.1"]} bodice triangles turned over, before {reference.BodiceTurnedBefore}");
-        Assert.True(turned["1.3"] <= reference.RollTurnedBefore * (1f + RollTurnSlack),
+        Assert.True(turned["1.3"] <= reference.RollTurnedBefore + RollTurnSlack,
                     $"{size}: {turned["1.3"]} fur roll triangles turned over, before {reference.RollTurnedBefore}");
     }
 
@@ -199,7 +200,25 @@ public sealed class SlayRideNippleClipLocalTests(SlayRideNippleClipLocalTests.Ru
         BodiceInFront(size, runs.Original, runs.Model(size), o.WriteLine);
     }
 
+    /// <summary>Rue+ Yiggle Small, clear before the fix: still clear, and no deeper than it was.</summary>
+    internal static void StaysClear(ModelParts original, ModelParts refit, Action<string> log)
+    {
+        float worst = NippleClipMeasure.Measure(refit).Worst(Bodice(original));
+        log($"RueS: {worst * 1000:F1} mm");
+        Assert.True(worst <= 0.002f, $"RueS: skin {worst * 1000:F1} mm in front of the bodice");
+        Assert.True(worst <= References["RueS"].Before / 1000f + 0.0005f, $"RueS: {worst * 1000:F1} mm, deeper than before");
+    }
+
+    [LocalDataFact(LocalData.SlayRideMod, LocalData.NeolitheMod, LocalData.RueMod, LocalData.UvMaps)]
+    [Trait("Plan", "AC-bodice-nipple-clip-4")]
+    public void Sizes_already_clear_stay_clear()
+    {
+        InputsAreTheMeasuredOnes();
+        StaysClear(runs.Original, runs.Model("RueS"), o.WriteLine);
+    }
+
     [LocalDataTheory(LocalData.SlayRideMod, LocalData.NeolitheMod, LocalData.RueMod, LocalData.UvMaps)]
+    [InlineData("RueS")]
     [InlineData("RueM")]
     [InlineData("RueL")]
     [Trait("Plan", "AC-bodice-nipple-clip-6")]

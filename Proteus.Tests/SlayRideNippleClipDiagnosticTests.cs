@@ -28,7 +28,6 @@ public sealed class SlayRideNippleClipDiagnosticTests(ITestOutputHelper o) : IDi
     private const string Yab = LocalData.Mods + ":hs-Yet Another Body+-4.2.0-tmi";
     private const string Bibo = LocalData.Mods + ":Bibo+";
     private const string Sirius = LocalData.Mods + ":Sirius - by Solona";
-    private const string OldThing = LocalData.Mods + ":This Old Thing - by Solona";
     private const string YabLarge = "files\\chest - smallclothes\\large\\chara\\equipment\\e0000\\model\\c0201e0000_top.mdl";
     private const string BiboLarge = "breasts - small clothes\\nude - large\\chara\\equipment\\e0000\\model\\c0201e0000_top.mdl";
 
@@ -103,16 +102,63 @@ public sealed class SlayRideNippleClipDiagnosticTests(ITestOutputHelper o) : IDi
             // The layer order off is the floor's reference: within 0.5 mm of it, or the floor is not the fix.
             Assert.True(Worst(floored) <= 3f && Worst(floored) <= Worst(noLayer) + 0.5f,
                         $"{label}: {Worst(floored):F1} mm with the floor, {Worst(noLayer):F1} with no layer order");
-            // The pin's checks, on every size — the regular suite runs Rue+ Yiggle Medium and Large only.
-            if (label == "RueS")
-            {
-                Assert.True(Worst(floored) <= 2f, $"RueS: {Worst(floored):F1} mm, no longer clear");
-                Assert.True(Worst(floored) <= SlayRideNippleClipLocalTests.References["RueS"].Before + 0.5f,
-                            $"RueS: {Worst(floored):F1} mm, deeper than before");
-            }
+            // The pin's checks, on every size — the regular suite runs Rue+ only.
+            if (label == "RueS") SlayRideNippleClipLocalTests.StaysClear(original, floored, o.WriteLine);
             else SlayRideNippleClipLocalTests.BodiceInFront(label, original, floored, o.WriteLine);
             SlayRideNippleClipLocalTests.NoMoreFolds(label, original, floored, o.WriteLine);
             if (label != "RueS") SlayRideNippleClipLocalTests.FurInFront(label, original, floored, o.WriteLine);
+
+            // The skin the layer order measures against is the written model's own, which the pass never moves; the
+            // layer order off leaves every point where the pass found it.
+            var skin = new BodySurface(floored, 0.01f);
+            float Standoff(ModelParts m, int v) => SkinTuckSheet.Standoff(new Vector3(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]), skin);
+            // [AC-5 / amendment 2] The worst any bodice point ended deeper than it stood, or than the skin: the floor is a plane
+            // at the round's start, and a curved or creased skin could take a point past it.
+            float sink = 0f;
+            int sinkAt = -1, sunk = 0;
+            foreach (int v in NippleClipMeasure.Cloth(floored).Where(p => bodice.Contains(p.Label)).SelectMany(p => p.Triangles).Distinct())
+            {
+                float s0 = Standoff(noLayer, v), s1 = Standoff(floored, v);
+                if (float.IsNaN(s0) || float.IsNaN(s1)) continue;
+                float by = MathF.Min(s0, 0f) - s1;
+                if (by > 0.0001f) sunk++;
+                if (by > sink) { sink = by; sinkAt = v; }
+            }
+            if (sinkAt >= 0)
+            {
+                var at = new Vector3(floored.Positions[sinkAt * 3], floored.Positions[sinkAt * 3 + 1], floored.Positions[sinkAt * 3 + 2]);
+                var was = new Vector3(noLayer.Positions[sinkAt * 3], noLayer.Positions[sinkAt * 3 + 1], noLayer.Positions[sinkAt * 3 + 2]);
+                o.WriteLine($"   sink: {sunk} bodice points deeper than they stood by > 0.1 mm; worst at {at} (was {was}, standoff " +
+                            $"{Standoff(noLayer, sinkAt) * 1000f:F2} -> {Standoff(floored, sinkAt) * 1000f:F2} mm), part " +
+                            $"{NippleClipMeasure.Cloth(floored).First(p => p.Triangles.Contains(sinkAt)).Label}");
+            }
+            // [AC-7] The fur that shows — its points outside the skin with the floor and without — within 1 mm of where it lay
+            // without the floor. (A point the floor kept out of the skin shows only because of it, and is not compared.)
+            int furMoved = 0, furSeen = 0;
+            float furWorst = 0f;
+            foreach (int v in NippleClipMeasure.Cloth(floored).Where(p => p.Label is "1.2" or "1.3").SelectMany(p => p.Triangles).Distinct())
+            {
+                float s1 = Standoff(floored, v), s0 = Standoff(before, v);
+                if (float.IsNaN(s1) || s1 < 0f || float.IsNaN(s0) || s0 < 0f) continue;
+                furSeen++;
+                float d = Vector3.Distance(new Vector3(floored.Positions[v * 3], floored.Positions[v * 3 + 1], floored.Positions[v * 3 + 2]),
+                                           new Vector3(before.Positions[v * 3], before.Positions[v * 3 + 1], before.Positions[v * 3 + 2]));
+                furWorst = MathF.Max(furWorst, d);
+                if (d > 0.001f) furMoved++;
+            }
+            // How far the floor moved the bodice: the fur lying on it rides with it.
+            float bodiceWorst = NippleClipMeasure.Cloth(floored).Where(p => p.Label == "1.1").SelectMany(p => p.Triangles).Distinct()
+                .Max(v => Vector3.Distance(new Vector3(floored.Positions[v * 3], floored.Positions[v * 3 + 1], floored.Positions[v * 3 + 2]),
+                                           new Vector3(before.Positions[v * 3], before.Positions[v * 3 + 1], before.Positions[v * 3 + 2])));
+            o.WriteLine($"   worst sink {sink * 1000f:F2} mm; visible fur {furSeen} points, {furMoved} moved > 1 mm by the floor, " +
+                        $"worst {furWorst * 1000f:F1} mm; the bodice moved up to {bodiceWorst * 1000f:F1} mm");
+            Assert.True(sink <= 0.0001f, $"{label}: a bodice point ended {sink * 1000f:F2} mm deeper than it stood");
+            // The fur that shows moves where the bodice under it moves — the floor keeps the bodice out of the breast, and
+            // the fur lying on it comes out with it (on Rue+ Yiggle Medium 121 of 11,735 points, up to 6.7 mm) — and where
+            // the floor stops a fur strand's own lift into the skin (on Rue+ Yiggle Small 22 points, up to 2.0 mm, the
+            // bodice 0.4): no further than the bodice moved, or 3 mm.
+            Assert.True(furWorst <= MathF.Max(bodiceWorst + 0.001f, 0.003f),
+                        $"{label}: a visible fur point moved {furWorst * 1000f:F1} mm, the bodice {bodiceWorst * 1000f:F1}");
         }
     }
 
@@ -146,12 +192,35 @@ public sealed class SlayRideNippleClipDiagnosticTests(ITestOutputHelper o) : IDi
                         LocalData.Path(LocalData.RueMod), SlayRideNippleClipLocalTests.Rue("large"), "NoLayerFloor");
         var on = Refit(SlayRide, LocalData.Path(LocalData.NeolitheMod), SlayRideNippleClipLocalTests.MadeOn,
                        LocalData.Path(LocalData.RueMod), SlayRideNippleClipLocalTests.Rue("large"), "");
-        var cloth = NippleClipMeasure.Cloth(on).SelectMany(p => p.Triangles).Distinct().ToList();
-        int changed = cloth.Count(v => on.Positions[v * 3] != off.Positions[v * 3] || on.Positions[v * 3 + 1] != off.Positions[v * 3 + 1]
-                                       || on.Positions[v * 3 + 2] != off.Positions[v * 3 + 2]);
-        o.WriteLine($"{changed} of {cloth.Count} cloth vertices moved by the floor");
+        // The floor's reach as the plan names it — the points it held and what the pass spreads from them — needs the
+        // solve's own nodes; read here off the written model instead: what moved, by part, and how far from the nipples.
+        var (left, right, _) = NippleClipMeasure.Tips(on);
+        bool Moved(int v) => on.Positions[v * 3] != off.Positions[v * 3] || on.Positions[v * 3 + 1] != off.Positions[v * 3 + 1]
+                             || on.Positions[v * 3 + 2] != off.Positions[v * 3 + 2];
+        int changed = 0, total = 0;
+        float lowest = float.MaxValue;
+        foreach (var part in NippleClipMeasure.Cloth(on))
+        {
+            var verts = part.Triangles.Distinct().ToList();
+            var moved = verts.Where(Moved).ToList();
+            float far = moved.Count == 0 ? 0f : moved.Max(v =>
+            {
+                var p = new Vector3(on.Positions[v * 3], on.Positions[v * 3 + 1], on.Positions[v * 3 + 2]);
+                return MathF.Min(Vector3.Distance(p, left), Vector3.Distance(p, right));
+            });
+            float low = moved.Count == 0 ? float.MaxValue : moved.Min(v => runs(v));
+            float runs(int v) => on.Positions[v * 3 + 1];
+            o.WriteLine($"  {part.Label}: {moved.Count} of {verts.Count} moved by the floor, the farthest {far * 1000f:F0} mm from a " +
+                        $"nipple, the lowest at y {low:F3}");
+            changed += moved.Count;
+            total += verts.Count;
+            lowest = MathF.Min(lowest, low);
+        }
+        o.WriteLine($"{changed} of {total} cloth vertices moved by the floor; nipple tips at y {left.Y:F3}");
         Assert.True(changed > 0, "the floor should have reached the bodice");
-        Assert.True(changed * 2 <= cloth.Count, $"{changed} of {cloth.Count} cloth vertices moved: the floor reached too far");
+        Assert.True(changed * 2 <= total, $"{changed} of {total} cloth vertices moved: the floor reached too far");
+        // The fur trim runs round the whole top edge, so the floor reaches the back as well as the bust; never the skirt.
+        Assert.True(lowest >= left.Y - 0.12f, $"the floor moved cloth down at y {lowest:F3}, {(left.Y - lowest) * 1000f:F0} mm below the nipples");
     }
 
     /// <summary>Bodice triangles the floor may newly turn over on another body's big bust (it turned 1 on YAB+ Large).</summary>
@@ -163,10 +232,11 @@ public sealed class SlayRideNippleClipDiagnosticTests(ITestOutputHelper o) : IDi
         { LocalData.SlayRideMod, SlayRideNippleClipLocalTests.Garment, LocalData.NeolitheMod, SlayRideNippleClipLocalTests.MadeOn, Yab, YabLarge },
         { LocalData.SlayRideMod, SlayRideNippleClipLocalTests.Garment, LocalData.NeolitheMod, SlayRideNippleClipLocalTests.MadeOn, Bibo, BiboLarge },
         { Sirius, "size/Sirius/L/chara/equipment/e0154/model/c0201e0154_top.mdl", Yab, "auto", LocalData.RueMod, SlayRideNippleClipLocalTests.Rue("large") },
-        { OldThing, "size/neolithe m/chara/equipment/e6255/model/c0201e6255_top.mdl", LocalData.NeolitheMod, "auto", LocalData.RueMod, SlayRideNippleClipLocalTests.Rue("large") },
+        // This Old Thing (cloth sunk ~4 mm in its own body) is not here: its refit renames the parts this measure lines
+        // up, so it would measure nothing.
     };
 
-    [LocalDataTheory(LocalData.SlayRideMod, LocalData.NeolitheMod, LocalData.RueMod, Yab, Bibo, Sirius, OldThing, LocalData.UvMaps)]
+    [LocalDataTheory(LocalData.SlayRideMod, LocalData.NeolitheMod, LocalData.RueMod, Yab, Bibo, Sirius, LocalData.UvMaps)]
     [MemberData(nameof(Others))]
     [Trait("Plan", "AC-bodice-nipple-clip-8")]
     [Trait("Plan", "EDGE-bodice-nipple-clip-9")]
@@ -197,7 +267,7 @@ public sealed class SlayRideNippleClipDiagnosticTests(ITestOutputHelper o) : IDi
             // more of the bodice's 10,304 triangles (22 to 23) — the pin's own sizes, Rue+ M and L, turn none more.
             Assert.True(turnedOn["1.1"] <= turnedOff["1.1"] + BigBustBodiceSlack,
                         $"bodice: {turnedOn["1.1"]} turned over with the floor, {turnedOff["1.1"]} without");
-            Assert.True(turnedOn["1.3"] <= turnedOff["1.3"] * (1f + SlayRideNippleClipLocalTests.RollTurnSlack),
+            Assert.True(turnedOn["1.3"] <= turnedOff["1.3"] + SlayRideNippleClipLocalTests.RollTurnSlack,
                         $"fur roll: {turnedOn["1.3"]} turned over with the floor, {turnedOff["1.3"]} without");
             return;
         }
