@@ -27,11 +27,14 @@ export const WORKER_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 export const STATIC_DIR = join(WORKER_DIR, 'static');
 export const CONTENTS_URL = 'https://api.github.com/repos/solona-m/plugins/contents/repo.json?ref=main';
 
-/** Throws unless the text is a JSON array with at least one entry: what Dalamud expects a plugin repo to be. */
+/** Throws unless the text is a non-empty JSON array of objects (plugin entries): what Dalamud expects a repo to be. */
 export function validateRepoJson(text) {
   let parsed;
   try { parsed = JSON.parse(text); } catch (e) { throw new Error(`repo.json is not valid JSON: ${e.message}`); }
   if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('repo.json is not a non-empty JSON array');
+  if (!parsed.every((e) => e !== null && typeof e === 'object' && !Array.isArray(e))) {
+    throw new Error('repo.json has an entry that is not an object');
+  }
   return parsed;
 }
 
@@ -124,9 +127,9 @@ export function parseArgs(argv) {
   let repoJsonPath;
   const extraArgs = [];
   for (let i = 0; i < rest.length; i++) {
-    if (rest[i] === '--repo-json') {
-      repoJsonPath = rest[++i];
-      if (!repoJsonPath) throw new Error('--repo-json needs a path');
+    if (rest[i] === '--repo-json' || rest[i].startsWith('--repo-json=')) {
+      repoJsonPath = rest[i] === '--repo-json' ? rest[++i] : rest[i].slice('--repo-json='.length);
+      if (!repoJsonPath || repoJsonPath.startsWith('--')) throw new Error('--repo-json needs a path');
     } else extraArgs.push(rest[i]);
   }
   if (!['prepare', 'deploy', 'dev'].includes(command)) throw new Error('usage: deploy.mjs prepare|deploy|dev [--repo-json <path>]');
@@ -138,6 +141,7 @@ async function main() {
   const { command, repoJsonPath, extraArgs } = parseArgs(process.argv.slice(2));
   if (command === 'prepare') {
     await prepare({ repoJsonPath });
+    console.log(`wrote ${join(STATIC_DIR, 'repo.json')}; delete it when done, or a raw \`wrangler deploy\` ships it`);
     return 0;
   }
   // Ctrl+C, a closed console or a polite kill: once wrangler runs it gets the signal too, and this process stays

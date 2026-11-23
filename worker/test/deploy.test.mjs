@@ -46,7 +46,8 @@ const stubGit = ({ porcelain = '', sha = SHA, remotes = '  origin/test\n' } = {}
 
 console.log('validateRepoJson:');
 // [AC-static-repo-json-5] [EDGE-static-repo-json-3]
-for (const [label, text] of [['empty', ''], ['not JSON', '{oops'], ['an object', '{"a":1}'], ['an empty array', '[]']]) {
+for (const [label, text] of [['empty', ''], ['not JSON', '{oops'], ['an object', '{"a":1}'], ['an empty array', '[]'],
+  ['an array holding null', '[null]'], ['an array of numbers', '[1]'], ['an array of arrays', '[[]]']]) {
   let threw = false;
   try { validateRepoJson(text); } catch { threw = true; }
   t(`rejects ${label}`, threw);
@@ -203,9 +204,13 @@ t('deployArgs is deterministic', JSON.stringify(deployArgs({ sha: SHA, repoJsonB
   === JSON.stringify(deployArgs({ sha: SHA, repoJsonBytes: FIXTURE })));
 t('wranglerCommand runs through node', wranglerCommand('/w')[0] === process.execPath);
 t('parseArgs reads --repo-json', parseArgs(['deploy', '--repo-json', 'x.json']).repoJsonPath === 'x.json');
+t('parseArgs reads --repo-json=<path> (not passed on to wrangler)',
+  parseArgs(['dev', '--repo-json=x.json']).repoJsonPath === 'x.json' && parseArgs(['dev', '--repo-json=x.json']).extraArgs.length === 0);
 for (const [label, argv] of [
   ['unknown deploy arguments', ['deploy', '--dry-run']],
   ['--repo-json without a path', ['deploy', '--repo-json']],
+  ['--repo-json followed by a flag', ['dev', '--repo-json', '--port']],
+  ['an empty --repo-json=', ['deploy', '--repo-json=']],
   ['an unknown command', ['publish']],
   ['no command', []],
 ]) {
