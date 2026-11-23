@@ -80,8 +80,12 @@ console.log('prepare:');
     const calls = [];
     await prepare({
       staticDir: s.staticDir,
-      fetchImpl: async (url, init) => { calls.push({ url, accept: init?.headers?.accept }); return new Response(FIXTURE); },
+      fetchImpl: async (url, init) => {
+        calls.push({ url, accept: init?.headers?.accept, timed: init?.signal instanceof AbortSignal });
+        return new Response(FIXTURE);
+      },
     });
+    t('the fetch carries a timeout signal', calls[0]?.timed === true);
     t('fetches once from the contents API with the raw media type',
       calls.length === 1 && calls[0].url === CONTENTS_URL
         && calls[0].url.startsWith('https://api.github.com/repos/solona-m/plugins/contents/repo.json')
@@ -128,7 +132,7 @@ console.log('deploy:');
   // [AC-static-repo-json-4] [AC-static-repo-json-6] The version is tagged with the commit, through node + wrangler.js.
   {
     const s = await scratch();
-    const { git } = stubGit();
+    const { git, calls } = stubGit();
     let seen;
     const code = await deploy({ workerDir: s.dir, staticDir: s.staticDir, repoJsonPath: s.repoJson, git,
       spawn: async (cmd, args, opts) => { seen = { cmd, args, opts, present: await exists(s.target) }; return 7; } });
@@ -140,6 +144,10 @@ console.log('deploy:');
         ['deploy', '--tag', SHA, '--message', `proteus ${SHA.slice(0, 7)} repo.json sha256:${digest}`])
       && seen.opts.cwd === s.dir, JSON.stringify(seen));
     t('repo.json is in place while wrangler runs', seen?.present === true);
+    // The refusals above pass because the stub answers by verb; this pins the exact questions asked of git, so a
+    // check that stopped asking the right one (e.g. `branch -r` without `--contains HEAD`) fails here.
+    t('asks git exactly: worker/ status, HEAD, remote branches containing HEAD', JSON.stringify(calls)
+      === JSON.stringify(['status --porcelain -- .', 'rev-parse HEAD', 'branch -r --contains HEAD']), JSON.stringify(calls));
     t("wrangler's exit code passes through", code === 7);
     await rm(s.dir, { recursive: true, force: true });
   }

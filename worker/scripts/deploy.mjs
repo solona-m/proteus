@@ -50,8 +50,10 @@ export async function prepare({ staticDir = STATIC_DIR, repoJsonPath, fetchImpl 
   if (repoJsonPath) {
     bytes = await readFile(repoJsonPath);
   } else {
+    // A timeout, so a stalled fetch fails (and a Ctrl+C during it takes effect) in seconds rather than minutes.
     const res = await fetchImpl(CONTENTS_URL, {
       headers: { accept: 'application/vnd.github.raw', 'user-agent': 'proteus-assets-deploy' },
+      signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) throw new Error(`fetching repo.json from the GitHub contents API failed: ${res.status}`);
     bytes = Buffer.from(await res.arrayBuffer());

@@ -458,7 +458,7 @@ public sealed class SupplyChainTests
                 "DalamudApiLevel and bumped by hand with the game; the other two come with it.");
     }
 
-    // [AC-security-scans-1] [EDGE-security-scans-9]
+    // [AC-security-scans-1] [EDGE-security-scans-9] [AC-static-repo-json-8]
     [Fact]
     public void Dependabot_NpmUsesWorkerAndIncreaseIfNecessary()
     {
