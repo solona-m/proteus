@@ -79,8 +79,7 @@ internal sealed class HatCompatPanel(HatCompatWatcher watcher, Configuration con
 
         var s = Strings.HatCompat;
         ImGui.Spacing();
-        if (ImGui.Button(string.Format(s.UndoAllFmt, count))) watcher.RevertAll();
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.UndoAllTip);
+        if (ProteusStyle.ArmedButton(string.Format(s.UndoAllFmt, count), s.UndoAllTip)) watcher.RevertAll();
     }
 
     private void DrawState()
@@ -109,7 +108,7 @@ internal sealed class HatCompatPanel(HatCompatWatcher watcher, Configuration con
         if (view.Patched)
         {
             ImGui.TextWrapped(s.AlreadyPatched);
-            if (ImGui.Button(s.Undo)) watcher.Revert();
+            if (ProteusStyle.ArmedButton(s.Undo)) watcher.Revert();
             DrawMessage(view);
             return;
         }

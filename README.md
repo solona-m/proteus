@@ -131,7 +131,7 @@ A matcap is a picture of a lit sphere; the parts take their colour from it by wh
 - **Your images**: put square pictures of a sphere (PNG or JPG) in `Penumbra/Proteus/Matcaps` (**Open matcap folder**, or **Matcap images** in Settings), or in a mod's own `Proteus/Matcaps`. Each one is baked into its own texture in the mod, so one piece can carry several different matcaps — up to the 10 materials a model can carry, which a refit also needs room in for nails and underwear.
 - **Library mods**: installed mods with a choice of matcaps for one shared texture (such as Westlaketea's [MatCap Library](https://westlaketeamods.carrd.co/)) are found and listed. Picking one points the parts at the library's texture and selects that option in your collection; the library's textures are never copied into your mod, so anyone you share the mod with needs the library too. One slot shows one matcap at a time. A library that is off is only switched on after you confirm, since that turns on its other files too.
 - **Hair** works, and so do the mod's other body options at the same path whose parts line up. **Au Ra horns** are part of the face model: open your face mod, or your own face under Matcaps, and only the horns can be ticked; hats still hide them, and the horn colour no longer applies to matcapped horns. A face overlay keeps working: Proteus redraws it from the edited face. **Viera ears** work too. **Tails** work too. So do Proteus's ports of a hairstyle to other races: Proteus then keeps that port as it is when the hairstyle changes, and doesn't by itself remake the ports of other races that share its material, until you undo the matcap.
-- To change a matcap, tick parts that already have it, pick another of the same kind (an image for another image, a library option for another) and press **Apply matcap**: it changes in place, wherever it is used, without splitting again. Click a matcap to see it on your character first (gear and accessories); nothing is saved until you press **Apply matcap**. **Undo matcaps on this model** puts every model file back exactly as it was and removes everything Proteus added. If the author updates the model, the old matcap shows as no longer used; **Forget** tidies it away.
+- To change a matcap, tick parts that already have it, pick another of the same kind (an image for another image, a library option for another) and press **Apply matcap**: it changes in place, wherever it is used, without splitting again. Click a matcap to see it on your character first (gear and accessories); nothing is saved until you press **Apply matcap**. **Undo matcaps on this model** (hold Ctrl or Shift and click) puts every model file back exactly as it was and removes everything Proteus added. If the author updates the model, the old matcap shows as no longer used; **Forget** tidies it away.
 
 ##### Moving, turning and scaling
 
@@ -178,7 +178,7 @@ Things worth knowing:
 - **The other sex** can be picked under **Refit for** too. A Midlander chest or legs garment can be refitted for Midlanders of the other sex when the body mod you refit onto has bodies of that sex. Women's shoes and gloves made for Midlanders can be refitted for Midlander men too: the foot or hand stays as it is and only the leg or arm is refitted, onto the men's legs or chest. On a men's shoe or glove that is only the game's own model, the panel offers to open the author's women's model with Midlander M already picked. Pick the body mod the garment was made for under **Made for body**. The bodies are matched through the bibo↔TBSE body maps, so only women's bodies in the Bibo+ or game layout pair with men's bodies in the TBSE or game layout. A refit is never refused for folded faces: how many turned over is shown beside it in the warning colour, since a turned-over face shows as a hole in game, so check those places before you share it. Every race that falls through to the saved model with no model of its own wears it too. The auto refit never crosses the sexes; the size set does, for a women's mod (see below). The game's own gear crosses the sexes for women's legs only: they can be refitted for Midlander men from the **Vanilla body**. The game has its own men's model of most items, so the panel says the saved refit replaces it while its new mod is on, and offers to open the game's men's model instead.
 - **Bones the race's skeleton lacks** don't stop a **Refit for**. A garment rigged to a women's physics skeleton (YAS) can be refitted for men, onto IVCS or the game's skeleton: each bone the race's skeleton doesn't have is moved onto the nearest one it has, such as YAS's buttock bones onto IVCS's. The panel lists every bone it moved; those parts then move with that bone instead of on their own. Bones only your collection's custom skeleton has are kept, and the panel warns that anyone without that skeleton sees those parts out of place.
 - **Shape keys are lost** when the skin is replaced or the garment moves between body mods. Proteus tells you when that happens.
-- **Remove the last refit** takes a saved size back out of the mod.
+- **Remove the last refit** (hold Ctrl or Shift and click) takes a saved size back out of the mod.
 - Only the highest level of detail is refitted, so the old size can show at a great distance.
 
 ##### Every size for other bodies
@@ -210,7 +210,7 @@ Things worth knowing:
 - **Equipment and accessories only.** There's nothing to attach a switch to on other model types.
 - **A part the author already switches can take yours too.** The two stack: the part shows only when both are on.
 - **Imported packs take switches too.** A garment from a pack you imported through **Import** gets its switch the same way.
-- **It's reversible.** The original models are kept, so **Undo — restore the original models** puts the mod back exactly as it was and removes the option group.
+- **It's reversible.** The original models are kept, so **Undo — restore the original models** (hold Ctrl or Shift and click) puts the mod back exactly as it was and removes the option group.
 - If an item has several model files whose parts are arranged differently, Proteus edits only the ones the switch lands on correctly and tells you which it left alone, rather than guessing and hitting the wrong geometry.
 
 #### Bindings
@@ -336,7 +336,7 @@ The **Hair** section fits hair mods to you: hair made for another race onto your
 **Hair made for another race.** Many hair mods are made for one race only, so on any other race the game shows its own hairstyle instead. With **Fit hair mods made for another race** on, Proteus bends the mod's hairstyle onto your race's head and adds it to the same option of the same mod, so it follows that mod's own switches.
 
 - It checks the hair mods switched on in your collection once after you update, when you switch the setting on, when you press **Check now**, and whenever a hair mod is installed, switched on or changed. The hairstyle you put on is fitted too. Chat names the hairstyle numbers that were fitted, so you know what to choose; Glamourer shows the number.
-- The section shows the check as it runs, with **Cancel**, and lists every hairstyle it fitted. Each has its own **Undo**, and **Undo everything this check fitted** takes them all back (click it twice). An undone hairstyle isn't fitted again by itself.
+- The section shows the check as it runs, with **Cancel**, and lists every hairstyle it fitted. Each has its own **Undo** (hold Ctrl or Shift and click), and **Undo everything this check fitted** takes them all back (click it twice). An undone hairstyle isn't fitted again by itself.
 - Only for your own race, from races of the same sex. A race you're only trying on isn't fitted: Proteus waits until you've kept it for 30 seconds.
 - Physics hair keeps its physics. When your race's skeleton lacks the bones a hairstyle moves with, the port brings the source race's skeleton and physics along for that hairstyle.
 - A hairstyle that wouldn't sit right on your head (it sinks into it, or stands off it) is still fitted, and Proteus says which, so you can check it in game.
@@ -358,7 +358,7 @@ The **Hair** section fits hair mods to you: hair made for another race onto your
 - **Make hairstyles fit under hats** is on by default. Proteus waits until you actually wear a hat, then fits the hairstyle under it and tells you in chat. If you never wear a hat, your hair mods are never touched. Untick it to stop, and your choice sticks.
 - **Hide ponytails** also makes the parts no hat could cover disappear while a hat is worn: ponytails, side tails, a long fall at the back. Off by default, because hiding is all or nothing and a part judged wrongly simply vanishes.
 - Or fit the hairstyle you're wearing yourself. The section says how many points would be pressed and by how far, and **Make it fit** writes the change.
-- **Undo** puts back the hairstyle you're wearing. A hair mod usually ships one model per race, so **Undo all** puts back every hairstyle Proteus changed in that mod. The originals are kept in `Proteus/hatcompat-backup/` inside the mod.
+- **Undo** and **Undo all** (hold Ctrl or Shift and click): **Undo** puts back the hairstyle you're wearing. A hair mod usually ships one model per race, so **Undo all** puts back every hairstyle Proteus changed in that mod. The originals are kept in `Proteus/hatcompat-backup/` inside the mod.
 - Hair whose author already added hat support is left alone, and hair that came with the game already works. The exception is hat support that hides far more hair than a hat covers, usually carried over from the hairstyle it was built from. Proteus offers to measure that again and replace it.
 - **Replace hat support a hairstyle came with** makes Proteus discard an author's hand-made hat fit and use its own instead. Off by default, since a hand-made fit is usually better. The author's version is kept and comes back when you turn it off.
 - Some hairstyles are welded into pieces too large for the game's shape format to address. Those points keep their shape, so a hat may still clip there.
@@ -388,7 +388,7 @@ Gear made before Dawntrail still uses the game's old shader (`characterlegacy.sh
 
 - The section counts what was upgraded and what was left on the old shader. Hover the count to see why pieces were left on the old shader, and how many for each reason.
 - **Upgrade what I'm wearing now** upgrades what you have on, including pieces you undid before.
-- **Undo for what I'm wearing** puts the author's files back and leaves those pieces alone until you upgrade them again. An update the author shipped since is kept. A file edited after its upgrade is left as it is, and its original stays in the backup folder.
+- **Undo for what I'm wearing** (hold Ctrl or Shift and click) puts the author's files back and leaves those pieces alone until you upgrade them again. An update the author shipped since is kept. A file edited after its upgrade is left as it is, and its original stays in the backup folder.
 - Turning it off stops further upgrades but doesn't undo them.
 
 ##### Gear variants
@@ -397,7 +397,7 @@ Many gear mods replace an item's model but ship its material for one variant onl
 
 - The section counts the pieces repointed and the pieces left. Hover the count to see which, and why a piece was left: the mod ships several variants of its own, sets the variant itself, or its material comes from another mod, for example.
 - **Repoint what I'm wearing now** repoints what you have on, including pieces you undid before.
-- **Undo for what I'm wearing** takes Proteus's entries back out and leaves those pieces alone until you repoint them. An entry someone changed since is kept.
+- **Undo for what I'm wearing** (hold Ctrl or Shift and click) takes Proteus's entries back out and leaves those pieces alone until you repoint them. An entry someone changed since is kept.
 - Turning it off stops further changes but doesn't undo them.
 
 ### Presets

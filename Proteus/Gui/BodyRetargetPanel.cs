@@ -1980,13 +1980,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         if (openDir != null && ImGui.Button(ps.RetargetOpenInPenumbra, FullWidth())) penumbra.OpenToMod(openDir);
 
         // Armed by a held modifier, like every other destructive button in the tab.
-        var io = ImGui.GetIO();
-        bool armed = io.KeyCtrl || io.KeyShift;
-        using (ImRaii.Disabled(saveTask != null || !armed))
-            if (ImGui.Button(ps.RetargetUndo, FullWidth()))
-                StartUndo(ctx, saved);
-        if (!armed && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip(ps.BrushRevertArmTip);
+        if (ProteusStyle.ArmedButton(ps.RetargetUndo, blocked: saveTask != null, blockedTip: ps.RetargetWorking, size: FullWidth()))
+            StartUndo(ctx, saved);
     }
 
     /// <summary>
