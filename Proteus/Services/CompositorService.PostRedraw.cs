@@ -177,7 +177,7 @@ public partial class CompositorService
 
             // A carrier equipped during this composite is still settling (its model can precede its materials). No echo
             // composite re-checks any more, so this check schedules its own, timed from that ask (two at most).
-            long lastCarrierAsk = Math.Max(LastRingAskTick, _lastGlassesInjectTick);
+            long lastCarrierAsk = Math.Max(LastRingAskTick, Interlocked.Read(ref _lastGlassesInjectTick));
             var sinceCarrier = unchecked(Environment.TickCount64 - lastCarrierAsk);
             if (sinceCarrier >= 0 && sinceCarrier < RingInjectCooldownMs)
             {

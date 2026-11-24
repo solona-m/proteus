@@ -270,6 +270,20 @@ public sealed class ShellHostAllocationTests
     }
 
     [Fact]
+    public void DisplacedCountsOnlyBodyLayers() // [EDGE-face-glasses-priority-10]
+    {
+        // Face priority pushes the body onto the ring carrier the iris would have taken: the iris becoming unhosted is
+        // not counted as "body layer(s) didn't fit".
+        Host[] hosts = [Glasses, RingCarrier];
+        var s = RunAll(hosts, [Body, Face, Iris], Layers((0, 5), (1, 1), (2, 1)));
+
+        Assert.Equal([5], OnHost(s, 0));
+        Assert.Equal([6], Assert.Single(s.Unhosted, u => u.Surface == 2).Layers);
+        Assert.Empty(s.Dropped);
+        Assert.Equal(0, s.DisplacedByReservation);
+    }
+
+    [Fact]
     public void ReservationUnusedOnADirectlyBuiltState() // [EDGE-face-glasses-priority-11]
     {
         var s = Begin(F2, 36);

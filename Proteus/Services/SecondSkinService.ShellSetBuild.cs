@@ -1165,7 +1165,7 @@ public sealed partial class SecondSkinService
             // natively-authored surface needs a CARRIER host, whose metadata is ours to change. The body never yields a host
             // to a human part, with ONE exception: a mod on the face material holds the facewear carrier before the body
             // fills the rest (ShellHostAllocation.FacewearReservation), since the face can only ride a carrier.
-            allocHosts =hosts.Select(h => new ShellHostAllocation.Host(
+            allocHosts = hosts.Select(h => new ShellHostAllocation.Host(
                 Capacity: SecondSkinWriter.MaxMaterials - h.BaseMatCount,
                 Carrier: h.BaseModel == null,
                 FacewearCarrier: h.BaseModel == null && h.Slot == "met" && h.Tree == "equipment",
@@ -1250,7 +1250,7 @@ public sealed partial class SecondSkinService
         private void PlaceContent()
         {
             // ── content units take what the shells left ───────────────────────────
-            // After the shells, from the same remaining[]/hostClaim[]/diskBudget state. One slot per unit, first host with
+            // After the shells, from the same allocation state (ShellHostAllocation). One slot per unit, first host with
             // room that may carry its surface; a unit that finds none is reported, never squeezed in over a shell.
             // Placed with the layers in DistributeLayers (ShellHostAllocation.Run); read back here.
             contentWork = alloc.ContentWork;

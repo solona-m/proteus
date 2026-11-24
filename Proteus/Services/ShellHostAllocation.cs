@@ -48,7 +48,7 @@ internal static class ShellHostAllocation
         public int ReservedOutstanding { get; set; }
         /// <summary>A reservation was made but placed nothing, so the allocation was re-run without it (defensive).</summary>
         public bool ReservationDropped { get; set; }
-        /// <summary>Layers of other surfaces dropped over budget only because of the reservation.</summary>
+        /// <summary>BODY layers (non-carrier-only surfaces) dropped over budget only because of the reservation.</summary>
         public int DisplacedByReservation { get; set; }
     }
 
@@ -113,11 +113,11 @@ internal static class ShellHostAllocation
             s.ReservationDropped = true;
             return s;
         }
-        // How many layers of the other surfaces the reservation cost, against the body-first allocation.
+        // How many BODY layers the reservation cost (dropped over budget), against the body-first allocation: what the
+        // "body layer(s) didn't fit" log line counts.
         var baseline = RunWith(null, hosts, surfaces, layerSurface, units, diskBudget);
-        int OthersDropped(State st) => st.Dropped.Count(k => layerSurface[k] != hold.Surface)
-                                       + st.Unhosted.Where(x => x.Surface != hold.Surface).Sum(x => x.Layers.Count);
-        s.DisplacedByReservation = Math.Max(0, OthersDropped(s) - OthersDropped(baseline));
+        int BodyDropped(State st) => st.Dropped.Count(k => layerSurface[k] >= 0 && !surfaces[layerSurface[k]].CarrierOnly);
+        s.DisplacedByReservation = Math.Max(0, BodyDropped(s) - BodyDropped(baseline));
         return s;
     }
 

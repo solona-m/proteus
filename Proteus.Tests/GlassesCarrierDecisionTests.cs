@@ -169,6 +169,14 @@ public sealed class GlassesCarrierDecisionTests
         Assert.False(confirmed.Resting(3_000));
         Assert.False(confirmed.NoteFailureRemoval(4_000));                // the count started again
 
+        // A removal while already resting neither starts a second rest nor extends it.
+        var extending = new GlassesChurn();
+        extending.NoteFailureRemoval(1_000);
+        Assert.True(extending.NoteFailureRemoval(2_000));
+        long endsAt = extending.RestEndsAt;
+        Assert.False(extending.NoteFailureRemoval(10_000));
+        Assert.Equal(endsAt, extending.RestEndsAt);
+
         Assert.Equal(GlassesAction.Rest, Decide(recorded: false, drawn: false, resting: true).Action);
     }
 

@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using Xunit;
 
@@ -237,10 +238,22 @@ public class GlassesCarrierWiringTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-face-glasses-priority-7")]
+    public void ConfirmedFacewearDrawEndsTheRest() // [AC-face-glasses-priority-7] [EDGE-face-glasses-priority-23]
+    {
+        var post = Source("Services/CompositorService.PostRedraw.cs");
+        Before(post, "Interlocked.Exchange(ref _shellConfirmedDrawnAtTick", "_glassesChurn.NoteConfirmedOnFacewear()");
+        int at = post.IndexOf("_glassesChurn.NoteConfirmedOnFacewear()", System.StringComparison.Ordinal);
+        var guard = post[post.LastIndexOf("if (", at, System.StringComparison.Ordinal)..at];
+        Assert.Contains("_met.mdl", guard);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-face-glasses-priority-26")]
     public void SharedTicksUseInterlocked() // [EDGE-face-glasses-priority-26]
     {
-        var src = Carriers;
+        var dir = Path.Combine(ProteusDir(), "Services");
+        var src = string.Join("\n", Directory.GetFiles(dir, "CompositorService.*.cs").Select(File.ReadAllText));
         foreach (var field in new[] { "_lastGlassesInjectTick", "_glassesRemovedAt", "_glassesLivePolls", "_lastFacewearWriteFailed" })
         {
             foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(src, $@"\b{field}\b"))
