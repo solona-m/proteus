@@ -1187,11 +1187,16 @@ public sealed partial class SecondSkinService
                 // Skipped, not squeezed: a native surface on a deforming host renders visibly wrong. Reported apart from a
                 // capacity overflow because the remedy is a free ring or facewear slot.
                 unhostedLayers.AddRange(layerIdxs);
-                service.log.Warning("[Proteus] second skin: {0} — {1} layer(s) skipped, no host can carry it. It must "
-                          + "not be race-deformed, so it needs a slot Proteus can replace outright (a free "
-                          + "ring, or the facewear slot); the {2} host(s) available are all append hosts or "
-                          + "already full",
-                    surfaces[surfIdx].Key, layerIdxs.Count, hosts.Count);
+                // A face while the facewear carrier rests is waiting for it, not missing a slot: ReportUnhosted says so once.
+                if (service.FacewearCarrierResting && surfaces[surfIdx].Key.Kind == ShellSurfaceKind.Face)
+                    service.log.Debug("[Proteus] second skin: {0} — {1} layer(s) wait for the resting facewear carrier",
+                        surfaces[surfIdx].Key, layerIdxs.Count);
+                else
+                    service.log.Warning("[Proteus] second skin: {0} — {1} layer(s) skipped, no host can carry it. It must "
+                              + "not be race-deformed, so it needs a slot Proteus can replace outright (a free "
+                              + "ring, or the facewear slot); the {2} host(s) available are all append hosts or "
+                              + "already full",
+                        surfaces[surfIdx].Key, layerIdxs.Count, hosts.Count);
             }
             foreach (var k in alloc.Dropped)                 // the dropped bottom layers = over budget
             {
@@ -1601,11 +1606,18 @@ public sealed partial class SecondSkinService
                 var keys = string.Join(", ", unhostedLayers
                     .Select(i => layerSurfaceName[i])
                     .Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal));
-                if (service.FacewearCarrierResting)
+                // Only faces wait for the resting facewear carrier; any other unhosted layer (every ring really worn) is
+                // told at once, as before.
+                bool onlyFacesWaiting = service.FacewearCarrierResting
+                    && unhostedLayers.All(i => layerSurface[i] >= 0 && surfaces[layerSurface[i]].Key.Kind == ShellSurfaceKind.Face);
+                if (onlyFacesWaiting)
+                {
                     // The facewear slot IS free; it is withheld for a moment after repeated failed builds. Not remembered
-                    // as told, so a layer still unhosted after the rest gets its line.
-                    service.log.Information("[Proteus] second skin: {0} layer(s) on [{1}] wait for the facewear carrier, "
-                                          + "which is resting after repeated failed builds", unhostedLayers.Count, keys);
+                    // as told, so a layer still unhosted after the rest gets its line. Logged once per set of surfaces.
+                    if (LogLineChanged(ref service.lastFacewearRestWaitLog, keys))
+                        service.log.Information("[Proteus] second skin: {0} layer(s) on [{1}] wait for the facewear carrier, "
+                                              + "which is resting after repeated failed builds", unhostedLayers.Count, keys);
+                }
                 else if (!string.Equals(service._lastUnhostedSurfaces, keys, StringComparison.Ordinal))
                 {
                     service._lastUnhostedSurfaces = keys;
@@ -1616,10 +1628,18 @@ public sealed partial class SecondSkinService
                     _ = Plugin.Framework.RunOnFrameworkThread(
                         () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
                 }
-                service.log.Warning("[Proteus] second skin: {0} layer(s) unhosted on surface(s) [{1}]",
-                    unhostedLayers.Count, keys);
+                if (!onlyFacesWaiting)
+                {
+                    LogLineChanged(ref service.lastFacewearRestWaitLog, null);
+                    service.log.Warning("[Proteus] second skin: {0} layer(s) unhosted on surface(s) [{1}]",
+                        unhostedLayers.Count, keys);
+                }
             }
-            else service._lastUnhostedSurfaces = null;
+            else
+            {
+                service._lastUnhostedSurfaces = null;
+                LogLineChanged(ref service.lastFacewearRestWaitLog, null);
+            }
 
             // Layers whose surface was never resolved: its own sentence, said only when the character is drawn (a mid-redraw
             // composite sees nothing). Deduped on the set.

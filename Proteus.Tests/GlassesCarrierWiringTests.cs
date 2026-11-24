@@ -307,7 +307,12 @@ public class GlassesCarrierWiringTests
     public void NoFreeASlotChatWhileTheFacewearCarrierRests() // [AC-face-glasses-priority-7] (QA re-run finding 2)
     {
         var report = Method(ShellSetBuild, "private void ReportUnhosted(");
-        Before(report, "if (service.FacewearCarrierResting)", "Chat.UnhostedLayers.Fmt");
+        // Held back only when every unhosted layer is a face waiting for the resting carrier; logged once.
+        Before(report, "bool onlyFacesWaiting = service.FacewearCarrierResting", "Chat.UnhostedLayers.Fmt");
+        Assert.Contains("unhostedLayers.All(i => layerSurface[i] >= 0 && surfaces[layerSurface[i]].Key.Kind == ShellSurfaceKind.Face)", report);
+        Before(report, "if (onlyFacesWaiting)", "LogLineChanged(ref service.lastFacewearRestWaitLog, keys)");
+        var distribute = Method(ShellSetBuild, "private void DistributeLayers(");
+        Before(distribute, "service.FacewearCarrierResting && surfaces[surfIdx].Key.Kind == ShellSurfaceKind.Face", "layer(s) skipped, no host can carry it");
         var gather = Method(ShellPhase, "private void GatherInputs(");
         Assert.Contains("run.compositor.secondSkin.FacewearCarrierResting = restedOut;", gather);
     }

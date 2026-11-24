@@ -260,7 +260,8 @@ public sealed partial class SecondSkinService
     internal volatile bool FacewearCarrierResting;
 
     /// <summary>The last facewear-carrier lines logged (face held / body displaced / guard / unbuilt), so each logs once.</summary>
-    private string? lastFacewearHoldLog, lastFacewearDisplacedLog, lastFacewearGuardLog, lastFacewearUnbuiltLog;
+    private string? lastFacewearHoldLog, lastFacewearDisplacedLog, lastFacewearGuardLog, lastFacewearUnbuiltLog,
+                    lastFacewearRestWaitLog;
 
     /// <summary>Store <paramref name="outcome"/> for <paramref name="hostKey"/>; true when it differs from the last one.</summary>
     internal static bool OutcomeChanged(Dictionary<string, string> byHost, object gate, string hostKey, string outcome)
