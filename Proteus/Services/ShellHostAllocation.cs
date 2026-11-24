@@ -41,6 +41,112 @@ internal static class ShellHostAllocation
         /// <summary>The bottom layers that ran out of capacity (over budget), bottom first.</summary>
         public List<int> Dropped { get; } = new();
         public List<int> ContentUnhosted { get; } = new();
+
+        /// <summary>The facewear carrier held for a face surface; null when none applies.</summary>
+        public FacewearHold? Reservation { get; set; }
+        /// <summary>Disk ids still held back from every other surface for the reserved face layers/pieces.</summary>
+        public int ReservedOutstanding { get; set; }
+        /// <summary>A reservation was made but placed nothing, so the allocation was re-run without it (defensive).</summary>
+        public bool ReservationDropped { get; set; }
+        /// <summary>Layers of other surfaces dropped over budget only because of the reservation.</summary>
+        public int DisplacedByReservation { get; set; }
+    }
+
+    /// <summary>The facewear carrier <paramref name="Host"/> held for face surface <paramref name="Surface"/>.</summary>
+    /// <param name="Demand">The face layers plus face pieces that will draw and could use it.</param>
+    internal sealed record FacewearHold(int Host, int Surface, int Demand);
+
+    /// <summary>
+    /// A mod on the face material gets the facewear carrier first: the first Face surface (in surface order) with demand
+    /// that will draw holds the facewear carrier, when one exists and some other host can still take the body. Its gear
+    /// layers count, and its content pieces that are neither effect-only nor carry an effect (an effect sorts onto an
+    /// accessory carrier, and an effect-only piece can never use the facewear slot). Null when nothing applies.
+    /// </summary>
+    public static FacewearHold? FacewearReservation(IReadOnlyList<Host> hosts, IReadOnlyList<Surface> surfaces,
+                                                    IReadOnlyList<int> layerSurface, IReadOnlyList<Unit> units)
+    {
+        int g = -1;
+        for (int i = 0; i < hosts.Count; i++)
+            if (hosts[i].FacewearCarrier && hosts[i].Carrier && hosts[i].Capacity > 0) { g = i; break; }
+        if (g < 0) return null;
+
+        bool otherHost = false;
+        for (int i = 0; i < hosts.Count; i++)
+            if (i != g && hosts[i].Capacity > 0) { otherHost = true; break; }
+        // A face overlay never costs the whole body look: with nothing else to carry it, the body keeps the glasses.
+        if (!otherHost) return null;
+
+        for (int surf = 0; surf < surfaces.Count; surf++)
+        {
+            if (!surfaces[surf].Face) continue;
+            int demand = 0;
+            foreach (var ls in layerSurface) if (ls == surf) demand++;
+            foreach (var u in units) if (u.Surface == surf && !u.EffectOnly && !u.CarriesEffect) demand++;
+            if (demand > 0) return new FacewearHold(g, surf, demand);
+        }
+        return null;
+    }
+
+    /// <summary>The reservation placed nothing on its host (unreachable by construction today; kept as a guard).</summary>
+    public static bool ReservationUnused(State s)
+        => s.Reservation is { } r
+           && !s.Work.Exists(w => w.HostIdx == r.Host)
+           && !s.ContentWork.Exists(w => w.HostIdx == r.Host);
+
+    /// <summary>A reserved facewear host that ended up with no published model after baking and writing.</summary>
+    public static bool ReservedButUnbuilt(int? reservedHost, IReadOnlyCollection<int> builtHosts)
+        => reservedHost is { } h && !builtHosts.Contains(h);
+
+    /// <summary>
+    /// The whole allocation: the facewear reservation (if any), the layers, then the content pieces. A reservation that
+    /// placed nothing is re-run without it.
+    /// </summary>
+    public static State Run(IReadOnlyList<Host> hosts, IReadOnlyList<Surface> surfaces, IReadOnlyList<int> layerSurface,
+                            IReadOnlyList<Unit> units, int diskBudget)
+    {
+        var hold = FacewearReservation(hosts, surfaces, layerSurface, units);
+        var s = RunWith(hold, hosts, surfaces, layerSurface, units, diskBudget);
+        if (hold == null) return s;
+        if (ReservationUnused(s))
+        {
+            s = RunWith(null, hosts, surfaces, layerSurface, units, diskBudget);
+            s.ReservationDropped = true;
+            return s;
+        }
+        // How many layers of the other surfaces the reservation cost, against the body-first allocation.
+        var baseline = RunWith(null, hosts, surfaces, layerSurface, units, diskBudget);
+        int OthersDropped(State st) => st.Dropped.Count(k => layerSurface[k] != hold.Surface)
+                                       + st.Unhosted.Where(x => x.Surface != hold.Surface).Sum(x => x.Layers.Count);
+        s.DisplacedByReservation = Math.Max(0, OthersDropped(s) - OthersDropped(baseline));
+        return s;
+    }
+
+    internal static State RunWith(FacewearHold? hold, IReadOnlyList<Host> hosts, IReadOnlyList<Surface> surfaces,
+                                  IReadOnlyList<int> layerSurface, IReadOnlyList<Unit> units, int diskBudget)
+    {
+        var s = Begin(hosts, diskBudget);
+        if (hold != null)
+        {
+            // Pre-claimed through the existing identity rule: every other surface's layers and pieces skip this host.
+            s.HostClaim[hold.Host] = hold.Surface;
+            s.HostSurface[hold.Host] = hold.Surface;
+            s.Reservation = hold;
+            s.ReservedOutstanding = Math.Min(Math.Min(hold.Demand, hosts[hold.Host].Capacity), diskBudget);
+        }
+        DistributeLayers(s, hosts, surfaces, layerSurface);
+        PlaceContent(s, hosts, surfaces, units);
+        return s;
+    }
+
+    /// <summary>The disk ids a surface may spend: everything for the reserved face surface, the rest minus what is held.</summary>
+    private static int Budget(State s, int surfIdx)
+        => s.Reservation is { } r && r.Surface == surfIdx ? s.DiskBudget : Math.Max(0, s.DiskBudget - s.ReservedOutstanding);
+
+    /// <summary>The reserved face surface placed <paramref name="n"/> on <paramref name="host"/>: that much of the hold is spent.</summary>
+    private static void Spend(State s, int surfIdx, int host, int n)
+    {
+        if (s.Reservation is { } r && r.Surface == surfIdx && r.Host == host)
+            s.ReservedOutstanding = Math.Max(0, s.ReservedOutstanding - n);
     }
 
     public static State Begin(IReadOnlyList<Host> hosts, int diskBudget)
@@ -85,7 +191,7 @@ internal static class ShellHostAllocation
                 eligible.Add(i);
             }
 
-            int capacity = Math.Min(eligible.Sum(i => s.Remaining[i]), s.DiskBudget);
+            int capacity = Math.Min(eligible.Sum(i => s.Remaining[i]), Budget(s, surfIdx));
             if (capacity == 0 && carrierOnly)
             {
                 // Skipped, not squeezed: a native surface on a deforming host renders visibly wrong.
@@ -100,12 +206,13 @@ internal static class ShellHostAllocation
             {
                 if (cursor < dropCount) break;
                 int take = Math.Min(s.Remaining[h], cursor - dropCount + 1);
-                take = Math.Min(take, s.DiskBudget);
+                take = Math.Min(take, Budget(s, surfIdx));
                 if (take <= 0) break;
                 for (int k = cursor - take + 1; k <= cursor; k++)   // ascending → topmost lands last (highest idx)
                     s.Work.Add((layerIdxs[k], h));
                 s.Remaining[h] -= take;
                 s.DiskBudget -= take;
+                Spend(s, surfIdx, h, take);
                 s.HostClaim[h] = surfIdx;
                 s.HostSurface[h] = surfIdx;
                 cursor -= take;
@@ -136,7 +243,7 @@ internal static class ShellHostAllocation
             int chosen = -1;
             foreach (var h in order)
             {
-                if (s.DiskBudget <= 0) break;
+                if (Budget(s, surfIdx) <= 0) break;
                 if (s.Remaining[h] <= 0) continue;
                 // Only a carrier's EQDP may be rewritten, so only a carrier can publish a natively-authored piece undeformed.
                 if (carrierOnly && !hosts[h].Carrier) continue;
@@ -149,6 +256,7 @@ internal static class ShellHostAllocation
 
             s.Remaining[chosen]--;
             s.DiskBudget--;
+            Spend(s, surfIdx, chosen, 1);
             s.HostClaim[chosen] = surfIdx;
             s.HostSurface[chosen] = surfIdx;
             s.ContentWork.Add((u, chosen));

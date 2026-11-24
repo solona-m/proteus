@@ -253,6 +253,9 @@ public sealed partial class SecondSkinService
     /// <summary>The Meshes folder last warned about as missing every toe cap.</summary>
     private string? lastCapsMissing;
 
+    /// <summary>The last facewear-carrier lines logged (face held / body displaced / guard / unbuilt), so each logs once.</summary>
+    private string? lastFacewearHoldLog, lastFacewearDisplacedLog, lastFacewearGuardLog, lastFacewearUnbuiltLog;
+
     /// <summary>Store <paramref name="outcome"/> for <paramref name="hostKey"/>; true when it differs from the last one.</summary>
     internal static bool OutcomeChanged(Dictionary<string, string> byHost, object gate, string hostKey, string outcome)
     {

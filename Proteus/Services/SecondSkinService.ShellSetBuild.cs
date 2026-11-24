@@ -1162,16 +1162,24 @@ public sealed partial class SecondSkinService
             // layers spill to the hosts behind. Within a host, stack order is kept so the topmost has the highest material
             // index. Over capacity, the BOTTOM layers drop, never the mask.
             // Done per SURFACE, body first: a host has one EQDP entry, so its layers must agree on a race code, and a
-            // natively-authored surface needs a CARRIER host, whose metadata is ours to change.
-            allocHosts = hosts.Select(h => new ShellHostAllocation.Host(
+            // natively-authored surface needs a CARRIER host, whose metadata is ours to change. The body never yields a host
+            // to a human part, with ONE exception: a mod on the face material holds the facewear carrier before the body
+            // fills the rest (ShellHostAllocation.FacewearReservation), since the face can only ride a carrier.
+            allocHosts =hosts.Select(h => new ShellHostAllocation.Host(
                 Capacity: SecondSkinWriter.MaxMaterials - h.BaseMatCount,
                 Carrier: h.BaseModel == null,
                 FacewearCarrier: h.BaseModel == null && h.Slot == "met" && h.Tree == "equipment",
                 EffectCarrier: EffectHostPlanner.CanHostEffectOnly(h.BaseModel != null, h.Prefix))).ToList();
             allocSurfaces = surfaces.Select(sf => new ShellHostAllocation.Surface(
                 CarrierOnly: sf.Key.RequiresNativeHost, Face: sf.Key.Kind == ShellSurfaceKind.Face)).ToList();
-            alloc = ShellHostAllocation.Begin(allocHosts, DiskIdSpace);   // the base-36 cap, enforced across all surfaces
-            ShellHostAllocation.DistributeLayers(alloc, allocHosts, allocSurfaces, layerSurface);
+            var units = contentUnits.Select((cu, u) => new ShellHostAllocation.Unit(
+                Surface: unitSurface[u],
+                EffectOnly: cu.EffectOnly,
+                CarriesEffect: cu.Owners.Any(o => o.Content.Piece.Effect != null))).ToList();
+            // The layers AND the content pieces, in one pass: a mod on the face material holds the facewear carrier before
+            // the body fills the hosts (the base-36 disk-id cap is enforced across all surfaces).
+            alloc = ShellHostAllocation.Run(allocHosts, allocSurfaces, layerSurface, units, DiskIdSpace);
+            LogFacewearReservation(units);
             work = alloc.Work;
             hostSurface = alloc.HostSurface;
             foreach (var (surfIdx, layerIdxs) in alloc.Unhosted)
@@ -1196,16 +1204,55 @@ public sealed partial class SecondSkinService
             unresolvedLayers = new List<int>(droppedLayers);
         }
 
+        /// <summary>The face-over-body decision on the facewear carrier, each line logged once until it changes.</summary>
+        private void LogFacewearReservation(IReadOnlyList<ShellHostAllocation.Unit> units)
+        {
+            if (alloc.Reservation is { } hold)
+            {
+                var key = surfaces[hold.Surface].Key;
+                if (LogLineChanged(ref service.lastFacewearHoldLog, $"{key}|{hold.Demand}"))
+                    service.log.Information("[Proteus] host: the facewear carrier is kept for {0} ({1} layer(s)/piece(s)) — "
+                                            + "the body fills the other hosts", key, hold.Demand);
+                if (alloc.DisplacedByReservation > 0)
+                {
+                    if (LogLineChanged(ref service.lastFacewearDisplacedLog, $"{key}|{alloc.DisplacedByReservation}"))
+                        service.log.Warning("[Proteus] host: {0} body layer(s) didn't fit because the facewear carrier carries "
+                                            + "{1} — free a ring slot to make room for them", alloc.DisplacedByReservation, key);
+                }
+                else LogLineChanged(ref service.lastFacewearDisplacedLog, null);
+                return;
+            }
+            LogLineChanged(ref service.lastFacewearHoldLog, null);
+            LogLineChanged(ref service.lastFacewearDisplacedLog, null);
+
+            if (alloc.ReservationDropped)
+            {
+                if (LogLineChanged(ref service.lastFacewearGuardLog, "dropped"))
+                    service.log.Information("[Proteus] host: the facewear carrier was held for a face surface that placed "
+                                            + "nothing on it — allocated body first instead");
+                return;
+            }
+            bool facewear = allocHosts.Exists(h => h.FacewearCarrier);
+            bool faceDemand = false;
+            for (int i = 0; i < allocSurfaces.Count && !faceDemand; i++)
+                if (allocSurfaces[i].Face)
+                    faceDemand = Array.IndexOf(layerSurface, i) >= 0
+                                 || units.Any(u => u.Surface == i && !u.EffectOnly && !u.CarriesEffect);
+            if (facewear && faceDemand)
+            {
+                if (LogLineChanged(ref service.lastFacewearGuardLog, "body"))
+                    service.log.Information("[Proteus] host: the facewear carrier is kept for the body — no other host "
+                                            + "could carry it, so the face layers wait for a free ring slot");
+            }
+            else LogLineChanged(ref service.lastFacewearGuardLog, null);
+        }
+
         private void PlaceContent()
         {
             // ── content units take what the shells left ───────────────────────────
             // After the shells, from the same remaining[]/hostClaim[]/diskBudget state. One slot per unit, first host with
             // room that may carry its surface; a unit that finds none is reported, never squeezed in over a shell.
-            var units = contentUnits.Select((cu, u) => new ShellHostAllocation.Unit(
-                Surface: unitSurface[u],
-                EffectOnly: cu.EffectOnly,
-                CarriesEffect: cu.Owners.Any(o => o.Content.Piece.Effect != null))).ToList();
-            ShellHostAllocation.PlaceContent(alloc, allocHosts, allocSurfaces, units);
+            // Placed with the layers in DistributeLayers (ShellHostAllocation.Run); read back here.
             contentWork = alloc.ContentWork;
             contentUnhosted = alloc.ContentUnhosted;
         }
@@ -1786,10 +1833,25 @@ public sealed partial class SecondSkinService
             hostModelPaths = new List<string>();
             appendHostModelPaths = new List<string>();
             appendHostSources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var builtHosts = new HashSet<int>();
             for (int h = 0; h < hosts.Count; h++)
             {
+                int before = hostModelPaths.Count;
                 BuildHostModel(pushSweep, h);
+                if (hostModelPaths.Count > before) builtHosts.Add(h);
             }
+
+            // The face held the facewear carrier but its model never published (a write failure, or no geometry): the body
+            // didn't get the glasses this composite either. Not re-run (that would re-bake every texture); the next one allocates again.
+            int? reservedHost = alloc.Reservation?.Host;
+            if (ShellHostAllocation.ReservedButUnbuilt(reservedHost, builtHosts))
+            {
+                if (LogLineChanged(ref service.lastFacewearUnbuiltLog, $"{reservedHost}|{surfaces[alloc.Reservation!.Surface].Key}"))
+                    service.log.Information("[Proteus] host: the facewear carrier was kept for {0} but its model was not "
+                                            + "published this composite — the next composite allocates again",
+                        surfaces[alloc.Reservation!.Surface].Key);
+            }
+            else LogLineChanged(ref service.lastFacewearUnbuiltLog, null);
         }
 
         /// <summary>Builds one host's shell model (or reuses a memoised one) and publishes it with its EQDP and variant redirects.</summary>
