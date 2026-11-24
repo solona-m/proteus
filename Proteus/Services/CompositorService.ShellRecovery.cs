@@ -115,7 +115,18 @@ public partial class CompositorService
                 log.Warning("[Proteus] output write failed for {0} file(s) after {1} attempt(s) — giving up until the "
                           + "inputs change. The files are held by something else (the game, a sync tool, an antivirus)",
                     failures, d.Attempt);
-                if (failedHosts.Count > 0) PrintShellNotice(failedHosts, partly: true);
+                if (failedHosts.Count > 0)
+                {
+                    // Our glasses carrier came off with its failed write: never tell the user to take off a pair they no
+                    // longer wear.
+                    var glasses = InvisibleGlasses.Resolve(Plugin.DataManager, log);
+                    var name = ShellNotDrawnNotice.HostsToName(failedHosts, glasses?.ModelSet,
+                                                               glasses is { } g && OurGlassesAreOn(g));
+                    if (name.Count < failedHosts.Count)
+                        log.Information("[Proteus] output write give-up: not naming the invisible glasses — Proteus "
+                                      + "already took them off");
+                    if (name.Count > 0) PrintShellNotice(name, partly: true);
+                }
                 break;
         }
         return d;

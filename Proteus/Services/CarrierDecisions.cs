@@ -99,6 +99,130 @@ internal static class CarrierDecisions
     /// </summary>
     public static bool IsValidWalk(IReadOnlyCollection<string>? models, Func<IReadOnlyCollection<string>, bool> hasBodySlotModel)
         => models is { Count: > 0 } m && hasBodySlotModel(m);
+
+    // ── The invisible-glasses carrier ────────────────────────────────────────────────────────────────
+    // Unlike the Emperor's New pieces, the facewear carrier (Gold Eyepatch, Right) has a visible model of its own: worn
+    // without our redirect it shows its real gold frames. So it is worn only while the shell is published on it AND
+    // Penumbra serves that redirect, and comes off whenever the shell is not on it, failed builds included.
+
+    /// <summary>Between polls for our facewear redirect to go live before an equip.</summary>
+    internal const int GlassesLivePollMs = 500;
+
+    /// <summary>Polls per host decision before giving up on the live check (a later reconcile may still equip).</summary>
+    internal const int GlassesLivePollCap = 6;
+
+    internal enum GlassesAction { None, Equip, RetryAfter, Remove, Unclaimed, RemovalInFlight, Rest, StopPolling }
+
+    /// <param name="RetryMs">For <see cref="GlassesAction.RetryAfter"/>: when to look again.</param>
+    /// <param name="ChargeCooldown">A removal that can oscillate with an equip: charge the inject cooldown.</param>
+    /// <param name="FailureRemoval">Taken off because the build failed (counted toward <see cref="GlassesChurn"/>).</param>
+    /// <param name="LivePoll">A retry waiting for the redirect to go live (counted toward <see cref="GlassesLivePollCap"/>).</param>
+    internal readonly record struct GlassesDecision(GlassesAction Action, int RetryMs = 0, bool ChargeCooldown = false,
+                                                    bool FailureRemoval = false, bool LivePoll = false);
+
+    /// <summary>What to do with the invisible-glasses carrier after a composite (or on a redraw or retry).</summary>
+    /// <param name="featureOn">The invisible-glasses option is on.</param>
+    /// <param name="gearWanted">Gear overlays or content want a host.</param>
+    /// <param name="shellBuilt">A shell was built this composite.</param>
+    /// <param name="publishedOnFacewear">Its model was PUBLISHED on a facewear "_met" path (a failed write does not count).</param>
+    /// <param name="facewearWriteFailed">The facewear host's model could not be written (#91).</param>
+    /// <param name="recorded">Proteus recorded equipping the carrier.</param>
+    /// <param name="ourModelDrawn">The walk shows the carrier's model set drawn.</param>
+    /// <param name="metKnown">A walk has populated the facewear list at all.</param>
+    /// <param name="anyMetWorn">Some facewear is drawn (ours or another).</param>
+    /// <param name="cooldownLeftMs">The inject cooldown still to run.</param>
+    /// <param name="msSinceOurRemoval">Since Proteus last took the carrier off; null when it has not.</param>
+    /// <param name="resting">Too many failure removals lately (<see cref="GlassesChurn"/>): no equip.</param>
+    /// <param name="redirectLive">Penumbra resolves the carrier's model to our file. Called only on the would-equip path.</param>
+    /// <param name="livePolls">Live polls already made this host decision.</param>
+    public static GlassesDecision Glasses(bool featureOn, bool gearWanted, bool shellBuilt, bool publishedOnFacewear,
+                                          bool facewearWriteFailed, bool recorded, bool ourModelDrawn, bool metKnown,
+                                          bool anyMetWorn, long cooldownLeftMs, long? msSinceOurRemoval, bool resting,
+                                          Func<bool> redirectLive, int livePolls)
+    {
+        if (featureOn && shellBuilt && publishedOnFacewear)
+        {
+            if (!metKnown || anyMetWorn) return new GlassesDecision(GlassesAction.None);
+            if (resting) return new GlassesDecision(GlassesAction.Rest);
+            if (cooldownLeftMs > 0)
+                return new GlassesDecision(GlassesAction.RetryAfter, (int)Math.Min(cooldownLeftMs, int.MaxValue));
+            // Equip only into a live redirect: equipped early, the game loads the carrier's own model (the gold frames)
+            // and, with auto redraw off, nothing redraws it afterwards. Stopping the polls never stops a later equip.
+            if (redirectLive()) return new GlassesDecision(GlassesAction.Equip);
+            return livePolls < GlassesLivePollCap
+                ? new GlassesDecision(GlassesAction.RetryAfter, GlassesLivePollMs, LivePoll: true)
+                : new GlassesDecision(GlassesAction.StopPolling);
+        }
+
+        if (!ourModelDrawn) return new GlassesDecision(GlassesAction.None);
+        if (!recorded)
+            return msSinceOurRemoval is { } since && since >= 0 && since <= RemovalGraceMs
+                ? new GlassesDecision(GlassesAction.RemovalInFlight)
+                : new GlassesDecision(GlassesAction.Unclaimed);
+        bool wanted = featureOn && gearWanted;
+        return new GlassesDecision(GlassesAction.Remove, ChargeCooldown: wanted,
+                                   FailureRemoval: wanted && (!shellBuilt || facewearWriteFailed));
+    }
+
+    /// <summary>
+    /// Our recorded pair is drawn at <paramref name="ourWalkedMetPath"/> but the newest published manifest has no redirect
+    /// for that exact path, so the game draws the carrier's own model.
+    /// </summary>
+    public static bool GlassesRedirectGap(string? ourWalkedMetPath, Func<string, string?> publishedTarget)
+        => ourWalkedMetPath != null && publishedTarget(ourWalkedMetPath) == null;
+
+    /// <summary>The gap Warning's dedup key: once per path and published manifest.</summary>
+    public static string GlassesGapLogKey(string path, long publishSeq) => $"{path}|{publishSeq}";
+
+    /// <summary>Penumbra resolves the carrier's model to our file (both canonicalised by the caller).</summary>
+    public static bool GlassesRedirectLive(string? expectedCanonical, string? resolvedCanonical)
+        => expectedCanonical != null && resolvedCanonical != null
+           && string.Equals(expectedCanonical, resolvedCanonical, StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// Failure removals of the invisible-glasses carrier. A build that alternates between failing and succeeding would take
+/// the pair off and put it back every few seconds; after <see cref="Cap"/> failure removals within <see cref="WindowMs"/>
+/// the carrier RESTS (stays off, and the shell is offered other hosts) until the window has passed since the last one
+/// or a facewear shell is confirmed drawn. The resting state is always "carrier off", never a visible eyepatch.
+/// </summary>
+internal sealed class GlassesChurn
+{
+    internal const int Cap = 2;
+    internal const int WindowMs = 60_000;
+
+    private readonly object sync = new();
+    private readonly Queue<long> removals = new();
+    private long restUntil = long.MinValue;
+
+    /// <summary>Count a failure removal. True when this one starts a rest.</summary>
+    public bool NoteFailureRemoval(long nowTick)
+    {
+        lock (sync)
+        {
+            while (removals.Count > 0 && nowTick - removals.Peek() >= WindowMs) removals.Dequeue();
+            removals.Enqueue(nowTick);
+            if (removals.Count < Cap || nowTick < restUntil) return false;
+            restUntil = nowTick + WindowMs;
+            return true;
+        }
+    }
+
+    /// <summary>A facewear shell was confirmed drawn: the churn is over.</summary>
+    public void NoteConfirmedOnFacewear()
+    {
+        lock (sync) { removals.Clear(); restUntil = long.MinValue; }
+    }
+
+    public bool Resting(long nowTick)
+    {
+        lock (sync) return nowTick < restUntil;
+    }
+
+    public long RestEndsAt
+    {
+        get { lock (sync) return restUntil; }
+    }
 }
 
 /// <summary>Consecutive asks per carrier slot, counted atomically: two reconciles can run at once.</summary>

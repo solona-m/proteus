@@ -16,7 +16,21 @@ public partial class CompositorService
 
     // Don't re-equip the invisible pair within this window: a recomposite before the model loads would loop inject → recomposite.
     private const int GlassesInjectCooldownMs = 5000;
+    // Written by the composite, the retry timer and the redraw-hook task: Interlocked only.
     private long _lastGlassesInjectTick;
+
+    // When Proteus last took the glasses carrier off (0 = never): a walk still showing it within
+    // CarrierDecisions.RemovalGraceMs is that removal in flight, not a pair the player put on. Interlocked only.
+    private long _glassesRemovedAt;
+
+    // Live polls made this host decision before an equip (CarrierDecisions.GlassesLivePollCap). Interlocked only.
+    private int _glassesLivePolls;
+
+    // Failure removals of the glasses carrier, and the rest that bounds them (see GlassesChurn).
+    private readonly GlassesChurn _glassesChurn = new();
+
+    // The last glasses lines logged, so each logs once until it changes.
+    private string? _lastGlassesStopLog, _lastGlassesRestLog, _lastGlassesGapLog;
 
     // Same guard for the Emperor's-ring injection, kept per slot: taking one host's carrier off must never delay
     // equipping the next host's (a host move rir->ril).
@@ -119,16 +133,21 @@ public partial class CompositorService
     private volatile bool _lastGearWanted;
     private volatile bool _lastShellBuilt;
     private volatile bool _lastShellOnFacewear;
+    // The facewear host's model could not be written (#91); 0/1, Volatile only.
+    private int _lastFacewearWriteFailed;
+    private bool LastFacewearWriteFailed => Volatile.Read(ref _lastFacewearWriteFailed) != 0;
     // An array, never mutated after assignment; volatile publishes the reference.
     private volatile string[] _lastShellCarrierSlots = [];
 
     /// <summary>Remember this composite's hosting decision for the cheap reconciles above.</summary>
     private void RememberHostDecision(bool gearWanted, bool shellBuilt, bool onFacewear,
-        IReadOnlyList<string> carrierSlots)
+        IReadOnlyList<string> carrierSlots, bool facewearWriteFailed = false)
     {
         _lastGearWanted         = gearWanted;
         _lastShellBuilt         = shellBuilt;
         _lastShellOnFacewear    = onFacewear;
+        Volatile.Write(ref _lastFacewearWriteFailed, facewearWriteFailed ? 1 : 0);
+        Interlocked.Exchange(ref _glassesLivePolls, 0);
         _lastShellCarrierSlots  = [.. carrierSlots];
         // A new decision is a new epoch: every slot's consecutive-ask count starts again.
         Interlocked.Increment(ref _hostDecisionEpoch);
@@ -170,7 +189,7 @@ public partial class CompositorService
             // Glamourer write 6.8 s after every boot composite).
             if (slots.Contains("glasses"))
                 ReconcileInvisibleGlasses(_lastGearWanted, _lastShellBuilt, _lastShellOnFacewear,
-                                          alreadyHosted: true);
+                                          alreadyHosted: true, facewearWriteFailed: LastFacewearWriteFailed);
             if (slots.Any(s => !string.Equals(s, "glasses", StringComparison.OrdinalIgnoreCase)))
                 ReconcileEmperorRing(_lastGearWanted, _lastShellBuilt, _lastShellCarrierSlots);
         }
@@ -288,21 +307,32 @@ public partial class CompositorService
     }
 
     /// <summary>
-    /// Keep the invisible-glasses injection in line with the current composite: equip our pair when a shell is wanted
-    /// and no facewear is worn; remove only ours, and only when the feature is off or nothing is hosted (not on a
-    /// transient failed build). Writes only when the slot's occupant must change. Framework-thread game write.
+    /// Keep the invisible-glasses carrier in line with the current composite: equip our pair when the shell is published on
+    /// the facewear slot, no facewear is worn and Penumbra already serves our model there; take ours off whenever the shell
+    /// is not on it (the feature off, nothing hosted, the shell moved, or the build or its facewear write failed), since
+    /// the carrier's own model is a visible gold eyepatch. Never touches a pair we have no record of equipping. Writes only
+    /// when the slot's occupant must change. Framework-thread game write. The rules are <see cref="CarrierDecisions.Glasses"/>.
     /// </summary>
     /// <param name="gearWanted">Gear overlays are active, so a shell is supposed to exist.</param>
     /// <param name="shellBuilt">A shell actually built this composite.</param>
-    /// <param name="hostedOnFacewear">That shell was published onto a "_met" path, so the pair is its host.</param>
+    /// <param name="hostedOnFacewear">That shell was PUBLISHED onto a "_met" path, so the pair is its host.</param>
     /// <param name="alreadyHosted">
     /// The shell is already hosted on the pair about to be equipped, so no follow-up recomposite is needed.
     /// </param>
+    /// <param name="facewearWriteFailed">The facewear host's model could not be written (#91).</param>
+    /// <param name="removeOnly">
+    /// Before the manifest is written (<see cref="ReleaseVacatedGlasses"/>): act only on a removal, and read Glamourer
+    /// only when one is due, so the steady state costs no IPC.
+    /// </param>
     private void ReconcileInvisibleGlasses(bool gearWanted, bool shellBuilt, bool hostedOnFacewear,
-        bool alreadyHosted = false)
+        bool alreadyHosted = false, bool facewearWriteFailed = false, bool removeOnly = false)
     {
         if (InvisibleGlasses.Resolve(Plugin.DataManager, log) is not { } g) return;
-        bool want = config.AutoInvisibleGlasses && shellBuilt && hostedOnFacewear;
+
+        if (removeOnly
+            && DecideGlasses(g, gearWanted, shellBuilt, hostedOnFacewear, facewearWriteFailed, liveCheck: false, out _, out _).Action
+               != CarrierDecisions.GlassesAction.Remove)
+            return;
 
         // Glamourer says another pair (or none) is worn: ours is gone, so forget it, or a pair the player puts on later
         // would be taken for it. Guarded on holding a record at all, since the state read is IPC and this runs on every
@@ -310,25 +340,43 @@ public partial class CompositorService
         if (_injectedGlasses)
             JudgeGlassesRecord(g);
 
-        if (want)
-        {
-            // No adopting a pair already on the face: the carrier is a real item, and a pair we did not equip is not ours
-            // to take off later. Nor does the shell host on it: ShellPhase hides the carrier set from the chooser unless the
-            // record says we equipped the worn pair, so a player's own carrier item keeps its real model.
-            var sinceInject = unchecked(Environment.TickCount64 - _lastGlassesInjectTick);
-            if (MetSnapshotKnown && !AnyMetWorn() && sinceInject <= GlassesInjectCooldownMs)
-                // Refused only by the cooldown: schedule a retry, since fast callers would otherwise leave the shell hostless.
-                ScheduleCarrierRetry((int)(GlassesInjectCooldownMs - sinceInject), "glasses");
+        // The live check is Penumbra IPC: never in remove-only mode, whose only outcome is a removal.
+        var d = DecideGlasses(g, gearWanted, shellBuilt, hostedOnFacewear, facewearWriteFailed, liveCheck: !removeOnly,
+                              out var liveExpected, out var liveResolved);
+        if (removeOnly && d.Action != CarrierDecisions.GlassesAction.Remove) return;
 
-            if (MetSnapshotKnown && !AnyMetWorn()
-                && sinceInject > GlassesInjectCooldownMs)
+        switch (d.Action)
+        {
+            case CarrierDecisions.GlassesAction.RetryAfter:
+                // Refused by the cooldown, or the redirect not live yet: schedule a retry, since fast callers would
+                // otherwise leave the shell hostless.
+                if (d.LivePoll) Interlocked.Increment(ref _glassesLivePolls);
+                ScheduleCarrierRetry(d.RetryMs, "glasses");
+                break;
+
+            case CarrierDecisions.GlassesAction.StopPolling:
+                if (SecondSkinService.LogLineChanged(ref _lastGlassesStopLog, $"{liveExpected}|{liveResolved}"))
+                    log.Information("[Proteus] invisible glasses: not equipping e{0:D4} — Penumbra still resolves its model "
+                                  + "to {1} instead of our {2}, so the carrier would show its own frames. Stopped "
+                                  + "polling; the next redraw or composite that finds the redirect live equips it",
+                        g.ModelSet, liveResolved ?? "(nothing)", liveExpected ?? "(no published redirect)");
+                break;
+
+            case CarrierDecisions.GlassesAction.Rest:
+                if (SecondSkinService.LogLineChanged(ref _lastGlassesRestLog, $"rest|{_glassesChurn.RestEndsAt}"))
+                    log.Information("[Proteus] invisible glasses: resting — the carrier came off for {0} failed builds "
+                                  + "within {1} s, so it stays off for now", GlassesChurn.Cap, GlassesChurn.WindowMs / 1000);
+                break;
+
+            case CarrierDecisions.GlassesAction.Equip:
             {
                 bool equipped = SetGlassesOnFramework(g.ItemId);
                 // The cooldown runs from the attempt, not from a success: a slot another plugin has locked refuses
                 // every equip, and must not be asked again on every redraw.
-                _lastGlassesInjectTick = Environment.TickCount64;
+                Interlocked.Exchange(ref _lastGlassesInjectTick, Environment.TickCount64);
                 if (!equipped) return;
                 _injectedGlasses = true;
+                SecondSkinService.LogLineChanged(ref _lastGlassesStopLog, null);
                 if (alreadyHosted)
                 {
                     // The shell is already redirected onto this pair, so its redraw lands on it; no recomposite.
@@ -341,40 +389,119 @@ public partial class CompositorService
                         g.ItemId, g.ModelSet);
                     TriggerRecomposite("invisible-glasses-equipped", delayMs: 600);
                 }
+                break;
             }
-        }
-        else if ((!config.AutoInvisibleGlasses || !gearWanted || (shellBuilt && !hostedOnFacewear))
-                 && IsOurGlassesWorn(g.ModelSet))
-        {
-            // Remove when the feature is off, nothing is hosted, or the shell moved to another host (the carrier would render
-            // its real frames). Not on a merely failed build, which is transient.
-            //
-            // Our carrier's model is drawn with no record of us equipping it: the player's own pair, so leave it and say so
-            // once. Confirmed against Glamourer's row, since other rows share the model set and naming the wrong item sends
-            // them looking for something they are not wearing. The flag is taken BEFORE the read, not after a match: this
-            // branch is reached on every redraw for as long as they wear it, and a read gated on matching would repeat the
-            // IPC forever against a pair that never matches. The cost is that a variant worn at this moment and swapped for
-            // ours later goes unremarked — an advisory line, against an unbounded per-redraw round-trip.
-            if (!_injectedGlasses)
-            {
+
+            case CarrierDecisions.GlassesAction.Unclaimed:
+                // Our carrier's model is drawn with no record of us equipping it: the player's own pair, so leave it and say
+                // so once. Confirmed against Glamourer's row, since other rows share the model set and naming the wrong item
+                // sends them looking for something they are not wearing. The flag is taken BEFORE the read, not after a
+                // match: this branch is reached on every redraw for as long as they wear it, and a read gated on matching
+                // would repeat the IPC forever against a pair that never matches.
                 if (Interlocked.Exchange(ref _unclaimedGlassesLogged, 1) == 0
                     && WornGlassesRow() == g.ItemId)
                     log.Information("[Proteus] invisible glasses: item #{0} (e{1:D4}) is worn but Proteus has no record "
                                   + "of equipping it — leaving it alone. If you did not put it on yourself (an older "
                                   + "build could equip it and forget), take it off manually.", g.ItemId, g.ModelSet);
-                return;
-            }
+                break;
 
-            bool hostMoved = shellBuilt && !hostedOnFacewear;
-            if (SetGlassesOnFramework(0))
+            case CarrierDecisions.GlassesAction.Remove:
             {
-                // Charge the cooldown only for the hosts-elsewhere removal, which can oscillate; the others cannot.
-                if (hostMoved) _lastGlassesInjectTick = Environment.TickCount64;
+                if (!SetGlassesOnFramework(0)) return;
+                long now = Environment.TickCount64;
+                // Charged for the removals that can oscillate with an equip (the shell moved, or the build failed).
+                if (d.ChargeCooldown) Interlocked.Exchange(ref _lastGlassesInjectTick, now);
+                Interlocked.Exchange(ref _glassesRemovedAt, now);
                 _injectedGlasses = false;
-                log.Information("[Proteus] invisible glasses: removed our injected glasses (e{0:D4}){1}",
-                    g.ModelSet, hostMoved ? " — the shell hosts elsewhere now" : "");
+                string why = !config.AutoInvisibleGlasses || !gearWanted ? ""
+                    : !shellBuilt ? " — this composite built no shell, so nothing hides its model"
+                    : facewearWriteFailed ? " — its shell model could not be written, so nothing hides its model"
+                    : " — the shell hosts elsewhere now";
+                log.Information("[Proteus] invisible glasses: removed our injected glasses (e{0:D4}){1}", g.ModelSet, why);
+                if (d.FailureRemoval && _glassesChurn.NoteFailureRemoval(now))
+                {
+                    log.Information("[Proteus] invisible glasses: taken off for {0} failed builds within {1} s — resting the "
+                                  + "carrier (the shell uses other hosts) for {1} s", GlassesChurn.Cap, GlassesChurn.WindowMs / 1000);
+                    // The rest is part of the composite fingerprint, so this trigger is not skipped as "inputs unchanged".
+                    _ = Task.Delay(GlassesChurn.WindowMs + 250).ContinueWith(_ =>
+                    {
+                        if (!_disposed && config.PluginEnabled) TriggerRecomposite("glasses-rest-over", force: false);
+                    });
+                }
+                break;
             }
         }
+    }
+
+    /// <summary>The glasses decision for the current state; <paramref name="liveExpected"/>/<paramref name="liveResolved"/> are
+    /// set only when the live check ran.</summary>
+    private CarrierDecisions.GlassesDecision DecideGlasses(InvisibleGlasses.Identity g, bool gearWanted, bool shellBuilt,
+        bool hostedOnFacewear, bool facewearWriteFailed, bool liveCheck, out string? liveExpected, out string? liveResolved)
+    {
+        long now = Environment.TickCount64;
+        long since = unchecked(now - Interlocked.Read(ref _lastGlassesInjectTick));
+        long cooldownLeft = since >= 0 && since <= GlassesInjectCooldownMs ? GlassesInjectCooldownMs - since : 0;
+        long removedAt = Interlocked.Read(ref _glassesRemovedAt);
+        string? exp = null, res = null;
+        var d = CarrierDecisions.Glasses(
+            featureOn: config.AutoInvisibleGlasses, gearWanted, shellBuilt, publishedOnFacewear: hostedOnFacewear,
+            facewearWriteFailed, recorded: _injectedGlasses, ourModelDrawn: IsOurGlassesWorn(g.ModelSet),
+            metKnown: MetSnapshotKnown, anyMetWorn: AnyMetWorn(), cooldownLeftMs: cooldownLeft,
+            msSinceOurRemoval: removedAt == 0 ? null : unchecked(now - removedAt),
+            resting: _glassesChurn.Resting(now),
+            redirectLive: () => liveCheck && GlassesRedirectIsLive(g.ModelSet, out exp, out res),
+            livePolls: Interlocked.CompareExchange(ref _glassesLivePolls, 0, 0));
+        liveExpected = exp;
+        liveResolved = res;
+        return d;
+    }
+
+    /// <summary>
+    /// Whether Penumbra resolves every facewear model key of our set in the newest published manifest to the file we wrote
+    /// for it, compared as <see cref="WaitForManifestLive"/> does. False with no such key. Penumbra IPC; only on the
+    /// would-equip path.
+    /// </summary>
+    private bool GlassesRedirectIsLive(int modelSet, out string? expected, out string? resolved)
+    {
+        expected = resolved = null;
+        var keys = PublishedMetKeys(modelSet);
+        if (keys.Count == 0) return false;
+        foreach (var (key, rel) in keys)
+        {
+            expected = TryCanonicalise(System.IO.Path.Combine(managedModDir, rel));
+            resolved = TryCanonicalise(penumbra.ResolvePlayer(key));
+            if (!CarrierDecisions.GlassesRedirectLive(expected, resolved)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// The glasses carrier comes off BEFORE the manifest that withdraws its redirect is written and reloaded, as the ring
+    /// carriers do (<see cref="ReleaseVacatedCarriers"/>): otherwise the reload shows its real frames until the removal.
+    /// Outside the config gate (it blocks on the framework thread).
+    /// </summary>
+    private void ReleaseVacatedGlasses(bool gearWanted, bool shellBuilt, bool onFacewear, bool facewearWriteFailed)
+        => ReconcileInvisibleGlasses(gearWanted, shellBuilt, onFacewear, facewearWriteFailed: facewearWriteFailed,
+                                     removeOnly: true);
+
+    /// <summary>
+    /// After a redraw: our recorded pair drawn at a "_met" path the newest manifest does not redirect means the game is
+    /// drawing the carrier's own model. Log-only (the drawn check owns the chat line), once per path and manifest.
+    /// </summary>
+    private void CheckGlassesRedirectGap()
+    {
+        if (InvisibleGlasses.Resolve(Plugin.DataManager, log) is not { } g) return;
+        if (!OurGlassesAreOn(g)) { SecondSkinService.LogLineChanged(ref _lastGlassesGapLog, null); return; }
+        var walked = (_equippedMetModels ?? []).FirstOrDefault(p => ParseMetSet(p) == g.ModelSet);
+        long seq = 0;
+        if (!CarrierDecisions.GlassesRedirectGap(walked, k => PublishedTarget(k, out seq)))
+        {
+            SecondSkinService.LogLineChanged(ref _lastGlassesGapLog, null);
+            return;
+        }
+        if (SecondSkinService.LogLineChanged(ref _lastGlassesGapLog, CarrierDecisions.GlassesGapLogKey(walked!, seq)))
+            log.Warning("[Proteus] invisible glasses: our pair (e{0:D4}) is drawn at {1}, which the published shell does "
+                      + "not redirect — the game is drawing the carrier's own model", g.ModelSet, walked!);
     }
 
     private bool SetGlassesOnFramework(ulong itemId)

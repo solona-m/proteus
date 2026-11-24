@@ -74,6 +74,7 @@ public partial class CompositorService
                 run.glassesPreHosted = false;
                 // Which host the shell was published onto; each reconcile below is driven by where the shell went.
                 run.shellOnFacewear = false;
+                run.facewearWriteFailed = false;
                     // The accessory slots the shell published a carrier onto (possibly several).
                 run.shellCarrierSlots = [];
                 run.tGear = PhaseCounter.Begin();
@@ -229,6 +230,12 @@ public partial class CompositorService
                     && InvisibleGlasses.Resolve(Plugin.DataManager, run.compositor.log) is { } ourGlasses
                     && !run.compositor.OurGlassesAreOn(ourGlasses))
                     invisibleGlassesSet = null;
+                // Resting after repeated failure removals (GlassesChurn): the facewear slot is not offered, so the shell goes
+                // to other hosts, unless our pair is on right now. The run's one snapshot, which the fingerprint carries too.
+                if (invisibleGlassesSet is int && run.glassesResting
+                    && !(InvisibleGlasses.Resolve(Plugin.DataManager, run.compositor.log) is { } restingGlasses
+                         && run.compositor.OurGlassesAreOn(restingGlasses)))
+                    invisibleGlassesSet = null;
 
                 // Snapshot the volatile shape set once, so the bake and its signature see the same value.
                 bodyShapes = run.compositor._bodyShapeSnapshot;
@@ -348,6 +355,9 @@ public partial class CompositorService
                 run.shellWriteFailures += writes.Count;
                 foreach (var host in writes.HostModelPaths)
                     if (!run.failedShellHosts.Contains(host, StringComparer.OrdinalIgnoreCase)) run.failedShellHosts.Add(host);
+                // Before the null-build check: with the facewear host the only one, a failed write leaves no shell at all.
+                run.facewearWriteFailed = run.failedShellHosts.Any(
+                    p => p.EndsWith("_met.mdl", StringComparison.OrdinalIgnoreCase));
             }
 
             private void ApplyShells()
@@ -355,11 +365,12 @@ public partial class CompositorService
                 if (shells != null)
                 {
                     run.shellBuilt = true;
-                    // A host dropped only because its model could not be written (#91) is still wanted: its carrier stays on
-                    // for the retry, never taken off and then named in a message telling the user to take it off.
+                    // A ring host dropped only because its model could not be written (#91) is still wanted: its carrier stays
+                    // on for the retry. Not the facewear host: the glasses carrier has a visible model of its own, so it is on
+                    // only while its model is PUBLISHED (a failed write takes it off; the retry puts it back).
                     var hostsInUse = shells.HostModelPaths.Concat(run.failedShellHosts).ToList();
                     // Where the shell landed, read off its published paths: this decides which item must be equipped for it to render.
-                    run.shellOnFacewear = hostsInUse.Any(
+                    run.shellOnFacewear = shells.HostModelPaths.Any(
                         p => p.EndsWith("_met.mdl", StringComparison.OrdinalIgnoreCase));
                     // ...and in which slots: a carrier only loads from the slot it published for.
                     run.shellCarrierSlots = InvisibleRing.CarrierSlots

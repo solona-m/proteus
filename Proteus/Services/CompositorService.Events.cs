@@ -646,17 +646,23 @@ public partial class CompositorService
 
         // Put the carriers back now: they are equipped with ApplyFlag.Once, so this redraw reverted them and the shell
         // has no host. Idempotent; off-thread (framework-thread IPC, Lumina reads). Skipped while a composite runs.
-        if (config.PluginEnabled && modelWalkOk && _secondSkinActive
-            && Volatile.Read(ref _compositesInFlight) == 0)
+        // The glasses gap check runs after every redraw, failed and empty builds included (no shell active then).
+        if (config.PluginEnabled && modelWalkOk && Volatile.Read(ref _compositesInFlight) == 0)
         {
-            var (gearWanted, shellBuilt, onFacewear, ringSlot) =
-                (_lastGearWanted, _lastShellBuilt, _lastShellOnFacewear, _lastShellCarrierSlots);
+            var (shellActive, gearWanted, shellBuilt, onFacewear, ringSlot, writeFailed) =
+                (_secondSkinActive, _lastGearWanted, _lastShellBuilt, _lastShellOnFacewear, _lastShellCarrierSlots,
+                 LastFacewearWriteFailed);
             Task.Run(() =>
             {
                 try
                 {
-                    ReconcileInvisibleGlasses(gearWanted, shellBuilt, onFacewear, alreadyHosted: true);
-                    ReconcileEmperorRing(gearWanted, shellBuilt, ringSlot);
+                    if (shellActive)
+                    {
+                        ReconcileInvisibleGlasses(gearWanted, shellBuilt, onFacewear, alreadyHosted: true,
+                                                  facewearWriteFailed: writeFailed);
+                        ReconcileEmperorRing(gearWanted, shellBuilt, ringSlot);
+                    }
+                    CheckGlassesRedirectGap();
                 }
                 catch (Exception ex) { log.Debug("[Proteus] carrier reconcile on redraw failed: {0}", ex.Message); }
             });

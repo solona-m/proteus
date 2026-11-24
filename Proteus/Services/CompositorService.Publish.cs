@@ -38,7 +38,38 @@ public partial class CompositorService
             var previous = _publishHistory.Count > 0 ? _publishHistory.Last() : null;
             _publishHistory.Enqueue(snapshot);
             while (_publishHistory.Count > PublishHistoryDepth) _publishHistory.Dequeue();
+            _publishSeq++;
             return previous;
+        }
+    }
+
+    /// <summary>Bumped under <see cref="_publishHistoryLock"/> for every manifest recorded: the newest one's identity.</summary>
+    private long _publishSeq;
+
+    /// <summary>
+    /// The newest published manifest's file for <paramref name="gamePath"/> (null when it has no such redirect), with that
+    /// manifest's sequence number. No manifest copy.
+    /// </summary>
+    private string? PublishedTarget(string gamePath, out long publishSeq)
+    {
+        lock (_publishHistoryLock)
+        {
+            publishSeq = _publishSeq;
+            return _publishHistory.Count > 0 && _publishHistory.Last().TryGetValue(gamePath, out var rel) ? rel : null;
+        }
+    }
+
+    /// <summary>The newest published manifest's facewear model keys of set <paramref name="modelSet"/>, with their files.</summary>
+    private List<(string Key, string Rel)> PublishedMetKeys(int modelSet)
+    {
+        var tag = $"/e{modelSet:D4}/";
+        lock (_publishHistoryLock)
+        {
+            if (_publishHistory.Count == 0) return [];
+            return _publishHistory.Last()
+                .Where(kv => kv.Key.Contains(tag, StringComparison.OrdinalIgnoreCase)
+                          && kv.Key.EndsWith("_met.mdl", StringComparison.OrdinalIgnoreCase))
+                .Select(kv => (kv.Key, kv.Value)).ToList();
         }
     }
 

@@ -195,7 +195,8 @@ public partial class CompositorService
         List<string> baseKeys,
         List<(OverlayEntry Entry, ResolvedContent Content)> contentLayers,
         IReadOnlySet<string> toeCapMods,
-        bool skinOnly = false)
+        bool skinOnly = false,
+        bool glassesResting = false)
     {
         var sb = new System.Text.StringBuilder();
 
@@ -292,6 +293,9 @@ public partial class CompositorService
               : EquipSignature(_equippedPartModels, _equippedAccessoryModels, _equippedMetModels,
                                _bareBodyModels, _humanPartModels))
           .Append('\n');
+        // Whether the glasses carrier is resting (GlassesChurn) decides whether the chooser is offered the facewear slot,
+        // so entering and leaving rest must re-allocate, never be skipped as "inputs unchanged". Shell-only.
+        if (!skinOnly) sb.Append("glassesRest:").Append(glassesResting ? '1' : '0').Append('\n');
         sb.Append("shape:").Append(BodyShapeSignature(_bodyShapeSnapshot)).Append('\n');
         sb.Append("bodytype:").Append(_lastCompositedBodyType).Append('\n');
         // The face-doubling switch decides the layout every face texture is published in, so toggling it must re-blend the face.
