@@ -190,6 +190,24 @@ public partial class CompositorService
                 // Each equipped slot's shell is cut from the model the character draws there (gear poses the skin it exposes).
                 // Retry the walk if the trigger-time one found nothing, and pass maps through without coalescing null: null means
                 // "unknown" to the host chooser, not "empty". Wrapped: a throw here must not cost the whole shell.
+                // Our own removed pair's stale walk must not pass for a pair the player put on (it hides the facewear slot from
+                // the chooser): look again first. Only in that state, so the steady state costs no extra walk.
+                if (InvisibleGlasses.Resolve(Plugin.DataManager, run.compositor.log) is { } walkGlasses
+                    && run.compositor.WalkMayHoldOurRemovedGlasses(walkGlasses))
+                {
+                    try
+                    {
+                        if (run.compositor.RefreshEquippedModels())
+                            run.compositor.log.Information("[Proteus] invisible glasses: re-walked after our removal — "
+                                + "e{0:D4} {1}", walkGlasses.ModelSet,
+                                run.compositor.IsOurGlassesWorn(walkGlasses.ModelSet) ? "is still drawn" : "was a stale reading");
+                    }
+                    catch (Exception ex)
+                    {
+                        run.compositor.log.Debug("[Proteus] second skin: glasses re-walk could not run ({0})", ex.GetType().Name);
+                    }
+                }
+
                 if (run.compositor._equippedPartModels == null)
                 {
                     var known = false;

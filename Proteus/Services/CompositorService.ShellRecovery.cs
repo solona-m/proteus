@@ -120,8 +120,8 @@ public partial class CompositorService
                     // Our glasses carrier came off with its failed write: never tell the user to take off a pair they no
                     // longer wear.
                     var glasses = InvisibleGlasses.Resolve(Plugin.DataManager, log);
-                    var name = ShellNotDrawnNotice.HostsToName(failedHosts, glasses?.ModelSet,
-                                                               glasses is { } g && OurGlassesAreOn(g));
+                    // The record, not the walk: a walk taken mid-reload can miss a pair that is still on (QA).
+                    var name = ShellNotDrawnNotice.HostsToName(failedHosts, glasses?.ModelSet, _injectedGlasses);
                     if (name.Count < failedHosts.Count)
                         log.Information("[Proteus] output write give-up: not naming the invisible glasses — Proteus "
                                       + "already took them off");

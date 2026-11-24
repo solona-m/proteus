@@ -1371,6 +1371,7 @@ public partial class CompositorService
                                  shellBuilt ? shellCarrierSlots : [], facewearWriteFailed);
             compositor.ReconcileInvisibleGlasses(hostWanted, shellBuilt, shellOnFacewear, glassesPreHosted,
                                                  facewearWriteFailed);
+            compositor.ScheduleGlassesGapCheck();
             compositor.ReconcileEmperorRing(hostWanted, shellBuilt, shellBuilt ? shellCarrierSlots : [], selfScheduleRetry: true);
             timeline.Mark("carriers");
 

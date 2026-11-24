@@ -237,6 +237,65 @@ public class GlassesCarrierWiringTests
         Assert.Contains("liveCheck: false", body);
     }
 
+    // ── In-game QA fixes ───────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    [Trait("Plan", "AC-face-glasses-priority-4")]
+    public void AWalkThatMissesOurPairDefersToGlamourer() // [AC-face-glasses-priority-4] (QA finding 1)
+    {
+        var body = Method(Carriers, "private void ReconcileInvisibleGlasses(");
+        Assert.Contains("bool walkMayMissOurs = _injectedGlasses && !hostedNow && !IsOurGlassesWorn(g.ModelSet);", body);
+        // Remove-only mode reads Glamourer in that state too, instead of returning on the walk's word.
+        Before(body, "if (removeOnly && !walkMayMissOurs", "JudgeGlassesRecord(g)");
+        Assert.Contains("bool glamourerSaysOurs = walkMayMissOurs && _injectedGlasses && worn == g.ItemId;", body);
+        var decide = Method(Carriers, "private CarrierDecisions.GlassesDecision DecideGlasses(");
+        Assert.Contains("ourModelDrawn: IsOurGlassesWorn(g.ModelSet) || glamourerSaysOurs", decide);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-face-glasses-priority-8")]
+    public void GapCheckAlsoRunsAfterTheCompositesOwnRedraw() // [AC-face-glasses-priority-8] (QA finding 2)
+    {
+        var verify = Method(Run, "private void ReconcileAndVerify(");
+        Before(verify, "compositor.ReconcileInvisibleGlasses(", "compositor.ScheduleGlassesGapCheck();");
+        var schedule = Carriers[Carriers.IndexOf("private void ScheduleGlassesGapCheck()", System.StringComparison.Ordinal)..];
+        schedule = schedule[..schedule.IndexOf("});", System.StringComparison.Ordinal)];
+        Before(schedule, "_compositesInFlight) == 0", "CheckGlassesRedirectGap();");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-face-glasses-priority-21")]
+    public void GiveUpNoticeGoesByTheRecordNotTheWalk() // [EDGE-face-glasses-priority-21] (QA finding 3)
+    {
+        var recovery = Source("Services/CompositorService.ShellRecovery.cs");
+        Assert.Contains("ShellNotDrawnNotice.HostsToName(failedHosts, glasses?.ModelSet, _injectedGlasses)", recovery);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-face-glasses-priority-1")]
+    public void OurRemovedPairsStaleWalkIsWalkedAgain() // [AC-face-glasses-priority-1] (QA finding 4)
+    {
+        var gather = Method(ShellPhase, "private void GatherInputs(");
+        Before(gather, "WalkMayHoldOurRemovedGlasses(walkGlasses)", "RefreshEquippedModels()");
+        Before(gather, "WalkMayHoldOurRemovedGlasses(walkGlasses)", "metModels = run.compositor._equippedMetModels;");
+        var may = Method(Carriers, "private bool WalkMayHoldOurRemovedGlasses(");
+        Assert.Contains("!_injectedGlasses && removedAt != 0 && IsOurGlassesWorn(g.ModelSet)", may);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-face-glasses-priority-7")]
+    public void DrawnCheckDefersOnAnEquipNotARemoval() // [AC-face-glasses-priority-7] (QA finding 5)
+    {
+        var post = Source("Services/CompositorService.PostRedraw.cs");
+        Assert.Contains("Math.Max(LastRingAskTick, Interlocked.Read(ref _lastGlassesEquipTick))", post);
+        var reconcile = Method(Carriers, "private void ReconcileInvisibleGlasses(");
+        var equip = reconcile[reconcile.IndexOf("case CarrierDecisions.GlassesAction.Equip:", System.StringComparison.Ordinal)..];
+        equip = equip[..equip.IndexOf("case CarrierDecisions.GlassesAction.Unclaimed:", System.StringComparison.Ordinal)];
+        Assert.Contains("_lastGlassesEquipTick", equip);
+        var remove = reconcile[reconcile.IndexOf("case CarrierDecisions.GlassesAction.Remove:", System.StringComparison.Ordinal)..];
+        Assert.DoesNotContain("_lastGlassesEquipTick", remove);
+    }
+
     [Fact]
     [Trait("Plan", "AC-face-glasses-priority-7")]
     public void ConfirmedFacewearDrawEndsTheRest() // [AC-face-glasses-priority-7] [EDGE-face-glasses-priority-23]
@@ -254,7 +313,7 @@ public class GlassesCarrierWiringTests
     {
         var dir = Path.Combine(ProteusDir(), "Services");
         var src = string.Join("\n", Directory.GetFiles(dir, "CompositorService.*.cs").Select(File.ReadAllText));
-        foreach (var field in new[] { "_lastGlassesInjectTick", "_glassesRemovedAt", "_glassesLivePolls", "_lastFacewearWriteFailed" })
+        foreach (var field in new[] { "_lastGlassesInjectTick", "_lastGlassesEquipTick", "_glassesRemovedAt", "_glassesLivePolls", "_lastFacewearWriteFailed" })
         {
             foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(src, $@"\b{field}\b"))
             {

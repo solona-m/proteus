@@ -475,7 +475,12 @@ lastHeal: healed|gave-up}` and `moveFault {patterns, movesLeft}`.
 - **Write retry:** `output-lock {"files":["textures/ss_*_*.tex"],"failMoves":2}`, toggle → `/log` "was locked; written
   after 2 retr(ies)", no `Failed to write`, `moveFault` null after.
 - **Latch:** `failMoves: 6`, toggle → "output write failed … retrying in 1500ms (attempt 1/3)", then
-  `writeRetry.lastDecision: clean`; never "skipped — inputs unchanged" while `outputIncomplete` is true.
+  `writeRetry.lastDecision: clean`; never "skipped — inputs unchanged" while `outputIncomplete` is true. A write
+  makes 6 move attempts before it fails, so `failMoves` below 6 is absorbed inside one write (models included); and
+  a model is moved only when its bytes changed, so change that host's layers before each attempt.
+- **Glasses carrier on a failed facewear write:** `output-lock {"files":["models/secondskin_0.mdl"],"failMoves":6}`
+  (the facewear host is host 0), toggle a facewear-host layer → "removed our injected glasses … could not be
+  written"; `/state.models` never shows e5521 `_met` resolving to the game's own file.
 - **Give-up without a loop:** `output-lock {"files":["textures/ss_*_*.tex"],"ms":60000}`, toggle → three retries, a
   Warning and one chat line naming the accessory; `/state.redraws.count` stops rising. Release, toggle, recovered.
 - **Redraw heals it:** `shell-fault {"shell":"any","until":"auto-redraw"}`, toggle, confirm the fault took, then
