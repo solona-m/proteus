@@ -370,6 +370,31 @@ public static class ProteusStyle
     }
 
     /// <summary>
+    /// The one way to draw a destructive one-click button — an Undo that throws away an edit saved into a mod. Proteus
+    /// has no confirmation dialogs: the button is dimmed and disabled until Ctrl or Shift is held, and its tooltip (shown
+    /// while disabled too) ends with "Hold Ctrl or Shift and click." Returns whether it was clicked while armed.
+    /// </summary>
+    /// <param name="tip">The button's own tooltip, kept as is; the arm tip follows it.</param>
+    /// <param name="blocked">Disabled whatever is held (busy, nothing to do). Draw the button outside any
+    /// <c>ImRaii.Disabled</c> on the same condition, or the dimming is applied twice.</param>
+    /// <param name="blockedTip">Shown alone while blocked, in place of the tip.</param>
+    /// <param name="small">A <c>SmallButton</c>, for rows in a list.</param>
+    public static bool ArmedButton(string label, string? tip = null, bool blocked = false, string? blockedTip = null,
+                                   Vector2 size = default, bool small = false)
+    {
+        var io = ImGui.GetIO();
+        bool armed = ArmedAction.Armed(io.KeyCtrl, io.KeyShift);
+        bool pressed;
+        // Relative to the current alpha, so a button inside some outer dimming never brightens.
+        using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * 0.5f, !armed))
+        using (ImRaii.Disabled(blocked || !armed))
+            pressed = small ? ImGui.SmallButton(label) : ImGui.Button(label, size);
+        // Read on every draw, so a language switch is followed.
+        ReasonTooltip(ArmedAction.Tooltip(tip, blocked ? blockedTip : null, Localization.Strings.Parts.BrushRevertArmTip));
+        return ArmedAction.Clicked(pressed, armed, blocked);
+    }
+
+    /// <summary>
     /// A raised panel with an accent bar down its left edge, painted around a group of widgets. Its border warms to
     /// the accent while the mouse is over it.
     /// </summary>

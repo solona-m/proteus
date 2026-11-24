@@ -3468,12 +3468,7 @@ public sealed partial class PartsPanel
             if (brushSaved > 0)
             {
                 ImGui.Spacing();
-                var io = ImGui.GetIO();
-                bool armed = io.KeyCtrl || io.KeyShift;
-                using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, armed ? 1f : 0.5f))
-                using (ImRaii.Disabled(!armed))
-                    if (ImGui.Button(ps.BrushRevert, FullWidth())) RevertBrush();
-                ProteusStyle.ReasonTooltip(ps.BrushRevertTip + "\n\n" + ps.BrushRevertArmTip);
+                if (ProteusStyle.ArmedButton(ps.BrushRevert, ps.BrushRevertTip, size: FullWidth())) RevertBrush();
             }
         }
     }
@@ -4060,7 +4055,7 @@ public sealed partial class PartsPanel
         // Listed per item, because that is how they are grouped in Penumbra.
         foreach (var item in record.Items)
             ImGui.TextDisabled($"{item.GroupName}: {string.Join(", ", item.Toggles.Keys)}");
-        if (ImGui.Button(ps.RevertBtn)) Revert();
+        if (ProteusStyle.ArmedButton(ps.RevertBtn)) Revert();
         ImGui.Separator();
     }
 

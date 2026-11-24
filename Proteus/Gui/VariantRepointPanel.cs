@@ -40,11 +40,10 @@ internal sealed class VariantRepointPanel(VariantRepointWatcher watcher, Configu
             if (ImGui.Button(s.GearVariantsRepointNow)) watcher.RepointWornNow();
             if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
                 ImGui.SetTooltip(view.Busy ? s.GearVariantsBusy : s.GearVariantsRepointNowTip);
-            ImGui.SameLine();
-            if (ImGui.Button(s.GearVariantsUndoWorn)) watcher.UndoWorn();
-            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                ImGui.SetTooltip(view.Busy ? s.GearVariantsBusy : s.GearVariantsUndoWornTip);
         }
+        ImGui.SameLine();
+        if (ProteusStyle.ArmedButton(s.GearVariantsUndoWorn, s.GearVariantsUndoWornTip, blocked: view.Busy, blockedTip: s.GearVariantsBusy))
+            watcher.UndoWorn();
         if (ResultText(view) is { } result) ImGui.TextWrapped(result);
     }
 

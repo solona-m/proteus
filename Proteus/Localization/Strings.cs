@@ -3485,7 +3485,10 @@ public sealed class PartsStrings
     public readonly string BrushSaveNothingTip = ProteusLoc.Localize("Parts.Brush.Save.Nothing.Tip",
         "Everything is already saved. Changes save on their own a moment after you stop painting.");
 
-    /// <summary>Added under <see cref="BrushRevertTip"/>: the button is armed only while a modifier is held.</summary>
+    /// <summary>
+    /// The shared arm tip of every destructive one-click button, added under its own tip by
+    /// <see cref="Proteus.Gui.ProteusStyle.ArmedButton"/>: the button is armed only while a modifier is held.
+    /// </summary>
     public readonly string BrushRevertArmTip = ProteusLoc.Localize("Parts.Brush.Revert.Arm.Tip",
         "Hold Ctrl or Shift and click.");
 
