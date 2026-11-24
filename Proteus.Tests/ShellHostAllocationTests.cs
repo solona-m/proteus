@@ -272,14 +272,12 @@ public sealed class ShellHostAllocationTests
     [Fact]
     public void DisplacedCountsOnlyBodyLayers() // [EDGE-face-glasses-priority-10]
     {
-        // Face priority pushes the body onto the ring carrier the iris would have taken: the iris becoming unhosted is
-        // not counted as "body layer(s) didn't fit".
-        Host[] hosts = [Glasses, RingCarrier];
-        var s = RunAll(hosts, [Body, Face, Iris], Layers((0, 5), (1, 1), (2, 1)));
+        // A face piece's disk-id hold costs an IRIS layer (dropped over budget): that is not a "body layer(s) didn't fit".
+        // Body-first, the iris places all 36 and the face piece goes unhosted; with the hold, the iris drops its bottom one.
+        var s = RunAll(F2, [Body, Face, Iris], Layers((2, 36)), [new Unit(1, EffectOnly: false, CarriesEffect: false)]);
 
-        Assert.Equal([5], OnHost(s, 0));
-        Assert.Equal([6], Assert.Single(s.Unhosted, u => u.Surface == 2).Layers);
-        Assert.Empty(s.Dropped);
+        Assert.Equal([0], s.Dropped);
+        Assert.Contains((0, 0), s.ContentWork);          // the face piece on the glasses
         Assert.Equal(0, s.DisplacedByReservation);
     }
 
