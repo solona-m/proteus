@@ -253,6 +253,12 @@ public sealed partial class SecondSkinService
     /// <summary>The Meshes folder last warned about as missing every toe cap.</summary>
     private string? lastCapsMissing;
 
+    /// <summary>
+    /// This composite withheld the facewear carrier because it is resting (repeated failed builds): an unhosted face is
+    /// that rest, not a missing slot, so the "free a ring or your facewear slot" chat line is not printed. Set per build.
+    /// </summary>
+    internal volatile bool FacewearCarrierResting;
+
     /// <summary>The last facewear-carrier lines logged (face held / body displaced / guard / unbuilt), so each logs once.</summary>
     private string? lastFacewearHoldLog, lastFacewearDisplacedLog, lastFacewearGuardLog, lastFacewearUnbuiltLog;
 

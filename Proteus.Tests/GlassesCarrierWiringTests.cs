@@ -276,9 +276,9 @@ public class GlassesCarrierWiringTests
     public void OurRemovedPairsStaleWalkIsWalkedAgain() // [AC-face-glasses-priority-1] (QA finding 4)
     {
         var gather = Method(ShellPhase, "private void GatherInputs(");
-        Before(gather, "WalkMayHoldOurRemovedGlasses(walkGlasses, out var removedAt)", "NoteGlassesRewalked(removedAt)");
-        Before(gather, "NoteGlassesRewalked(removedAt)", "RefreshEquippedModels()");
-        Before(gather, "RefreshEquippedModels()", "metModels = run.compositor._equippedMetModels;");
+        Before(gather, "WalkMayHoldOurRemovedGlasses(walkGlasses, out var removedAt)", "RefreshEquippedModels()");
+        Before(gather, "RefreshEquippedModels()", "NoteGlassesRewalked(removedAt)");
+        Before(gather, "NoteGlassesRewalked(removedAt)", "metModels = run.compositor._equippedMetModels;");
         var may = Method(Carriers, "private bool WalkMayHoldOurRemovedGlasses(");
         Assert.Contains("CarrierDecisions.GlassesRewalkDue(", may);
     }
@@ -295,6 +295,30 @@ public class GlassesCarrierWiringTests
         Before(equip, "if (!equipped) return;", "_lastGlassesEquipTick");
         var remove = reconcile[reconcile.IndexOf("case CarrierDecisions.GlassesAction.Remove:", System.StringComparison.Ordinal)..];
         Assert.DoesNotContain("_lastGlassesEquipTick", remove);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-face-glasses-priority-7")]
+    public void RestOverRunsInManualModeToo() // [AC-face-glasses-priority-7] (QA re-run finding 3)
+        => Assert.Contains("TriggerRecomposite(\"glasses-rest-over\", force: false, autoRedrawExempt: true)", Carriers);
+
+    [Fact]
+    [Trait("Plan", "AC-face-glasses-priority-7")]
+    public void NoFreeASlotChatWhileTheFacewearCarrierRests() // [AC-face-glasses-priority-7] (QA re-run finding 2)
+    {
+        var report = Method(ShellSetBuild, "private void ReportUnhosted(");
+        Before(report, "if (service.FacewearCarrierResting)", "Chat.UnhostedLayers.Fmt");
+        var gather = Method(ShellPhase, "private void GatherInputs(");
+        Assert.Contains("run.compositor.secondSkin.FacewearCarrierResting = restedOut;", gather);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-face-glasses-priority-1")]
+    public void ARewalkDuringOurRemovalsRedrawIsNotSpent() // [AC-face-glasses-priority-1]
+    {
+        var gather = Method(ShellPhase, "private void GatherInputs(");
+        Before(gather, "RefreshEquippedModels();", "CarrierDecisions.RemovalGraceMs");
+        Before(gather, "CarrierDecisions.RemovalGraceMs", "NoteGlassesRewalked(removedAt)");
     }
 
     [Fact]

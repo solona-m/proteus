@@ -231,15 +231,20 @@ internal sealed class GlassesChurn
             while (removals.Count > 0 && nowTick - removals.Peek() >= WindowMs) removals.Dequeue();
             removals.Enqueue(nowTick);
             if (removals.Count < Cap || nowTick < restUntil) return false;
+            removals.Clear();               // the rest answers these; the next rest needs Cap new failures
             restUntil = nowTick + WindowMs;
             return true;
         }
     }
 
-    /// <summary>A facewear shell was confirmed drawn: the churn is over.</summary>
+    /// <summary>
+    /// A facewear shell was confirmed drawn: an active rest ends. The failure removals stay counted for their window,
+    /// since a build that alternates failing and succeeding confirms a draw between every two failures (QA: the
+    /// count was cleared each time and rest never started, 7 carrier writes in 60 s).
+    /// </summary>
     public void NoteConfirmedOnFacewear()
     {
-        lock (sync) { removals.Clear(); restUntil = long.MinValue; }
+        lock (sync) restUntil = long.MinValue;
     }
 
     public bool Resting(long nowTick)

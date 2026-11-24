@@ -135,6 +135,7 @@ public sealed class GlassesCarrierDecisionTests
             {
                 case GlassesAction.Equip:
                     ours = true; lastInject = t; writes.Add(t);
+                    churn.NoteConfirmedOnFacewear();          // the retry's shell is confirmed drawn on the glasses
                     break;
                 case GlassesAction.Remove:
                     ours = false; writes.Add(t);
@@ -166,8 +167,15 @@ public sealed class GlassesCarrierDecisionTests
         confirmed.NoteFailureRemoval(1_000);
         confirmed.NoteFailureRemoval(2_000);
         confirmed.NoteConfirmedOnFacewear();
-        Assert.False(confirmed.Resting(3_000));
-        Assert.False(confirmed.NoteFailureRemoval(4_000));                // the count started again
+        Assert.False(confirmed.Resting(3_000));                           // a confirmed draw ends the rest
+        Assert.False(confirmed.NoteFailureRemoval(4_000));                // and the next rest needs Cap new failures
+        Assert.True(confirmed.NoteFailureRemoval(5_000));
+
+        // A confirmed draw between failures does not reset the count (QA: rest never started with auto redraw on).
+        var alternating = new GlassesChurn();
+        Assert.False(alternating.NoteFailureRemoval(1_000));
+        alternating.NoteConfirmedOnFacewear();
+        Assert.True(alternating.NoteFailureRemoval(15_000));
 
         // A removal while already resting neither starts a second rest nor extends it.
         var extending = new GlassesChurn();

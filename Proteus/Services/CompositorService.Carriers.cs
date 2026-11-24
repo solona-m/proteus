@@ -439,7 +439,10 @@ public partial class CompositorService
                     // The rest is part of the composite fingerprint, so this trigger is not skipped as "inputs unchanged".
                     _ = Task.Delay(GlassesChurn.WindowMs + 250).ContinueWith(_ =>
                     {
-                        if (!_disposed && config.PluginEnabled) TriggerRecomposite("glasses-rest-over", force: false);
+                        // Exempt from the manual-mode gate (as an equipment change is while a shell stands): it re-offers
+                        // the facewear slot, which the rest took away.
+                        if (!_disposed && config.PluginEnabled)
+                            TriggerRecomposite("glasses-rest-over", force: false, autoRedrawExempt: true);
                     });
                 }
                 break;

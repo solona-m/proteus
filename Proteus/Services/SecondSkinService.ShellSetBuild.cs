@@ -1601,7 +1601,12 @@ public sealed partial class SecondSkinService
                 var keys = string.Join(", ", unhostedLayers
                     .Select(i => layerSurfaceName[i])
                     .Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal));
-                if (!string.Equals(service._lastUnhostedSurfaces, keys, StringComparison.Ordinal))
+                if (service.FacewearCarrierResting)
+                    // The facewear slot IS free; it is withheld for a moment after repeated failed builds. Not remembered
+                    // as told, so a layer still unhosted after the rest gets its line.
+                    service.log.Information("[Proteus] second skin: {0} layer(s) on [{1}] wait for the facewear carrier, "
+                                          + "which is resting after repeated failed builds", unhostedLayers.Count, keys);
+                else if (!string.Equals(service._lastUnhostedSurfaces, keys, StringComparison.Ordinal))
                 {
                     service._lastUnhostedSurfaces = keys;
                     var msg = string.Format(ProteusLoc.Localize("Chat.UnhostedLayers.Fmt",

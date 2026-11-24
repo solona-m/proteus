@@ -195,10 +195,14 @@ public partial class CompositorService
                 if (InvisibleGlasses.Resolve(Plugin.DataManager, run.compositor.log) is { } walkGlasses
                     && run.compositor.WalkMayHoldOurRemovedGlasses(walkGlasses, out var removedAt))
                 {
-                    run.compositor.NoteGlassesRewalked(removedAt);
                     try
                     {
                         run.compositor.RefreshEquippedModels();
+                        // Spent once per removal, but not by a walk taken while that removal's own redraw still shows the
+                        // pair (within the removal grace): the next composite looks again.
+                        if (!run.compositor.IsOurGlassesWorn(walkGlasses.ModelSet)
+                            || unchecked(Environment.TickCount64 - removedAt) > CarrierDecisions.RemovalGraceMs)
+                            run.compositor.NoteGlassesRewalked(removedAt);
                         run.compositor.log.Information("[Proteus] invisible glasses: re-walked after our removal — "
                             + "e{0:D4} {1} in the walk now", walkGlasses.ModelSet,
                             run.compositor.IsOurGlassesWorn(walkGlasses.ModelSet) ? "is still" : "is no longer");
@@ -251,10 +255,11 @@ public partial class CompositorService
                     invisibleGlassesSet = null;
                 // Resting after repeated failure removals (GlassesChurn): the facewear slot is not offered, so the shell goes
                 // to other hosts, unless our pair is on right now. The run's one snapshot, which the fingerprint carries too.
-                if (invisibleGlassesSet is int && run.glassesResting
+                bool restedOut = invisibleGlassesSet is int && run.glassesResting
                     && !(InvisibleGlasses.Resolve(Plugin.DataManager, run.compositor.log) is { } restingGlasses
-                         && run.compositor.OurGlassesAreOn(restingGlasses)))
-                    invisibleGlassesSet = null;
+                         && run.compositor.OurGlassesAreOn(restingGlasses));
+                if (restedOut) invisibleGlassesSet = null;
+                run.compositor.secondSkin.FacewearCarrierResting = restedOut;
 
                 // Snapshot the volatile shape set once, so the bake and its signature see the same value.
                 bodyShapes = run.compositor._bodyShapeSnapshot;
