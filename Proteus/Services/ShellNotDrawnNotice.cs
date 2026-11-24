@@ -83,6 +83,17 @@ internal static class ShellNotDrawnNotice
             && string.Equals(suffix, "met", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// The failed hosts the give-up message (#91) may name: our invisible glasses are left out once Proteus has taken them
+    /// off (a failed facewear write removes the carrier), or the message would tell the user to take off a pair they no
+    /// longer wear. Every other host is kept.
+    /// </summary>
+    internal static IReadOnlyList<string> HostsToName(IReadOnlyList<string> failedHosts, int? glassesCarrierSet, bool ourGlassesOn)
+        => ourGlassesOn || glassesCarrierSet == null
+            ? failedHosts
+            : failedHosts.Where(h => !IsCarrierHost(h, glassesCarrierSet)
+                                     || !h.EndsWith("_met.mdl", StringComparison.OrdinalIgnoreCase)).ToList();
+
     private const string RedrawOffKey = "Chat.ShellNotDrawnRedrawOff.Fmt";
     private const string RedrawOffText =
         "[Proteus] Part of your second skin isn't showing. It rides on {0}. Auto redraw is off, so Proteus didn't "

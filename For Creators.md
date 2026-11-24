@@ -560,6 +560,7 @@ colours share a single slot.
 shared equipment space and is deformed onto the wearer exactly as a second skin is. `Face`, `Hair`, `Tail`
 and `Ear` are authored at the character's own race and must **not** be deformed, so they can only ride a slot
 Proteus can replace outright — a free ring, or the facewear slot. Add `"SurfaceId": "f0001"` for those.
+When a look has both, a `Face` piece takes the facewear slot first, and `Body` layers fill the rings.
 
 ### Gear shader upgrade (what it changes in a user's copy of your mod)
 

@@ -118,10 +118,12 @@ public class IssueSweepDWiringTests
         // ...into a catch that drops only that host: the build and the other hosts go on (review FAIL 1).
         var buildHost = Method(Source("Services/SecondSkinService.ShellSetBuild.cs"), "private void BuildHostModel(");
         Before(buildHost, "try { new HostModelBuild(this, pushSweep, h).Run(); }", "catch (OutputWriteException ex)");
-        // A host dropped for its write is still in use for the carrier decisions: its carrier stays on (second look FAIL 1).
+        // A ring host dropped for its write is still in use for the carrier decisions: its carrier stays on (second look
+        // FAIL 1). The facewear host is not (face-glasses-priority, EDGE-21): the glasses carrier has a visible model of its
+        // own, so it is on only while its model is published (GlassesCarrierWiringTests.FacewearComesFromPublishedHostsOnly).
         var apply = Method(Source("Services/CompositorService.ShellPhase.cs"), "private void ApplyShells(");
         Assert.Contains("var hostsInUse = shells.HostModelPaths.Concat(run.failedShellHosts).ToList();", apply);
-        Before(apply, "var hostsInUse", "run.shellOnFacewear = hostsInUse.Any(");
+        Assert.Contains("run.shellOnFacewear = shells.HostModelPaths.Any(", apply);
         Assert.Contains(".Where(c => hostsInUse.Any(p =>", apply);
     }
 
@@ -215,7 +217,9 @@ public class IssueSweepDWiringTests
         var record = Method(Recovery, "private OutputWriteRetry.Decision RecordPublishOutcome(");
         var giveUp = record[record.IndexOf("case OutputWriteRetry.Kind.GiveUp:", StringComparison.Ordinal)..];
         Before(giveUp, "if (!d.Warn)", "log.Warning(");
-        Assert.Contains("if (failedHosts.Count > 0) PrintShellNotice(failedHosts, partly: true);", giveUp);
+        // Our glasses carrier, already taken off with its failed write, is left out of the names (face-glasses-priority).
+        Before(giveUp, "if (failedHosts.Count > 0)", "ShellNotDrawnNotice.HostsToName(failedHosts,");
+        Before(giveUp, "ShellNotDrawnNotice.HostsToName(failedHosts,", "PrintShellNotice(name, partly: true);");
     }
 
     [Fact]

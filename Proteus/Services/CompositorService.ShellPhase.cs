@@ -74,6 +74,7 @@ public partial class CompositorService
                 run.glassesPreHosted = false;
                 // Which host the shell was published onto; each reconcile below is driven by where the shell went.
                 run.shellOnFacewear = false;
+                run.facewearWriteFailed = false;
                     // The accessory slots the shell published a carrier onto (possibly several).
                 run.shellCarrierSlots = [];
                 run.tGear = PhaseCounter.Begin();
@@ -189,6 +190,29 @@ public partial class CompositorService
                 // Each equipped slot's shell is cut from the model the character draws there (gear poses the skin it exposes).
                 // Retry the walk if the trigger-time one found nothing, and pass maps through without coalescing null: null means
                 // "unknown" to the host chooser, not "empty". Wrapped: a throw here must not cost the whole shell.
+                // Our own removed pair's stale walk must not pass for a pair the player put on (it hides the facewear slot from
+                // the chooser): look again first. Once per removal, so a pair the player really wears costs one extra walk.
+                if (InvisibleGlasses.Resolve(Plugin.DataManager, run.compositor.log) is { } walkGlasses
+                    && run.compositor.WalkMayHoldOurRemovedGlasses(walkGlasses, out var removedAt))
+                {
+                    try
+                    {
+                        run.compositor.RefreshEquippedModels();
+                        // Spent once per removal, but not by a walk taken while that removal's own redraw still shows the
+                        // pair (within the removal grace): the next composite looks again.
+                        if (!run.compositor.IsOurGlassesWorn(walkGlasses.ModelSet)
+                            || unchecked(Environment.TickCount64 - removedAt) > CarrierDecisions.RemovalGraceMs)
+                            run.compositor.NoteGlassesRewalked(removedAt);
+                        run.compositor.log.Information("[Proteus] invisible glasses: re-walked after our removal — "
+                            + "e{0:D4} {1} in the walk now", walkGlasses.ModelSet,
+                            run.compositor.IsOurGlassesWorn(walkGlasses.ModelSet) ? "is still" : "is no longer");
+                    }
+                    catch (Exception ex)
+                    {
+                        run.compositor.log.Debug("[Proteus] second skin: glasses re-walk could not run ({0})", ex.GetType().Name);
+                    }
+                }
+
                 if (run.compositor._equippedPartModels == null)
                 {
                     var known = false;
@@ -229,6 +253,13 @@ public partial class CompositorService
                     && InvisibleGlasses.Resolve(Plugin.DataManager, run.compositor.log) is { } ourGlasses
                     && !run.compositor.OurGlassesAreOn(ourGlasses))
                     invisibleGlassesSet = null;
+                // Resting after repeated failure removals (GlassesChurn): the facewear slot is not offered, so the shell goes
+                // to other hosts, unless our pair is on right now. The run's one snapshot, which the fingerprint carries too.
+                bool restedOut = invisibleGlassesSet is int && run.glassesResting
+                    && !(InvisibleGlasses.Resolve(Plugin.DataManager, run.compositor.log) is { } restingGlasses
+                         && run.compositor.OurGlassesAreOn(restingGlasses));
+                if (restedOut) invisibleGlassesSet = null;
+                run.compositor.secondSkin.FacewearCarrierResting = restedOut;
 
                 // Snapshot the volatile shape set once, so the bake and its signature see the same value.
                 bodyShapes = run.compositor._bodyShapeSnapshot;
@@ -348,6 +379,9 @@ public partial class CompositorService
                 run.shellWriteFailures += writes.Count;
                 foreach (var host in writes.HostModelPaths)
                     if (!run.failedShellHosts.Contains(host, StringComparer.OrdinalIgnoreCase)) run.failedShellHosts.Add(host);
+                // Before the null-build check: with the facewear host the only one, a failed write leaves no shell at all.
+                run.facewearWriteFailed = run.failedShellHosts.Any(
+                    p => p.EndsWith("_met.mdl", StringComparison.OrdinalIgnoreCase));
             }
 
             private void ApplyShells()
@@ -355,11 +389,12 @@ public partial class CompositorService
                 if (shells != null)
                 {
                     run.shellBuilt = true;
-                    // A host dropped only because its model could not be written (#91) is still wanted: its carrier stays on
-                    // for the retry, never taken off and then named in a message telling the user to take it off.
+                    // A ring host dropped only because its model could not be written (#91) is still wanted: its carrier stays
+                    // on for the retry. Not the facewear host: the glasses carrier has a visible model of its own, so it is on
+                    // only while its model is PUBLISHED (a failed write takes it off; the retry puts it back).
                     var hostsInUse = shells.HostModelPaths.Concat(run.failedShellHosts).ToList();
                     // Where the shell landed, read off its published paths: this decides which item must be equipped for it to render.
-                    run.shellOnFacewear = hostsInUse.Any(
+                    run.shellOnFacewear = shells.HostModelPaths.Any(
                         p => p.EndsWith("_met.mdl", StringComparison.OrdinalIgnoreCase));
                     // ...and in which slots: a carrier only loads from the slot it published for.
                     run.shellCarrierSlots = InvisibleRing.CarrierSlots

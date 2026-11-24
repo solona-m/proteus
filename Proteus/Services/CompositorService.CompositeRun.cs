@@ -143,6 +143,10 @@ public partial class CompositorService
         private bool publishedThisRun;
         private bool glassesPreHosted;
         private bool shellOnFacewear;
+        // The facewear host's model could not be written (#91); set even when the build came back null.
+        internal bool facewearWriteFailed;
+        // GlassesChurn.Resting, read ONCE per run: the fingerprint and ShellPhase's chooser offer must agree.
+        internal bool glassesResting;
         private List<string> shellCarrierSlots = null!;
         private long tGear;
         private string reloadKind = null!;
@@ -984,9 +988,10 @@ public partial class CompositorService
             // ── Unchanged-inputs gate ────────────────────────────────────────
             // An ambient trigger can stop here when the inputs hash to what is already published. Placed after resolution and
             // the design-binding overrides so the fingerprint covers them; nothing persistent is mutated before the return.
+            glassesResting = compositor._glassesChurn.Resting(Environment.TickCount64);
             fingerprint = compositor.BuildCompositeFingerprint(
                 byMaterial, gearOverlays, maskPathsByMod, maskAssetsByMod, maskRowsByMod, maskDescByMod,
-                maskShellMods, baseKeys, contentLayers, toeCapMods);
+                maskShellMods, baseKeys, contentLayers, toeCapMods, glassesResting: glassesResting);
 
             // The same inputs minus those only the shell reads (see the skin-reuse gate below).
             skinFingerprint = compositor.BuildCompositeFingerprint(
@@ -1005,7 +1010,7 @@ public partial class CompositorService
             {
                 // Still reconcile the carriers: whatever redraw led here may have reverted them (ApplyFlag.Once). Idempotent.
                 compositor.ReconcileInvisibleGlasses(compositor._lastGearWanted, compositor._lastShellBuilt, compositor._lastShellOnFacewear,
-                                          alreadyHosted: true);
+                                          alreadyHosted: true, facewearWriteFailed: compositor.LastFacewearWriteFailed);
                 compositor.ReconcileEmperorRing(compositor._lastGearWanted, compositor._lastShellBuilt, compositor._lastShellCarrierSlots);
 
                 // Nothing published, so nothing to record: RecordPublish would let PruneSupersededOutput collect live files.
@@ -1297,6 +1302,8 @@ public partial class CompositorService
             // written and reloaded: after the supersede check above, outside the config gate (it blocks on the framework).
             bool hostWantedNow = (gearOverlays.Count > 0 && !shellAllHeld) || contentLayers.Count > 0;
             compositor.ReleaseVacatedCarriers(hostWantedNow, shellBuilt, shellBuilt ? shellCarrierSlots : []);
+            // The glasses carrier too: its own model is a visible gold eyepatch, so it never outlives its redirect.
+            compositor.ReleaseVacatedGlasses(hostWantedNow, shellBuilt, shellOnFacewear, facewearWriteFailed);
 
 #if PROTEUS_TEST_HARNESS
             // The harness's shell load fault (ADR 0002): leaves one shell texture out of this manifest.
@@ -1361,8 +1368,10 @@ public partial class CompositorService
             // A shell whose every layer was held off a man (women's art without the maps, or switched off) wants nothing.
             bool hostWanted = (gearOverlays.Count > 0 && !shellAllHeld) || contentLayers.Count > 0;
             compositor.RememberHostDecision(hostWanted, shellBuilt, shellOnFacewear,
-                                 shellBuilt ? shellCarrierSlots : []);
-            compositor.ReconcileInvisibleGlasses(hostWanted, shellBuilt, shellOnFacewear, glassesPreHosted);
+                                 shellBuilt ? shellCarrierSlots : [], facewearWriteFailed);
+            compositor.ReconcileInvisibleGlasses(hostWanted, shellBuilt, shellOnFacewear, glassesPreHosted,
+                                                 facewearWriteFailed);
+            compositor.ScheduleGlassesGapCheck();
             compositor.ReconcileEmperorRing(hostWanted, shellBuilt, shellBuilt ? shellCarrierSlots : [], selfScheduleRetry: true);
             timeline.Mark("carriers");
 

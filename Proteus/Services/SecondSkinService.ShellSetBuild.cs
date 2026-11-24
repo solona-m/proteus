@@ -97,9 +97,9 @@ public sealed partial class SecondSkinService
         private int overBudget;
         private int overBudgetMask;
         private List<int> unhostedLayers = null!;
-        private int[] remaining = null!;
-        private int?[] hostClaim = null!;
-        private int diskBudget;
+        private ShellHostAllocation.State alloc = null!;
+        private List<ShellHostAllocation.Host> allocHosts = null!;
+        private List<ShellHostAllocation.Surface> allocSurfaces = null!;
         private List<(int LayerIdx, int HostIdx)> work = null!;
         private List<int> unresolvedLayers = null!;
         private List<(int Unit, int HostIdx)> contentWork = null!;
@@ -1162,72 +1162,46 @@ public sealed partial class SecondSkinService
             // layers spill to the hosts behind. Within a host, stack order is kept so the topmost has the highest material
             // index. Over capacity, the BOTTOM layers drop, never the mask.
             // Done per SURFACE, body first: a host has one EQDP entry, so its layers must agree on a race code, and a
-            // natively-authored surface needs a CARRIER host, whose metadata is ours to change.
-            remaining = new int[hosts.Count];
-            for (int i = 0; i < hosts.Count; i++)
-                remaining[i] = SecondSkinWriter.MaxMaterials - hosts[i].BaseMatCount;
-            hostClaim = new int?[hosts.Count];     // surface index that has taken this host
-            diskBudget = DiskIdSpace;              // the base-36 cap, now enforced across all surfaces
-
-            work = new List<(int LayerIdx, int HostIdx)>();
-            // Surface order: body, then the rest as resolved. Body never yields a host to a human part.
-            foreach (var surfIdx in Enumerable.Range(0, surfaces.Count))
+            // natively-authored surface needs a CARRIER host, whose metadata is ours to change. The body never yields a host
+            // to a human part, with ONE exception: a mod on the face material holds the facewear carrier before the body
+            // fills the rest (ShellHostAllocation.FacewearReservation), since the face can only ride a carrier.
+            allocHosts = hosts.Select(h => new ShellHostAllocation.Host(
+                Capacity: SecondSkinWriter.MaxMaterials - h.BaseMatCount,
+                Carrier: h.BaseModel == null,
+                FacewearCarrier: h.BaseModel == null && h.Slot == "met" && h.Tree == "equipment",
+                EffectCarrier: EffectHostPlanner.CanHostEffectOnly(h.BaseModel != null, h.Prefix))).ToList();
+            allocSurfaces = surfaces.Select(sf => new ShellHostAllocation.Surface(
+                CarrierOnly: sf.Key.RequiresNativeHost, Face: sf.Key.Kind == ShellSurfaceKind.Face)).ToList();
+            var units = contentUnits.Select((cu, u) => new ShellHostAllocation.Unit(
+                Surface: unitSurface[u],
+                EffectOnly: cu.EffectOnly,
+                CarriesEffect: cu.Owners.Any(o => o.Content.Piece.Effect != null))).ToList();
+            // The layers AND the content pieces, in one pass: a mod on the face material holds the facewear carrier before
+            // the body fills the hosts (the base-36 disk-id cap is enforced across all surfaces).
+            alloc = ShellHostAllocation.Run(allocHosts, allocSurfaces, layerSurface, units, DiskIdSpace);
+            LogFacewearReservation(units);
+            work = alloc.Work;
+            hostSurface = alloc.HostSurface;
+            foreach (var (surfIdx, layerIdxs) in alloc.Unhosted)
             {
-                var surf = surfaces[surfIdx];
-                var layerIdxs = new List<int>();
-                for (int i = 0; i < gearOverlays.Count; i++)
-                    if (layerSurface[i] == surfIdx) layerIdxs.Add(i);
-                if (layerIdxs.Count == 0) continue;
-
-                bool carrierOnly = surf.Key.RequiresNativeHost;
-                var eligible = new List<int>();
-                for (int i = 0; i < hosts.Count; i++)
-                {
-                    if (remaining[i] <= 0) continue;
-                    // Only a carrier's EQDP may be rewritten, so only a carrier can publish a native surface undeformed.
-                    if (carrierOnly && hosts[i].BaseModel != null) continue;
-                    // Already taken by ANOTHER SURFACE. Identity, not cut-code equality: a host is built from exactly one surface's
-                    // sources, so sharing it would replace the first surface's geometry.
-                    if (hostClaim[i] is { } claimed && claimed != surfIdx) continue;
-                    eligible.Add(i);
-                }
-
-                int capacity = Math.Min(eligible.Sum(i => remaining[i]), diskBudget);
-                if (capacity == 0 && carrierOnly)
-                {
-                    // Skipped, not squeezed: a native surface on a deforming host renders visibly wrong. Reported apart from a capacity
-                    // overflow because the remedy is a free ring or facewear slot.
-                    unhostedLayers.AddRange(layerIdxs);
+                // Skipped, not squeezed: a native surface on a deforming host renders visibly wrong. Reported apart from a
+                // capacity overflow because the remedy is a free ring or facewear slot.
+                unhostedLayers.AddRange(layerIdxs);
+                // A face while the facewear carrier rests is waiting for it, not missing a slot: ReportUnhosted says so once.
+                if (service.FacewearCarrierResting && surfaces[surfIdx].Key.Kind == ShellSurfaceKind.Face)
+                    service.log.Debug("[Proteus] second skin: {0} — {1} layer(s) wait for the resting facewear carrier",
+                        surfaces[surfIdx].Key, layerIdxs.Count);
+                else
                     service.log.Warning("[Proteus] second skin: {0} — {1} layer(s) skipped, no host can carry it. It must "
                               + "not be race-deformed, so it needs a slot Proteus can replace outright (a free "
                               + "ring, or the facewear slot); the {2} host(s) available are all append hosts or "
                               + "already full",
-                        surf.Key, layerIdxs.Count, hosts.Count);
-                    continue;
-                }
-
-                int placeable = Math.Min(layerIdxs.Count, capacity);
-                int dropCount = layerIdxs.Count - placeable;
-                int cursor = layerIdxs.Count - 1;              // the TOP layer of THIS surface (its mask)
-                foreach (var h in eligible)
-                {
-                    if (cursor < dropCount) break;
-                    int take = Math.Min(remaining[h], cursor - dropCount + 1);
-                    take = Math.Min(take, diskBudget);
-                    if (take <= 0) break;
-                    for (int k = cursor - take + 1; k <= cursor; k++)   // ascending → topmost lands last (highest idx)
-                        work.Add((layerIdxs[k], h));
-                    remaining[h] -= take;
-                    diskBudget -= take;
-                    hostClaim[h] = surfIdx;
-                    hostSurface[h] = surfIdx;
-                    cursor -= take;
-                }
-                for (int k = 0; k < dropCount; k++)            // the dropped bottom layers = over budget
-                {
-                    overBudget++;
-                    if (gearOverlays[layerIdxs[k]].Overlay.Descriptor.IsMaskShell) overBudgetMask++;
-                }
+                        surfaces[surfIdx].Key, layerIdxs.Count, hosts.Count);
+            }
+            foreach (var k in alloc.Dropped)                 // the dropped bottom layers = over budget
+            {
+                overBudget++;
+                if (gearOverlays[k].Overlay.Descriptor.IsMaskShell) overBudgetMask++;
             }
             // Layers whose surface could not be resolved at all (already logged by the resolver). NOT folded into
             // unhostedLayers: a different failure with a different remedy. Split by whether the character is drawing anything,
@@ -1235,46 +1209,57 @@ public sealed partial class SecondSkinService
             unresolvedLayers = new List<int>(droppedLayers);
         }
 
+        /// <summary>The face-over-body decision on the facewear carrier, each line logged once until it changes.</summary>
+        private void LogFacewearReservation(IReadOnlyList<ShellHostAllocation.Unit> units)
+        {
+            if (alloc.Reservation is { } hold)
+            {
+                var key = surfaces[hold.Surface].Key;
+                if (LogLineChanged(ref service.lastFacewearHoldLog, $"{key}|{hold.Demand}"))
+                    service.log.Information("[Proteus] host: the facewear carrier is kept for {0} ({1} layer(s)/piece(s)) — "
+                                            + "the body fills the other hosts", key, hold.Demand);
+                if (alloc.DisplacedByReservation > 0)
+                {
+                    if (LogLineChanged(ref service.lastFacewearDisplacedLog, $"{key}|{alloc.DisplacedByReservation}"))
+                        service.log.Warning("[Proteus] host: {0} body layer(s) didn't fit because the facewear carrier carries "
+                                            + "{1} — free a ring slot to make room for them", alloc.DisplacedByReservation, key);
+                }
+                else LogLineChanged(ref service.lastFacewearDisplacedLog, null);
+                return;
+            }
+            LogLineChanged(ref service.lastFacewearHoldLog, null);
+            LogLineChanged(ref service.lastFacewearDisplacedLog, null);
+
+            if (alloc.ReservationDropped)
+            {
+                if (LogLineChanged(ref service.lastFacewearGuardLog, "dropped"))
+                    service.log.Information("[Proteus] host: the facewear carrier was held for a face surface that placed "
+                                            + "nothing on it — allocated body first instead");
+                return;
+            }
+            bool facewear = allocHosts.Exists(h => h.FacewearCarrier);
+            bool faceDemand = false;
+            for (int i = 0; i < allocSurfaces.Count && !faceDemand; i++)
+                if (allocSurfaces[i].Face)
+                    faceDemand = Array.IndexOf(layerSurface, i) >= 0
+                                 || units.Any(u => u.Surface == i && !u.EffectOnly && !u.CarriesEffect);
+            if (facewear && faceDemand)
+            {
+                if (LogLineChanged(ref service.lastFacewearGuardLog, "body"))
+                    service.log.Information("[Proteus] host: the facewear carrier is kept for the body — no other host "
+                                            + "could carry it, so the face layers wait for a free ring slot");
+            }
+            else LogLineChanged(ref service.lastFacewearGuardLog, null);
+        }
+
         private void PlaceContent()
         {
             // ── content units take what the shells left ───────────────────────────
-            // After the shells, from the same remaining[]/hostClaim[]/diskBudget state. One slot per unit, first host with
+            // After the shells, from the same allocation state (ShellHostAllocation). One slot per unit, first host with
             // room that may carry its surface; a unit that finds none is reported, never squeezed in over a shell.
-            contentWork = new List<(int Unit, int HostIdx)>();
-            contentUnhosted = new List<int>();
-            for (int u = 0; u < contentUnits.Count; u++)
-            {
-                int surfIdx = unitSurface[u];
-                bool carrierOnly = surfaces[surfIdx].Key.RequiresNativeHost;
-                // An effect's IMC entry is only ours to write on an invisible ACCESSORY carrier (see EffectHostPlanner), so its
-                // placeholder goes nowhere else: on a worn ring it would rewrite the player's item for nothing visible.
-                bool effectOnly = contentUnits[u].EffectOnly;
-                // A piece with real geometry AND an effect tries the carriers first, so its effect has a host that can carry
-                // it; it may still fall back to a worn item, where only its geometry is placed.
-                bool carriesEffect = contentUnits[u].Owners.Any(o => o.Content.Piece.Effect != null);
-                var order = Enumerable.Range(0, hosts.Count);
-                if (carriesEffect && !effectOnly)
-                    order = order.OrderBy(h => EffectHostPlanner.CanHostEffectOnly(hosts[h].BaseModel != null, hosts[h].Prefix) ? 0 : 1);
-                int chosen = -1;
-                foreach (var h in order)
-                {
-                    if (diskBudget <= 0) break;
-                    if (remaining[h] <= 0) continue;
-                    // Only a carrier's EQDP may be rewritten, so only a carrier can publish a natively-authored piece undeformed.
-                    if (carrierOnly && hosts[h].BaseModel != null) continue;
-                    if (effectOnly && !EffectHostPlanner.CanHostEffectOnly(hosts[h].BaseModel != null, hosts[h].Prefix)) continue;
-                    if (hostClaim[h] is { } claimed && claimed != surfIdx) continue;
-                    chosen = h;
-                    break;
-                }
-                if (chosen < 0) { contentUnhosted.Add(u); continue; }
-
-                remaining[chosen]--;
-                diskBudget--;
-                hostClaim[chosen] = surfIdx;
-                hostSurface[chosen] = surfIdx;
-                contentWork.Add((u, chosen));
-            }
+            // Placed with the layers in DistributeLayers (ShellHostAllocation.Run); read back here.
+            contentWork = alloc.ContentWork;
+            contentUnhosted = alloc.ContentUnhosted;
         }
 
         private void PlanHosts()
@@ -1621,7 +1606,19 @@ public sealed partial class SecondSkinService
                 var keys = string.Join(", ", unhostedLayers
                     .Select(i => layerSurfaceName[i])
                     .Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal));
-                if (!string.Equals(service._lastUnhostedSurfaces, keys, StringComparison.Ordinal))
+                // Only faces wait for the resting facewear carrier; any other unhosted layer (every ring really worn) is
+                // told at once, as before.
+                bool onlyFacesWaiting = service.FacewearCarrierResting
+                    && unhostedLayers.All(i => layerSurface[i] >= 0 && surfaces[layerSurface[i]].Key.Kind == ShellSurfaceKind.Face);
+                if (onlyFacesWaiting)
+                {
+                    // The facewear slot IS free; it is withheld for a moment after repeated failed builds. Not remembered
+                    // as told, so a layer still unhosted after the rest gets its line. Logged once per set of surfaces.
+                    if (LogLineChanged(ref service.lastFacewearRestWaitLog, keys))
+                        service.log.Information("[Proteus] second skin: {0} layer(s) on [{1}] wait for the facewear carrier, "
+                                              + "which is resting after repeated failed builds", unhostedLayers.Count, keys);
+                }
+                else if (!string.Equals(service._lastUnhostedSurfaces, keys, StringComparison.Ordinal))
                 {
                     service._lastUnhostedSurfaces = keys;
                     var msg = string.Format(ProteusLoc.Localize("Chat.UnhostedLayers.Fmt",
@@ -1631,10 +1628,18 @@ public sealed partial class SecondSkinService
                     _ = Plugin.Framework.RunOnFrameworkThread(
                         () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
                 }
-                service.log.Warning("[Proteus] second skin: {0} layer(s) unhosted on surface(s) [{1}]",
-                    unhostedLayers.Count, keys);
+                if (!onlyFacesWaiting)
+                {
+                    LogLineChanged(ref service.lastFacewearRestWaitLog, null);
+                    service.log.Warning("[Proteus] second skin: {0} layer(s) unhosted on surface(s) [{1}]",
+                        unhostedLayers.Count, keys);
+                }
             }
-            else service._lastUnhostedSurfaces = null;
+            else
+            {
+                service._lastUnhostedSurfaces = null;
+                LogLineChanged(ref service.lastFacewearRestWaitLog, null);
+            }
 
             // Layers whose surface was never resolved: its own sentence, said only when the character is drawn (a mid-redraw
             // composite sees nothing). Deduped on the set.
@@ -1853,10 +1858,25 @@ public sealed partial class SecondSkinService
             hostModelPaths = new List<string>();
             appendHostModelPaths = new List<string>();
             appendHostSources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var builtHosts = new HashSet<int>();
             for (int h = 0; h < hosts.Count; h++)
             {
+                int before = hostModelPaths.Count;
                 BuildHostModel(pushSweep, h);
+                if (hostModelPaths.Count > before) builtHosts.Add(h);
             }
+
+            // The face held the facewear carrier but its model never published (a write failure, or no geometry): the body
+            // didn't get the glasses this composite either. Not re-run (that would re-bake every texture); the next one allocates again.
+            int? reservedHost = alloc.Reservation?.Host;
+            if (ShellHostAllocation.ReservedButUnbuilt(reservedHost, builtHosts))
+            {
+                if (LogLineChanged(ref service.lastFacewearUnbuiltLog, $"{reservedHost}|{surfaces[alloc.Reservation!.Surface].Key}"))
+                    service.log.Information("[Proteus] host: the facewear carrier was kept for {0} but its model was not "
+                                            + "published this composite — the next composite allocates again",
+                        surfaces[alloc.Reservation!.Surface].Key);
+            }
+            else LogLineChanged(ref service.lastFacewearUnbuiltLog, null);
         }
 
         /// <summary>Builds one host's shell model (or reuses a memoised one) and publishes it with its EQDP and variant redirects.</summary>

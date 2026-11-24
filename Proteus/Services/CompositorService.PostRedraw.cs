@@ -115,6 +115,9 @@ public partial class CompositorService
                     ClearUndrawnKeys(expected);
                     // Stamped with the key: a carrier ask or a game redraw after this makes it stale (ShellConfirmedSince).
                     Interlocked.Exchange(ref _shellConfirmedDrawnAtTick, Environment.TickCount64);
+                    // A facewear shell on the character ends any glasses-carrier rest.
+                    if (expected.Models.Any(m => m.EndsWith("_met.mdl", StringComparison.OrdinalIgnoreCase)))
+                        _glassesChurn.NoteConfirmedOnFacewear();
                     if (timeline != null)
                         log.Information("[Proteus] refresh drawn: {0:F0}ms from first trigger to the shell on the "
                                       + "character (to within {1}ms)",
@@ -174,7 +177,7 @@ public partial class CompositorService
 
             // A carrier equipped during this composite is still settling (its model can precede its materials). No echo
             // composite re-checks any more, so this check schedules its own, timed from that ask (two at most).
-            long lastCarrierAsk = Math.Max(LastRingAskTick, _lastGlassesInjectTick);
+            long lastCarrierAsk = Math.Max(LastRingAskTick, Interlocked.Read(ref _lastGlassesEquipTick));
             var sinceCarrier = unchecked(Environment.TickCount64 - lastCarrierAsk);
             if (sinceCarrier >= 0 && sinceCarrier < RingInjectCooldownMs)
             {
