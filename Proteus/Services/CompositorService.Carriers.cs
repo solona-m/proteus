@@ -339,7 +339,7 @@ public partial class CompositorService
         // on: with our record standing and the shell NOT on the facewear slot, Glamourer decides whether it is on (QA:
         // the walk said "pending injection" while the gold eyepatch was being drawn, so nothing took it off).
         bool hostedNow = config.AutoInvisibleGlasses && shellBuilt && hostedOnFacewear;
-        bool walkMayMissOurs = _injectedGlasses && !hostedNow && !IsOurGlassesWorn(g.ModelSet);
+        bool walkMayMissOurs = CarrierDecisions.GlassesWalkMayMissOurs(_injectedGlasses, hostedNow, IsOurGlassesWorn(g.ModelSet));
 
         if (removeOnly && !walkMayMissOurs
             && DecideGlasses(g, gearWanted, shellBuilt, hostedOnFacewear, facewearWriteFailed, liveCheck: false,
@@ -351,7 +351,7 @@ public partial class CompositorService
         // would be taken for it. Guarded on holding a record at all, since the state read is IPC and this runs on every
         // redraw. What the reading means is decided in GlassesRecord — see there for why a wrong clear is permanent.
         ulong? worn = _injectedGlasses ? JudgeGlassesRecord(g) : null;
-        bool glamourerSaysOurs = walkMayMissOurs && _injectedGlasses && worn == g.ItemId;
+        bool glamourerSaysOurs = walkMayMissOurs && CarrierDecisions.GlassesConfirmedOurs(_injectedGlasses, worn, g.ItemId);
 
         // The live check is Penumbra IPC: never in remove-only mode, whose only outcome is a removal.
         var d = DecideGlasses(g, gearWanted, shellBuilt, hostedOnFacewear, facewearWriteFailed, liveCheck: !removeOnly,
@@ -496,12 +496,17 @@ public partial class CompositorService
     /// minutes: possibly that pair's stale walk, not a pair the player put on (QA: three composites in a row left the
     /// face off the glasses while nothing was drawn there). The shell phase re-walks before believing it.
     /// </summary>
-    private bool WalkMayHoldOurRemovedGlasses(InvisibleGlasses.Identity g)
+    private bool WalkMayHoldOurRemovedGlasses(InvisibleGlasses.Identity g, out long removedAt)
     {
-        long removedAt = Interlocked.Read(ref _glassesRemovedAt);
-        return !_injectedGlasses && removedAt != 0 && IsOurGlassesWorn(g.ModelSet)
-               && unchecked(Environment.TickCount64 - removedAt) is >= 0 and < 300_000;
+        removedAt = Interlocked.Read(ref _glassesRemovedAt);
+        return CarrierDecisions.GlassesRewalkDue(_injectedGlasses, IsOurGlassesWorn(g.ModelSet), removedAt,
+                                                Interlocked.Read(ref _glassesRewalkedFor), Environment.TickCount64);
     }
+
+    /// <summary>The removal stamp a stale-walk re-walk was made for (once per removal). Interlocked only.</summary>
+    private long _glassesRewalkedFor;
+
+    private void NoteGlassesRewalked(long removedAt) => Interlocked.Exchange(ref _glassesRewalkedFor, removedAt);
 
     /// <summary>
     /// The composite's own redraw skips the redraw hook's reconciles (a composite is in flight then), so the gap check

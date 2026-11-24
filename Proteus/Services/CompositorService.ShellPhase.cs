@@ -191,16 +191,17 @@ public partial class CompositorService
                 // Retry the walk if the trigger-time one found nothing, and pass maps through without coalescing null: null means
                 // "unknown" to the host chooser, not "empty". Wrapped: a throw here must not cost the whole shell.
                 // Our own removed pair's stale walk must not pass for a pair the player put on (it hides the facewear slot from
-                // the chooser): look again first. Only in that state, so the steady state costs no extra walk.
+                // the chooser): look again first. Once per removal, so a pair the player really wears costs one extra walk.
                 if (InvisibleGlasses.Resolve(Plugin.DataManager, run.compositor.log) is { } walkGlasses
-                    && run.compositor.WalkMayHoldOurRemovedGlasses(walkGlasses))
+                    && run.compositor.WalkMayHoldOurRemovedGlasses(walkGlasses, out var removedAt))
                 {
+                    run.compositor.NoteGlassesRewalked(removedAt);
                     try
                     {
-                        if (run.compositor.RefreshEquippedModels())
-                            run.compositor.log.Information("[Proteus] invisible glasses: re-walked after our removal — "
-                                + "e{0:D4} {1}", walkGlasses.ModelSet,
-                                run.compositor.IsOurGlassesWorn(walkGlasses.ModelSet) ? "is still drawn" : "was a stale reading");
+                        run.compositor.RefreshEquippedModels();
+                        run.compositor.log.Information("[Proteus] invisible glasses: re-walked after our removal — "
+                            + "e{0:D4} {1} in the walk now", walkGlasses.ModelSet,
+                            run.compositor.IsOurGlassesWorn(walkGlasses.ModelSet) ? "is still" : "is no longer");
                     }
                     catch (Exception ex)
                     {

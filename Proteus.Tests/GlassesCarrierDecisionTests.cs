@@ -267,6 +267,47 @@ public sealed class GlassesCarrierDecisionTests
     }
 
     [Fact]
+    public void AWalkMissingOurPairIsEvidenceOnlyWhenHostedOrUnrecorded() // [AC-face-glasses-priority-4] (QA finding 1)
+    {
+        Assert.True(GlassesWalkMayMissOurs(recorded: true, hostedOnFacewearNow: false, walkShowsOurs: false));
+        Assert.False(GlassesWalkMayMissOurs(recorded: true, hostedOnFacewearNow: true, walkShowsOurs: false));
+        Assert.False(GlassesWalkMayMissOurs(recorded: true, hostedOnFacewearNow: false, walkShowsOurs: true));
+        Assert.False(GlassesWalkMayMissOurs(recorded: false, hostedOnFacewearNow: false, walkShowsOurs: false));
+    }
+
+    [Fact]
+    public void GlamourerConfirmsOnlyOurOwnRowWhileTheRecordStands() // [AC-face-glasses-priority-4] [AC-face-glasses-priority-6] (QA finding 1)
+    {
+        const ulong ours = 5521;
+        Assert.True(GlassesConfirmedOurs(recordedAfterRead: true, wornRow: ours, ourItemId: ours));
+        Assert.False(GlassesConfirmedOurs(recordedAfterRead: true, wornRow: null, ourItemId: ours));    // unreadable
+        Assert.False(GlassesConfirmedOurs(recordedAfterRead: true, wornRow: 0, ourItemId: ours));       // none worn
+        Assert.False(GlassesConfirmedOurs(recordedAfterRead: true, wornRow: 4242, ourItemId: ours));    // another pair
+        Assert.False(GlassesConfirmedOurs(recordedAfterRead: false, wornRow: ours, ourItemId: ours));   // the read forgot it
+
+        // Together with the decision: the player's own carrier row never makes a removal without our record.
+        var d = Decide(shellBuilt: false, published: false, recorded: false,
+                       drawn: GlassesConfirmedOurs(recordedAfterRead: false, wornRow: ours, ourItemId: ours));
+        Assert.NotEqual(GlassesAction.Remove, d.Action);
+    }
+
+    [Fact]
+    public void ARewalkIsDueOncePerRemovalWithinTheWindow() // [AC-face-glasses-priority-1] (QA finding 4)
+    {
+        const long removed = 1_000_000;
+        Assert.True(GlassesRewalkDue(recorded: false, walkShowsOurs: true, removed, rewalkedForTick: 0, removed + 1));
+        Assert.True(GlassesRewalkDue(false, true, removed, 0, removed));                                  // at once
+        Assert.True(GlassesRewalkDue(false, true, removed, 0, removed + GlassesRewalkWindowMs - 1));
+        Assert.False(GlassesRewalkDue(false, true, removed, 0, removed + GlassesRewalkWindowMs));         // window over
+        Assert.False(GlassesRewalkDue(false, true, removed, 0, removed - 1));                             // clock went back
+        Assert.False(GlassesRewalkDue(false, true, removed, rewalkedForTick: removed, removed + 10));     // already re-walked
+        Assert.True(GlassesRewalkDue(false, true, removed, rewalkedForTick: removed - 5, removed + 10));  // a newer removal
+        Assert.False(GlassesRewalkDue(false, true, removedAtTick: 0, 0, 10));                            // never removed
+        Assert.False(GlassesRewalkDue(recorded: true, true, removed, 0, removed + 10));                  // ours on record
+        Assert.False(GlassesRewalkDue(false, walkShowsOurs: false, removed, 0, removed + 10));           // nothing to doubt
+    }
+
+    [Fact]
     public void HostsToNameDropsOurRemovedGlasses() // [AC-face-glasses-priority-4] [EDGE-face-glasses-priority-21]
     {
         IReadOnlyList<string> failed =

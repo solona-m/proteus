@@ -244,10 +244,10 @@ public class GlassesCarrierWiringTests
     public void AWalkThatMissesOurPairDefersToGlamourer() // [AC-face-glasses-priority-4] (QA finding 1)
     {
         var body = Method(Carriers, "private void ReconcileInvisibleGlasses(");
-        Assert.Contains("bool walkMayMissOurs = _injectedGlasses && !hostedNow && !IsOurGlassesWorn(g.ModelSet);", body);
+        Assert.Contains("CarrierDecisions.GlassesWalkMayMissOurs(_injectedGlasses, hostedNow, IsOurGlassesWorn(g.ModelSet))", body);
         // Remove-only mode reads Glamourer in that state too, instead of returning on the walk's word.
         Before(body, "if (removeOnly && !walkMayMissOurs", "JudgeGlassesRecord(g)");
-        Assert.Contains("bool glamourerSaysOurs = walkMayMissOurs && _injectedGlasses && worn == g.ItemId;", body);
+        Before(body, "JudgeGlassesRecord(g)", "CarrierDecisions.GlassesConfirmedOurs(_injectedGlasses, worn, g.ItemId)");
         var decide = Method(Carriers, "private CarrierDecisions.GlassesDecision DecideGlasses(");
         Assert.Contains("ourModelDrawn: IsOurGlassesWorn(g.ModelSet) || glamourerSaysOurs", decide);
     }
@@ -276,10 +276,11 @@ public class GlassesCarrierWiringTests
     public void OurRemovedPairsStaleWalkIsWalkedAgain() // [AC-face-glasses-priority-1] (QA finding 4)
     {
         var gather = Method(ShellPhase, "private void GatherInputs(");
-        Before(gather, "WalkMayHoldOurRemovedGlasses(walkGlasses)", "RefreshEquippedModels()");
-        Before(gather, "WalkMayHoldOurRemovedGlasses(walkGlasses)", "metModels = run.compositor._equippedMetModels;");
+        Before(gather, "WalkMayHoldOurRemovedGlasses(walkGlasses, out var removedAt)", "NoteGlassesRewalked(removedAt)");
+        Before(gather, "NoteGlassesRewalked(removedAt)", "RefreshEquippedModels()");
+        Before(gather, "RefreshEquippedModels()", "metModels = run.compositor._equippedMetModels;");
         var may = Method(Carriers, "private bool WalkMayHoldOurRemovedGlasses(");
-        Assert.Contains("!_injectedGlasses && removedAt != 0 && IsOurGlassesWorn(g.ModelSet)", may);
+        Assert.Contains("CarrierDecisions.GlassesRewalkDue(", may);
     }
 
     [Fact]
@@ -291,7 +292,7 @@ public class GlassesCarrierWiringTests
         var reconcile = Method(Carriers, "private void ReconcileInvisibleGlasses(");
         var equip = reconcile[reconcile.IndexOf("case CarrierDecisions.GlassesAction.Equip:", System.StringComparison.Ordinal)..];
         equip = equip[..equip.IndexOf("case CarrierDecisions.GlassesAction.Unclaimed:", System.StringComparison.Ordinal)];
-        Assert.Contains("_lastGlassesEquipTick", equip);
+        Before(equip, "if (!equipped) return;", "_lastGlassesEquipTick");
         var remove = reconcile[reconcile.IndexOf("case CarrierDecisions.GlassesAction.Remove:", System.StringComparison.Ordinal)..];
         Assert.DoesNotContain("_lastGlassesEquipTick", remove);
     }
@@ -313,7 +314,7 @@ public class GlassesCarrierWiringTests
     {
         var dir = Path.Combine(ProteusDir(), "Services");
         var src = string.Join("\n", Directory.GetFiles(dir, "CompositorService.*.cs").Select(File.ReadAllText));
-        foreach (var field in new[] { "_lastGlassesInjectTick", "_lastGlassesEquipTick", "_glassesRemovedAt", "_glassesLivePolls", "_lastFacewearWriteFailed" })
+        foreach (var field in new[] { "_lastGlassesInjectTick", "_lastGlassesEquipTick", "_glassesRewalkedFor", "_glassesRemovedAt", "_glassesLivePolls", "_lastFacewearWriteFailed" })
         {
             foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(src, $@"\b{field}\b"))
             {

@@ -174,6 +174,34 @@ internal static class CarrierDecisions
     /// <summary>The gap Warning's dedup key: once per path and published manifest.</summary>
     public static string GlassesGapLogKey(string path, long publishSeq) => $"{path}|{publishSeq}";
 
+    /// <summary>
+    /// A walk taken while the character reloads can miss our pair that is still on. With our record standing and the
+    /// shell NOT on the facewear slot, the walk not showing ours is not evidence: Glamourer decides.
+    /// </summary>
+    public static bool GlassesWalkMayMissOurs(bool recorded, bool hostedOnFacewearNow, bool walkShowsOurs)
+        => recorded && !hostedOnFacewearNow && !walkShowsOurs;
+
+    /// <summary>Glamourer reports our own carrier row while our record stands (re-checked after the read).</summary>
+    public static bool GlassesConfirmedOurs(bool recordedAfterRead, ulong? wornRow, ulong ourItemId)
+        => recordedAfterRead && wornRow is { } worn && worn == ourItemId;
+
+    /// <summary>How long after our own removal a walk showing our set may be that removal's stale reading.</summary>
+    internal const int GlassesRewalkWindowMs = 300_000;
+
+    /// <summary>
+    /// Re-walk before believing a walk that shows our carrier's set with no record: Proteus took its own pair off
+    /// within <see cref="GlassesRewalkWindowMs"/> and has not re-walked for that removal yet. Once per removal, so a
+    /// player who really wears a pair on that set costs one extra walk, not one per composite.
+    /// </summary>
+    /// <param name="removedAtTick">When Proteus last took its pair off (0 = never).</param>
+    /// <param name="rewalkedForTick">The removal stamp a re-walk was already made for.</param>
+    public static bool GlassesRewalkDue(bool recorded, bool walkShowsOurs, long removedAtTick, long rewalkedForTick, long nowTick)
+    {
+        if (recorded || !walkShowsOurs || removedAtTick == 0 || removedAtTick == rewalkedForTick) return false;
+        long since = unchecked(nowTick - removedAtTick);
+        return since >= 0 && since < GlassesRewalkWindowMs;
+    }
+
     /// <summary>Penumbra resolves the carrier's model to our file (both canonicalised by the caller).</summary>
     public static bool GlassesRedirectLive(string? expectedCanonical, string? resolvedCanonical)
         => expectedCanonical != null && resolvedCanonical != null
