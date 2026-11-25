@@ -32,20 +32,21 @@ internal static class HarnessOptionLookup
         var g = Pick(groups.Select(x => x.Name).ToList(), group, "group");
         if (g.Error is { } ge) return ge;
         var options = groups.First(x => x.Name == g.Name).Options;
-        var o = Pick(options.ToList(), option, $"option in group {g.Name}");
+        var o = Pick(options.ToList(), option, "option", g.Name);
         if (o.Error is { } oe) return oe;
         return new Result(g.Name, o.Name, 200, null, null);
     }
 
-    private static (string? Name, Result? Error) Pick(List<string> names, string wanted, string what)
+    private static (string? Name, Result? Error) Pick(List<string> names, string wanted, string what, string? inGroup = null)
     {
+        string where = inGroup == null ? "" : $" in group {inGroup}";
         if (names.Contains(wanted, StringComparer.Ordinal)) return (wanted, null);
         var loose = names.Where(n => string.Equals(n, wanted, StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.Ordinal).ToList();
         return loose.Count switch
         {
             1 => (loose[0], null),
-            0 => (null, Result.Fail(404, "option-not-found", $"the mod has no {what} '{wanted}'")),
-            _ => (null, Result.Fail(400, "invalid-field", $"'{wanted}' matches more than one {what} when case is ignored ({string.Join(", ", loose)}); give the exact name")),
+            0 => (null, Result.Fail(404, "option-not-found", $"the mod has no {what} '{wanted}'{where}")),
+            _ => (null, Result.Fail(400, "invalid-field", $"'{wanted}' matches more than one {what}{where} when case is ignored ({string.Join(", ", loose)}); give the exact name")),
         };
     }
 
@@ -87,7 +88,7 @@ internal static class HarnessOptionLookup
             var chosen = new List<string>();
             foreach (var option in options)
             {
-                var o = Pick(group.Options.ToList(), option, $"option in group {group.Name}");
+                var o = Pick(group.Options.ToList(), option, "option", group.Name);
                 if (o.Error is { } oe)
                     return SelectionResult.Fail(oe.Status, oe.Code!, oe.Code == "option-not-found"
                         ? $"{oe.Message}; its options: {string.Join(", ", group.Options)}"

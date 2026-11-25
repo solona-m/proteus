@@ -194,6 +194,7 @@ public class HarnessOptionHoldTests : IDisposable
         Assert.Contains(Size, Message(b1));
         var (s2, b2) = await fx.Post("/actions/mod-settings", """{"mod":"Skirt","options":{"Body — Skirt / Model(s)":["Rue M"]}}""");
         Assert.Equal((404, "option-not-found"), (s2, Code(b2)));
+        Assert.Contains("no option 'Rue M' in group", Message(b2));
         Assert.Contains("Rue WC", Message(b2));
         Assert.Contains("Tre Medium", Message(b2));
         Assert.Empty(Game.HoldSets);

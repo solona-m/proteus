@@ -228,6 +228,10 @@ and put-back does not undo their writes, so:
 - To judge fit on another body, prefer holding the worn body mod off (`enabled:false`)
   and the target body on over a priority stack, and say which you used. That covers
   the piece's shape only: skin look and UV on that body stay UNVERIFIED.
+  A body mod Proteus's own design restore holds (an active design binding) answers
+  `held-elsewhere` with or without `options`: then raise the target body by priority
+  instead (it outranks Proteus's composited skin textures, so the skin look is not
+  representative) and say so.
 - If any file of a held mod, its `meta.json` or a `Proteus/` record changed: **STOP and report**.
   Never run `undoWorn` on a mod that held shader-upgrade or Gear-variants state
   before the session: it would undo the user's own earlier work. The scratchpad copy is
