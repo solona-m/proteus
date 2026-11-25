@@ -199,4 +199,47 @@ internal static class StarlightMeasure
                               && !BodySurface.IsSmallclothes(p.Material));
 
     private static Vector3 P(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
+
+    // ── the knee standoff's pose measure ──────────────────────────────────
+
+    /// <summary>A posed skin point standing outside its own stocking face.</summary>
+    /// <param name="Facing">The face's way out at rest, z: below 0 the back of the leg (the character faces +z).</param>
+    internal sealed record BentPoint(int Vertex, Vector3 RestAt, float Depth, string Part, float Facing, int A = -1, int B = -1, int C = -1);
+
+    /// <summary>The posed measure: skin points through their own stocking face, and how many skin points were paired.</summary>
+    internal sealed record Bent(IReadOnlyList<BentPoint> Through, int Paired)
+    {
+        public int Count => Through.Count;
+        public float Percentile(float p)
+            => Through.Count == 0 ? 0f : Through.Select(t => t.Depth).OrderBy(d => d).ElementAt(Math.Min(Through.Count - 1, (int)(p * Through.Count)));
+    }
+
+    /// <summary>
+    /// Skin points through the stockings in a pose: each skin vertex under a stocking face at rest
+    /// (<see cref="SkinThroughCloth.Covering"/>'s rules) is paired with that face; posed, it counts when it stands outside
+    /// that same face, posed, by more than 0.2 mm (the face's way out as at rest). <paramref name="posed"/> is in
+    /// <see cref="ModelPartReader"/>'s vertex order.
+    /// </summary>
+    internal static Bent BentStockingSkinOut(ModelParts rest, Vector3[] posed)
+    {
+        var stockings = StockingParts(rest);
+        var covers = SkinThroughCloth.Covering(rest).Where(c => stockings.Contains(c.Label)).ToList();
+        var through = new List<BentPoint>();
+        foreach (var c in covers)
+        {
+            Vector3 a = posed[c.A], b = posed[c.B], cc = posed[c.C], s = posed[c.Vertex];
+            var n = Vector3.Cross(b - a, cc - a);
+            if (n.LengthSquared() < 1e-14f) continue;
+            n = Vector3.Normalize(n);
+            if (c.Flip) n = -n;
+            var q = a * c.U + b * c.V + cc * c.W;
+            float by = Vector3.Dot(s - q, n);
+            if (by <= SkinThroughCloth.Tolerance) continue;
+            var ra = P(rest, c.A);
+            var rn = Vector3.Cross(P(rest, c.B) - ra, P(rest, c.C) - ra);
+            float facing = rn.LengthSquared() > 1e-14f ? Vector3.Normalize(rn).Z * (c.Flip ? -1f : 1f) : 0f;
+            through.Add(new BentPoint(c.Vertex, c.At, by, c.Label, facing, c.A, c.B, c.C));
+        }
+        return new Bent(through, covers.Count);
+    }
 }

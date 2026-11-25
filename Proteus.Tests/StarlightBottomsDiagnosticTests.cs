@@ -7,6 +7,7 @@ using System.Numerics;
 using Proteus.Services;
 using Xunit;
 using Xunit.Abstractions;
+using XivLiveMesh;
 
 namespace Proteus.Tests;
 
@@ -149,8 +150,12 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
         => m.Parts.Where(p => p.Island < 0 && BodySurface.IsSmallclothes(p.Material)).Sum(p => p.Triangles.Length / 3);
 
     private static ModelParts Refit(string dir, string mod, string rel, string tune)
+        => ModelPartReader.Read(File.ReadAllBytes(RefitFile(dir, mod, rel, tune)))!;
+
+    /// <summary>The refit written for a tune, in its own folder (the tune's name, sanitised).</summary>
+    private static string RefitFile(string dir, string mod, string rel, string tune)
     {
-        string outDir = Path.Combine(dir, tune.Length == 0 ? "as-is" : "before");
+        string outDir = Path.Combine(dir, tune.Length == 0 ? "as-is" : new string(tune.Select(ch => char.IsLetterOrDigit(ch) ? ch : '-').ToArray()));
         Directory.CreateDirectory(outDir);
         var args = new List<string>
         {
@@ -168,6 +173,153 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
         try { exit = RefitCli::Proteus.Refit.Program.Dispatch([.. args], stdout, stderr); }
         finally { Console.SetOut(console); }
         if (exit != 0) throw new InvalidOperationException($"refit failed: {stderr}");
-        return ModelPartReader.Read(File.ReadAllBytes(Path.Combine(outDir, "Size.mdl")))!;
+        return Path.Combine(outDir, "Size.mdl");
+    }
+
+    // ── the knee standoff's pose measure (Phase B: measured at 1502, before any pass) ──
+
+    /// <summary>The poses each size is measured in: the owner's idle as dumped and mirrored, and knee bends added beyond
+    /// bind (the hip held as dumped).</summary>
+    internal static IReadOnlyList<(string Name, LivePose Pose)> MeasuredPoses()
+    {
+        var idle = KneeBend.Load(LocalData.Path(LocalData.IdlePose));
+        return
+        [
+            ("idle", idle), ("idle-mirrored", KneeBend.Mirrored(idle)),
+            ("+15", KneeBend.Scaled(idle, 15)), ("+30", KneeBend.Scaled(idle, 30)),
+            ("+60", KneeBend.Scaled(idle, 60)), ("+90", KneeBend.Scaled(idle, 90)),
+        ];
+    }
+
+    [LocalDataTheory(LocalData.StarlightMod, LocalData.TightFirmMod, LocalData.NeolitheMod, LocalData.BiboPlusMod,
+                     LocalData.RueMod, LocalData.YabMod, LocalData.TreMod, LocalData.RosalineMod, LocalData.UvMaps, LocalData.IdlePose)]
+    [MemberData(nameof(Names))]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Plan", "AC-knee-standoff-1")]
+    public void Bent_figures_per_size(string size)
+    {
+        var (mod, rel) = Sizes[size];
+        string dir = Path.Combine(Path.GetTempPath(), "proteus-starlight-bent-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            string file = RefitFile(dir, mod, rel, "");
+            var bytes = File.ReadAllBytes(file);
+            var rest = ModelPartReader.Read(bytes)!;
+            var mesh = ModelSkinReader.Read(bytes, null, null)!;
+            o.WriteLine($"{size}: at rest {StarlightMeasure.StockingSkinOut(rest)} through");
+            foreach (var (name, pose) in MeasuredPoses())
+            {
+                var (posed, unmapped) = KneeBend.Posed(bytes, pose);
+                var bent = StarlightMeasure.BentStockingSkinOut(rest, posed);
+                int back = bent.Through.Count(t => t.Facing < -0.3f), front = bent.Through.Count(t => t.Facing > 0.3f);
+                var bones = bent.Through.SelectMany(t => KneeBend.BonesOf(mesh, t.Vertex)).GroupBy(b => b)
+                                .OrderByDescending(g => g.Count()).Take(5).Select(g => $"{g.Key}:{g.Count()}");
+                float yLo = bent.Count == 0 ? 0 : bent.Through.Min(t => t.RestAt.Y), yHi = bent.Count == 0 ? 0 : bent.Through.Max(t => t.RestAt.Y);
+                o.WriteLine($"  {name,-14} {bent.Count,4} through of {bent.Paired}; p50 {bent.Percentile(0.5f) * 1000:F1} p90 {bent.Percentile(0.9f) * 1000:F1} "
+                            + $"max {bent.Percentile(1f) * 1000:F1} mm; back {back} front {front} side {bent.Count - back - front}; "
+                            + $"y {yLo:F2}-{yHi:F2}; bones {string.Join(" ", bones)}"
+                            + (unmapped.Count > 0 ? $"; unmapped {string.Join(",", unmapped)}" : ""));
+            }
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
+    }
+
+    /// <summary>The bone sets the knee band may read (decision 2), smallest first.</summary>
+    internal static readonly (string Name, string[] Prefixes)[] BandSets =
+    [
+        ("j_asi_b", ["j_asi_b"]), ("j_asi_b+n_hizasoubi", ["j_asi_b", "n_hizasoubi"]), ("j_asi_b+j_asi_c", ["j_asi_b", "j_asi_c"]),
+        ("j_asi_b+c+hizasoubi", ["j_asi_b", "j_asi_c", "n_hizasoubi"]),
+    ];
+
+    /// <summary>A vertex's share of weight on bones starting with any of <paramref name="prefixes"/>.</summary>
+    internal static float Share(SkinnedMesh mesh, int v, string[] prefixes)
+    {
+        float on = 0, all = 0;
+        int o = v * SkinnedMesh.MaxInfluences;
+        for (int k = 0; k < SkinnedMesh.MaxInfluences; k++)
+        {
+            float w = mesh.BoneWeights[o + k];
+            if (w <= 0) continue;
+            all += w;
+            if (prefixes.Any(p => mesh.BoneNames[mesh.BoneIndices[o + k]].StartsWith(p, StringComparison.Ordinal))) on += w;
+        }
+        return all > 0 ? on / all : 0;
+    }
+
+    [LocalDataFact(LocalData.StarlightMod, LocalData.TightFirmMod, LocalData.NeolitheMod, LocalData.BiboPlusMod,
+                   LocalData.RueMod, LocalData.YabMod, LocalData.TreMod, LocalData.RosalineMod, LocalData.UvMaps, LocalData.IdlePose)]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Plan", "AC-knee-standoff-1")]
+    public void Band_coverage_over_every_size()
+    {
+        var poses = MeasuredPoses().Where(p => p.Name is "idle" or "idle-mirrored" or "+15" or "+30").ToList();
+        var shares = BandSets.ToDictionary(s => s.Name, _ => new List<float>());
+        // As the pass selects: a face counts when any of its samples (corners, edge midpoints, centroid) reads in the band,
+        // the share read from the nearest skin vertex of the new body.
+        var faceShares = BandSets.ToDictionary(s => s.Name, _ => new List<float>());
+        string dir = Path.Combine(Path.GetTempPath(), "proteus-starlight-band-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            foreach (var (size, (mod, rel)) in Sizes)
+            {
+                var bytes = File.ReadAllBytes(RefitFile(Path.Combine(dir, size.Replace(' ', '-')), mod, rel, ""));
+                var rest = ModelPartReader.Read(bytes)!;
+                var mesh = ModelSkinReader.Read(bytes, null, null)!;
+                var skin = rest.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                               .SelectMany(p => p.Triangles).Distinct().ToArray();
+                Vector3 V(int i) => new(rest.Positions[i * 3], rest.Positions[i * 3 + 1], rest.Positions[i * 3 + 2]);
+                int Nearest(Vector3 q)
+                {
+                    int best = -1;
+                    float bd = float.MaxValue;
+                    foreach (int s in skin)
+                    {
+                        float d = Vector3.DistanceSquared(V(s), q);
+                        if (d < bd) { bd = d; best = s; }
+                    }
+                    return best;
+                }
+                foreach (var (_, pose) in poses)
+                {
+                    var bent = StarlightMeasure.BentStockingSkinOut(rest, KneeBend.Posed(bytes, pose).Posed);
+                    foreach (var t in bent.Through)
+                    {
+                        Vector3 a = V(t.A), b = V(t.B), c = V(t.C);
+                        var samples = new[] { a, b, c, (a + b) / 2, (b + c) / 2, (c + a) / 2, (a + b + c) / 3 }.Select(Nearest).ToArray();
+                        foreach (var (name, prefixes) in BandSets)
+                        {
+                            shares[name].Add(Share(mesh, t.Vertex, prefixes));
+                            faceShares[name].Add(samples.Max(s => Share(mesh, s, prefixes)));
+                        }
+                    }
+                }
+            }
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
+        foreach (var (label, table) in new[] { ("point", shares), ("face", faceShares) })
+            foreach (var (name, list) in table)
+            {
+                var row = new[] { 0.05f, 0.1f, 0.2f, 0.3f, 0.5f }.Select(th => $"≥{th:F2}: {100f * list.Count(s => s >= th) / Math.Max(1, list.Count):F1}%");
+                o.WriteLine($"{label} {name,-22} {list.Count} points; {string.Join("  ", row)}");
+            }
+    }
+
+    [LocalDataFact(LocalData.IdlePose)]
+    [Trait("Suite", "Diagnostic")]
+    public void The_idle_dump_s_leg_angles()
+    {
+        var idle = KneeBend.Load(LocalData.Path(LocalData.IdlePose));
+        foreach (var (name, pose) in MeasuredPoses())
+            foreach (var side in new[] { "l", "r" })
+            {
+                var a = KneeBend.Angles(pose, side);
+                o.WriteLine($"{name,-14} {side}: knee bind {a.KneeBind:F1} pose {a.KneePose:F1} added {a.Added:F1}; hip {a.Hip:F1}; j_asi_b {a.KneeB:F1} j_asi_c {a.KneeC:F1}");
+            }
     }
 }
