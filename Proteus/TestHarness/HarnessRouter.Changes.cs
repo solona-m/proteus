@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -62,7 +64,7 @@ internal sealed partial class HarnessRouter
 
     private async Task<HarnessResponse> ModSettings(HarnessRequest request)
     {
-        var (body, bad) = JsonBody(request, "mod", "enabled", "priority", "permanent", "collection");
+        var (body, bad) = JsonBody(request, "mod", "enabled", "priority", "permanent", "collection", "options");
         if (bad != null) return bad;
         string? mod = OptionalString(body, "mod", out bad);
         if (bad != null) return bad;
@@ -88,7 +90,16 @@ internal sealed partial class HarnessRouter
                 return HarnessResponse.Error(400, "invalid-field", "permanent must be true or false");
             permanent = pm.GetBoolean();
         }
-        if (enabled == null && priority == null) return HarnessResponse.Error(400, "invalid-field", "give enabled, priority or both");
+        // Options for the hold: a temporary selection, never saved, never with a permanent write.
+        List<(string Group, IReadOnlyList<string> Options)>? askedOptions = null;
+        if (body.TryGetProperty("options", out var optionsEl))
+        {
+            if (ParseOptions(optionsEl, out var parsed) is { } why) return HarnessResponse.Error(400, "invalid-field", why);
+            if (permanent) return HarnessResponse.Error(400, "invalid-field", "options are for a temporary hold only, never with permanent");
+            askedOptions = parsed;
+        }
+        if (enabled == null && priority == null && askedOptions == null)
+            return HarnessResponse.Error(400, "invalid-field", "give enabled, priority, options or a combination");
         if (!ModBackup.SafeModDir(mod)) return HarnessResponse.Error(400, "invalid-field", "the mod folder name is not a plain folder name");
         // Another collection (a sync plugin's, say): a temporary hold there too, never permanent.
         string? rawCollection = OptionalString(body, "collection", out bad);
@@ -99,6 +110,22 @@ internal sealed partial class HarnessRouter
             if (!Guid.TryParse(rawCollection, out var g)) return HarnessResponse.Error(400, "invalid-field", "collection must be a collection id (a guid)");
             if (permanent) return HarnessResponse.Error(400, "invalid-field", "permanent writes are for the player's collection only");
             asked = g;
+        }
+
+        // With options: the mod found on the framework thread, its groups read and the selection resolved off it (a read
+        // of its meta.json), then the hold in the usual hop, the mod found again there.
+        Dictionary<string, List<string>>? selection = null;
+        if (askedOptions != null)
+        {
+            var (root, findError) = await OnFramework(() =>
+            {
+                var (d, m, e) = FindMod(mod);
+                return (e == null ? Path.Combine(m!.ModsRoot, d!) : null, e);
+            });
+            if (findError != null) return Answer(findError);
+            var resolved = await Task.Run(() => HarnessOptionLookup.ResolveSelection(HarnessOptionLookup.ReadModGroups(root!), askedOptions));
+            if (!resolved.Ok) return HarnessResponse.Error(resolved.Status, resolved.Code!, changes.Scrub(resolved.Message ?? ""));
+            selection = resolved.Selection;
         }
 
         var result = await OnFramework(() =>
@@ -112,15 +139,39 @@ internal sealed partial class HarnessRouter
                     return ChangeResult.Fail(503, "penumbra-unavailable", "Penumbra could not list its collections");
                 if (!listed.Any(c => c.Id == other))
                     return ChangeResult.Fail(404, "collection-not-found", $"Penumbra has no collection {other}");
-                return changes.Hold(other, dir!, enabled, priority);
+                return changes.Hold(other, dir!, enabled, priority, selection);
             }
             if (Game.PlayerCollection() is not { } collection)
                 return ChangeResult.Fail(409, "no-collection", "the character has no Penumbra collection");
             // Permanent: a Proteus mod's own setting, recorded (on disk first) and written back by put-back.
             return permanent ? changes.Bindings.WritePermanent(collection, dir!, enabled, priority)
-                             : changes.Hold(collection, dir!, enabled, priority);
+                             : changes.Hold(collection, dir!, enabled, priority, selection);
         });
         return Answer(result);
+    }
+
+    /// <summary>
+    /// A hold's <c>options</c>: a non-empty object, each key a group name, each value an array of non-empty option names.
+    /// Null when well formed; else why not.
+    /// </summary>
+    private static string? ParseOptions(JsonElement el, out List<(string Group, IReadOnlyList<string> Options)> parsed)
+    {
+        parsed = [];
+        if (el.ValueKind != JsonValueKind.Object) return "options must be an object of group name to an array of option names";
+        foreach (var prop in el.EnumerateObject())
+        {
+            if (prop.Name.Length == 0) return "options: a group name is empty";
+            if (prop.Value.ValueKind != JsonValueKind.Array) return $"options: group {prop.Name} must name an array of options";
+            var names = new List<string>();
+            foreach (var o in prop.Value.EnumerateArray())
+            {
+                if (o.ValueKind != JsonValueKind.String || o.GetString() is not { Length: > 0 } name)
+                    return $"options: group {prop.Name} must list option names as non-empty strings";
+                names.Add(name);
+            }
+            parsed.Add((prop.Name, names));
+        }
+        return parsed.Count == 0 ? "options must name at least one group" : null;
     }
 
     private async Task<HarnessResponse> PutBack(HarnessRequest request)

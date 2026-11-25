@@ -73,7 +73,7 @@ four requests were open at once: retry when one finishes; it is never a busy run
 | `GET /hair-port?mod=<folder>&hair=<hair model game path>` | Read-only: what the Studio's "Port to all races" lists for that hairstyle — `{modDir, hair, source, sourceRace, id, otherSexNote, rows:[{race:"c0101", state: open\|covered\|ported\|stale\|no-style\|other-sex-authored\|ported-elsewhere, otherSex, ownVersion, ownSkeleton, tickable, defaultTicked, declined, stateText, warning, portedFrom}], ports:[{race, targetGamePath, sourceGamePath, group, option, file, auto, est, skeletonFrom, portVersion}]}`. `hair` may use either slash and any case; a port of ours stands for the author's hairstyle it was made from (`source`). `warning` is set only on `ported`/`stale` rows. `ported-elsewhere`: another hairstyle of the mod has a port of that race in a place this one is published from — tickable, never default-ticked; `portedFrom` is that hairstyle's game path (null otherwise). 404 `hair-not-in-mod`, 409 `legacy-mod`, 409 `mod-unreadable`. |
 | `POST /actions/hair-port` | `{"mod":"<folder>","hair":"<hair model game path>","races":["c0101","c0401"]}` → 202 `{job, modDir, state}`: the Studio's **Port** button for those races (leave `races` out for the Studio's default ticks), after a backup; then reloads the mod and redraws. `{"mod","hair","remove":true}` is the **Remove ports** button. Only races the Studio lets you tick are ported; the rest come back in `result.skippedRaces` (`not-listed`, `covered`, `ported`, `no-style`, `other-sex-authored`, `own-version`, `own-skeleton`). Job kinds `hair-port` / `hair-remove`; `result` = `{action, summary: ported\|nothing-to-port\|nothing-ported\|removed\|nothing-to-remove, resultLine, source, asked, skippedRaces, ported:[{race, group, option, est, skeletonFrom}], stripped, refused:[{race, reason}], warnings, current, saved, replaced:[{race, from}]}` — `replaced` lists races whose port replaced another hairstyle's (`from`, its game path); a `ported-elsewhere` race is ported only when listed in `races` (remove: `removed, message, remaining`). No backup is taken when nothing would be written. 400 `invalid-field` for a bad `hair`, `races` that are not playable `cNNNN` codes, `remove` other than `true`, or both; 409 `hair-port-busy` (below). |
 | `POST /actions/equip` | `{"slot":"Body","item":12345}` or `{"slot":"Body","set":317,"variant":2}`, optionally `"dyes":[stain1,stain2]` (Glamourer stain ids 0–255; default none; put-back restores the original's) → 200 `{slot, sent, item, set, variant, dyes, previous, original}` (`readBack:false` when the worn item could not be read back). Equips through Glamourer for this session only (no lock, no design). Slots: Head, Body, Hands, Legs, Feet, Ears, Neck, Wrists, RFinger, LFinger (any case). `set`/`variant` equip that model even when no item uses it. 400 `invalid-field` / `item-invalid`; 409 `busy`, `auto-refit-busy`, `not-logged-in`, `carrier-slot`, `glamourer-refused`; 503 `glamourer-unavailable`, `harness-stopping`. |
-| `POST /actions/mod-settings` | `{"mod":"<folder>","enabled":false}` and/or `"priority":1000` → 200 `{mod, collection, enabled, priority, before, redrawRequested}`. Holds the mod in the player's collection with a Penumbra **temporary** setting (its options kept), never saved. 409 `held-elsewhere` when another plugin (Glamourer, design binding) holds it; 404 `mod-not-found`; 400 `managed-mod`; 409 `no-collection`, `penumbra-refused`; 503 `penumbra-unavailable`, `harness-stopping`. |
+| `POST /actions/mod-settings` | `{"mod":"<folder>","enabled":false}`, `"priority":1000` and/or `"options":{"<group>":["<option>"]}` (any combination, at least one) → 200 `{mod, collection, enabled, priority, options:[{group,options}], before, redrawRequested}`. Holds the mod in the player's collection with a Penumbra **temporary** setting, never saved: `options` selects options for the hold (each named group's selection replaced; every other group kept as it is; a Single group takes exactly one option, a Multi/Imc/Combining group any number), else its options are kept. Names resolve as `/bindings` resolves them (exact, else one case-insensitive match, in the mod's spelling); the answer echoes the whole selection sent, names scrubbed (assert on the status and `/state.models`, not the echo). Put-back removes the whole hold: the collection's own options show again. `options` alone leaves an unconfigured mod off: send `"enabled":true` too. Never with `"permanent"`. 400 `invalid-field` (bad `options` shape, a Single group without exactly one option, an option or group named twice, a case-ambiguous name, `options` with `permanent`); 404 `option-not-found` (an unknown group lists the mod's groups, an unknown option its group's options); 409 `mod-unreadable` (its `meta.json` or a group file cannot be read); 409 `held-elsewhere` when another plugin (Glamourer, design binding) holds it; 404 `mod-not-found`; 400 `managed-mod`; 409 `no-collection`, `penumbra-refused` (Penumbra's code, e.g. `OptionMissing`); 503 `penumbra-unavailable`, `harness-stopping`. `/state.harnessChanges.holds[].options`: the groups the harness selected (`[{group,options}]`, null when none). |
 | `POST /actions/mod-settings` with `"permanent":true` | `{"mod":"<Proteus mod folder>","enabled":false,"permanent":true}` → 200 `{mod, collection, permanent:true, enabled, priority, before:{enabled,priority}, redrawRequested}`. Writes a **Proteus** mod's own enabled/priority (not a hold), recorded for put-back (see **Design bindings**). 409 `not-a-proteus-mod`, `penumbra-refused`; 503 `record-failed`. |
 | `POST /actions/put-back` | `{}` → 200 `{gear:[{slot,result}], holds:[{mod,result}], sweep, redrawRequested, studio:[{mod,files,panel,code,kept}], binding}`. Undoes every equip and hold of this session, then ends the Studio session (see *The Studio*), then the binding session (`binding` is null when there is none: see **Design bindings**). `output` is `{locks:[{file,result: released\|gone}], moveFault:{result: disarmed\|none}, fault:{result: cleared\|none}, autoRedraw:{result: cleared\|none}}` for the shell output routes (a cleared shell fault recomposites). 409 `busy` only while a design apply is settling. |
 | `GET /bindings?mod=<folder>&group=<g>&option=<o>&design=<guid>&names=1` | Read-only design-binding state: `{enabled, followsAutomation, restoresCharacterMods, unequipUnset, echoWindowOpen, echoMsLeft, active:{id, fields}, storeSha256, bindings:[{id, capturedUtc, mods, sha256}], designs:[{id, bound}], mod, design}`. With `mod` (and `group`+`option`): `{mod, governed, presetDriven, live:[{row,diffuse,emissive}], stored:[…], settings:{enabled,priority,options,temporary}}`; with `design`: its applied `fields`. Names appear only with `names=1`, scrubbed. `group`/`option` are looked up in the mod's own groups: an exact name wins, else a single case-insensitive match is used and echoed in the mod's spelling (`mod.group`, `mod.option`). Only these five query keys are taken. 400 `invalid-field` (an unknown query key; a name matching several groups/options when case is ignored); 404 `mod-not-found`, `design-not-found`, `option-not-found` (no such group or option, a simple mod included); 409 `mod-unreadable` (its groups can't be read); 503 `glamourer-unavailable`. |
@@ -198,6 +198,41 @@ Equips and holds change the shared character for everyone, so:
   cannot, and logs what it left).
 - Start with a smoke check: one equip and put-back of one slot, one hold and
   put-back, with `/state` read before and after each.
+
+### Checking other sizes
+
+A mod's size (or any option) can be switched for the check through the hold's
+`"options"` — never saved, removed by put-back. A worn mod switched this way is an
+equip as far as auto refit, the gear shader upgrade and Gear variants are concerned,
+and put-back does not undo their writes, so:
+
+- Send group names with non-ASCII characters as ASCII escapes: an em dash is `\u2014`
+  (`"Body \u2014 Valentione Skirt / Model(s)"`). Windows PowerShell 5.1 does not send a
+  plain string body as UTF-8; a body file read as UTF-8 also works.
+- First `POST /actions/auto-refit {"enabled":false}` for the session, and check auto
+  redraw is effectively on (`POST /actions/auto-redraw {"enabled":true}` for the
+  session if not).
+- Copy the mod's `meta.json`, group files and `Proteus/` to the scratchpad (the whole
+  mod if it is small) and hash every file, and every other mod you hold (body mods
+  too; a worn hat or hair mod as well). Record whether `Proteus/shaderupgrade.json` or
+  `Proteus/variantrepoint.json` existed before you start.
+- Baseline: the legs (or the slot's) row of `/state.models` — its `loaded` and
+  `resolved` — is the option file the mod's `meta.json` maps for the selection the
+  collection has. If another mod serves it, stop and report what does.
+- Per option: hold it, wait for `compositor.phase` `idle`, `autoRefit.busy`,
+  `variantRepoint.busy` and `shaderUpgrade.busy` false, and `redraws.count` to rise
+  since the hold; then poll the row's **`loaded`** file (`slot` ≥ 0) for up to 10 s
+  until it is that option's file — still another file after that is a mismatch; a row
+  that never settles is reported as `timed-out`. A screenshot counts as drawn only if
+  it shows the piece; otherwise that option's look is UNVERIFIED.
+- To judge fit on another body, prefer holding the worn body mod off (`enabled:false`)
+  and the target body on over a priority stack, and say which you used. That covers
+  the piece's shape only: skin look and UV on that body stay UNVERIFIED.
+- If any file of a held mod, its `meta.json` or a `Proteus/` record changed: **STOP and report**.
+  Never run `undoWorn` on a mod that held shader-upgrade or Gear-variants state
+  before the session: it would undo the user's own earlier work. The scratchpad copy is
+  the restore.
+- Back and side views need a camera route (#125): UNVERIFIED.
 
 ## Design bindings
 
@@ -598,5 +633,5 @@ lastHeal: healed|gave-up}` and `moveFault {patterns, movesLeft}`.
   that group Off is unmeasured. First, with the owner's Rue+ "Pubes" group set Off in Penumbra and the legs slot empty,
   check that Rue+'s own bare legs (`c0201e0000_dwn.mdl`, which name `_bibopube` themselves) still draw. Then, with the
   group still Off, `POST /actions/refit {"mod":"<a Bibo+ legs garment>","bodies":["rue"],"pubes":true}`, equip a made
-  Rue+ size and confirm the legs draw. `/actions/mod-settings` cannot pick an option group; if this needs automating, add
-  the route.
+  Rue+ size and confirm the legs draw. To set the group Off for the check only, hold Rue+ with
+  `/actions/mod-settings` `"options"` (see **Checking other sizes**).

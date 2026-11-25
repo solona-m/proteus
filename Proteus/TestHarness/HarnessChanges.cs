@@ -16,7 +16,10 @@ internal sealed record GearRecord(string Slot, Worn Original, Worn Applied, (int
 /// <summary>A mod's effective state before the harness first held it this session.</summary>
 internal sealed record HoldBefore(bool Enabled, int Priority, bool Temporary, bool Configured);
 
-internal sealed record HoldRecord(Guid Collection, string ModDir, bool Enabled, int Priority, HoldBefore Before, DateTime AtUtc);
+/// <param name="Options">The groups the harness selected this session (group → options, the mod's spelling), accumulated
+/// across holds; null when it selected none. Put-back clears the whole temporary setting, so there is no option Before.</param>
+internal sealed record HoldRecord(Guid Collection, string ModDir, bool Enabled, int Priority, HoldBefore Before, DateTime AtUtc,
+                                  IReadOnlyDictionary<string, IReadOnlyList<string>>? Options = null);
 
 /// <summary>One undone change: its slot or mod, and restored / cleared / changed / gone / failed (with a code).</summary>
 internal sealed record UndoEntry(string Name, string Result, string? Code = null);
@@ -279,6 +282,11 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
 
     internal string Scrub(string source) => LogAnonymizer.Scrub(names.Scrub(source));
 
+    /// <summary>A hold's options as <c>{group, options}</c> pairs, every name scrubbed (<see cref="Scrub"/>): a list, so two
+    /// names scrubbing to one placeholder never collide as keys. Penumbra is always sent the real names.</summary>
+    private List<object> OptionPairs<TList>(IEnumerable<KeyValuePair<string, TList>> options) where TList : IEnumerable<string>
+        => options.Select(e => (object)new { group = Scrub(e.Key), options = e.Value.Select(Scrub).ToList() }).ToList();
+
     /// <summary>The gate equips and holds share, in the contract's order; null when they may go ahead.</summary>
     public ChangeResult? Gate(bool jobBusy, bool autoRefitBusy)
     {
@@ -336,7 +344,10 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
     /// Hold a mod in a collection with a temporary setting, its options kept. Checks in one order: the temporary-setting
     /// query, someone else's hold, the effective-settings read, the write. A failed read never falls back to "off".
     /// </summary>
-    public ChangeResult Hold(Guid collection, string modDir, bool? enabled, int? priority)
+    /// <param name="select">Groups to select for the hold (group → options, already resolved in the mod's spelling): each
+    /// replaces that group's selection; every other group is sent as read. Null keeps every group as read.</param>
+    public ChangeResult Hold(Guid collection, string modDir, bool? enabled, int? priority,
+                             IReadOnlyDictionary<string, List<string>>? select = null)
     {
         if (game.QueryHold(collection, modDir) is not { } q)
             return ChangeResult.Fail(503, "penumbra-unavailable", "Penumbra could not say whether the mod is held");
@@ -359,7 +370,12 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         var s = read.Settings;
         bool baseEnabled = s?.Enabled ?? false;
         int basePriority = s?.Priority ?? 0;
-        var options = s?.Options ?? new Dictionary<string, List<string>>();
+        // A new dictionary: the snapshot Penumbra returned is never changed. Penumbra resets a group a temporary setting
+        // leaves out to its default, so every group read is sent, the selected ones replaced.
+        var options = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var (group, chosen) in s?.Options ?? new Dictionary<string, List<string>>()) options[group] = [.. chosen];
+        if (select != null)
+            foreach (var (group, chosen) in select) options[group] = [.. chosen];
 
         bool newEnabled = enabled ?? baseEnabled;
         int newPriority = priority ?? basePriority;
@@ -369,15 +385,26 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         var key = (collection, modDir);
         var before = holds.TryGetValue(key, out var old) ? old.Before
                    : new HoldBefore(baseEnabled, basePriority, q.Present || s?.Temporary == true, s != null);
-        holds[key] = new HoldRecord(collection, modDir, newEnabled, newPriority, before, DateTime.UtcNow);
+        Dictionary<string, IReadOnlyList<string>>? selected = old?.Options?.ToDictionary(e => e.Key, e => e.Value, StringComparer.Ordinal);
+        if (select != null)
+        {
+            selected ??= new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+            foreach (var (group, chosen) in select) selected[group] = [.. chosen];
+        }
+        holds[key] = new HoldRecord(collection, modDir, newEnabled, newPriority, before, DateTime.UtcNow, selected);
         // Only a hold in the player's own collection changes what the character draws; a redraw for another collection's
         // would itself wake every watcher and hide what QA is checking (that they ignore other collections).
         bool redraw = game.PlayerCollection() == collection;
         if (redraw) game.RequestRedraw();
-        log?.Information("[Proteus] test harness: holding {0} enabled={1} priority={2}", modDir, newEnabled, newPriority);
+        if (select == null)
+            log?.Information("[Proteus] test harness: holding {0} enabled={1} priority={2}", modDir, newEnabled, newPriority);
+        else
+            log?.Information("[Proteus] test harness: holding {0} enabled={1} priority={2}, options {3}", modDir, newEnabled,
+                             newPriority, string.Join("; ", select.Select(e => $"{e.Key}: {string.Join(", ", e.Value)}")));
         return ChangeResult.Ok(new Dictionary<string, object?>
         {
             ["mod"] = modDir, ["collection"] = collection, ["enabled"] = newEnabled, ["priority"] = newPriority,
+            ["options"] = OptionPairs(options),
             ["before"] = new { enabled = before.Enabled, priority = before.Priority, temporary = before.Temporary,
                                configured = before.Configured },
             ["redrawRequested"] = redraw,
@@ -670,6 +697,7 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
             mod = h.ModDir, collection = h.Collection, enabled = h.Enabled, priority = h.Priority,
             before = new { enabled = h.Before.Enabled, priority = h.Before.Priority, temporary = h.Before.Temporary,
                            configured = h.Before.Configured },
+            options = h.Options == null ? null : OptionPairs(h.Options),
             atUtc = h.AtUtc,
         }).ToList(),
         studio = StudioSessionView(),

@@ -445,6 +445,24 @@ public class HarnessHostTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-harness-option-hold-2")]
+    [Trait("Plan", "EDGE-harness-option-hold-20")]
+    public async Task Off_puts_back_an_options_hold()
+    {
+        string root = System.IO.Path.Combine(game.ModsRoot, "Skirt");
+        System.IO.Directory.CreateDirectory(root);
+        System.IO.File.WriteAllText(System.IO.Path.Combine(root, "meta.json"),
+            """{"FileVersion":3,"Groups":[{"Name":"Size","Type":"Single","Options":[{"Name":"S"},{"Name":"L"}]}]}""");
+        game.ModFolders["Skirt"] = "Skirt";
+        using var host = Host();
+        host.Command("on");
+        await Post(SessionFile!, "/actions/mod-settings", """{"mod":"Skirt","options":{"Size":["L"]}}""");
+        Assert.NotEmpty(game.Temporary);
+        dispatcher.Run(() => host.Command("off"));
+        Assert.Empty(game.Temporary);
+    }
+
+    [Fact]
     public async Task Dispose_OnFramework_PutsBackBeforeReturning()
     {
         // [AC-harness-equip-7] [EDGE-harness-equip-32]

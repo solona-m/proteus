@@ -135,6 +135,11 @@ check what Proteus reads from the drive while nothing changes:
 - `mod-settings` takes another collection: still a Penumbra temporary hold under the
   harness key, never saved; put-back's sweep covers every collection Penumbra lists.
   `/state` lists collection ids only, never names.
+- 2026-11-25: `mod-settings` takes `options`, selecting a mod's options for the same
+  temporary hold: never saved, never with `permanent`; put-back removes it whole. The
+  answer, `/state.harnessChanges.holds[].options` and the refusals carry the mod's
+  group and option names, scrubbed of session names; the hold's log line carries them
+  too (the same class of data as the mod folder names already logged).
 - `auto-refit` switches auto refit for the session in memory only. It is never
   written to the configuration, so no save can keep it; put-back or unload clears
   it, and put-back lists any mod a refit wrote into while it stood (those writes are
