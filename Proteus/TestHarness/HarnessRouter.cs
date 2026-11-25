@@ -31,6 +31,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
         ("GET", "/matcaps"), ("POST", "/actions/matcap-image"), ("POST", "/actions/matcap"), ("POST", "/actions/matcap-preview"),
         ("POST", "/actions/boot-rearm"), ("POST", "/actions/sidecar-edit"), ("GET", "/sidecar"), ("POST", "/actions/auto-refit"),
         ("POST", "/actions/output-lock"), ("POST", "/actions/shell-fault"), ("POST", "/actions/auto-redraw"),
+        ("POST", "/actions/emote"), ("POST", "/actions/camera"), ("POST", "/actions/posedump"),
     ];
 
     private IHarnessGame Game => jobs.Game;
@@ -81,6 +82,9 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                 "/actions/output-lock" => OutputLockAction(request),
                 "/actions/shell-fault" => await ShellFaultAction(request),
                 "/actions/auto-redraw" => await AutoRedrawAction(request),
+                "/actions/emote" => await EmoteAction(request),
+                "/actions/camera" => await CameraAction(request),
+                "/actions/posedump" => await PoseDumpAction(request),
                 _ => Job(path["/jobs/".Length..]),
             };
         }
@@ -114,7 +118,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
 
     private async Task<HarnessResponse> State()
     {
-        var (s, harnessChanges, qa) = await OnFramework(() => (Game.State(), changes.View(), QaState()));
+        var (s, harnessChanges, qa, poseView) = await OnFramework(() => (Game.State(), changes.View(), QaState(), changes.PoseView()));
         var recovery = Game.RecoveryState();
         var models = ModelJoin.Join(s.Loaded, s.ResourceMap, s.ModsRoot);
         var c = s.Compositor;
@@ -158,6 +162,8 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
             job = jobs.Current?.View(),
             gear = GearBlock(s.Gear),
             harnessChanges,
+            pose = poseView.Pose,
+            camera = poseView.Camera,
         });
     }
 

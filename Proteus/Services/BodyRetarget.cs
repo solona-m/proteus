@@ -352,7 +352,7 @@ internal static partial class BodyRetarget
                                   float LayerResidual = 0f, int DeepCleared = 0, float DeepWorst = 0f,
                                   IReadOnlyList<int>? DeepAt = null, int StandoffPulled = 0, float StandoffWorst = 0f,
                                   int StandoffHeld = 0, int OpenEdgeFitted = 0, int SourceSmallclothes = 0,
-                                  int ShapeFallbacks = 0, SeamPin? Seam = null);
+                                  int ShapeFallbacks = 0, SeamPin? Seam = null, int KneeMoved = 0, float KneeWorst = 0f);
 
     /// <summary>
     /// The garment split into the two sets the two passes act on.
@@ -888,6 +888,9 @@ internal static partial class BodyRetarget
         if (solved.StandoffPulled > 0)
             log?.Invoke($"cloth brought back toward the author's standoff: {solved.StandoffPulled} points, up to "
                         + $"{solved.StandoffWorst * 1000f:0.0} mm");
+        if (solved.KneeMoved > 0)
+            log?.Invoke($"knee standoff: {solved.KneeMoved} cloth points held off the skin behind the knees, up to "
+                        + $"{solved.KneeWorst * 1000f:0.0} mm");
         var written = MeshVolumeService.Inflate(garmentBytes, solved.Edit);
         byte[] model = written.Model;
 
@@ -987,7 +990,7 @@ internal static partial class BodyRetarget
     /// <param name="swapMeshes">The skin meshes the swap replaces (<see cref="PartedSkinMeshes"/>), as <see cref="Plan"/>
     /// works them out once for both the solve and the rebuild; null works them out here.</param>
     /// <param name="trace">Each stage by name — "transfer", "knit", "layer-knit", "lay", "follow", "push", "unfold",
-    /// "relax", "face-settle", "rim-lift", "standoff", "layer-order" — with a copy of every node's move so far, indexed as
+    /// "relax", "face-settle", "knee-standoff", "rim-lift", "standoff", "layer-order" — with a copy of every node's move so far, indexed as
     /// <see cref="Sets.NodeOf"/> maps vertices — and "outfit-order" after them when <paramref name="outfit"/> is given.
     /// Changes nothing; null skips the copies.</param>
     /// <param name="outfit">The other piece of the garment's outfit, which it was authored over and must stay outside
@@ -1093,6 +1096,8 @@ internal static partial class BodyRetarget
             Relax(sets, nodeDelta, SignedOff(drawn), stay, layers, GuardsRelax(relaxSinkGuard, clearBody, pairs) ? faceCheck : null);
         Stage("relax");
 
+        int kneeMoved = 0;
+        float kneeWorst = 0f;
         if (faceCheck != null && pushedBy != null && !Tuned.NoFaceSettle)
         {
             // The underside of the breast first, every layer together; then whatever face is still through.
@@ -1113,6 +1118,17 @@ internal static partial class BodyRetarget
             pushed += ClearFaces(faceCheck, nodeDelta, pushedBy, ref worstPush, stay);
         }
         Stage("face-settle");
+
+        // Then the coarse cloth behind the knees held its standoff off the skin, so it still covers it as the knee bends —
+        // see KneeFaces. Before the rim lift and the layer order, which keep any layer over it outside. The knee band is
+        // read off the bodies only once a coarse face looking back is found.
+        if (faceCheck != null && pushedBy != null && !Tuned.NoFaceSettle && !Tuned.NoKneeStandoff
+            && KneeFaces(faceCheck, nodeDelta, () => KneeTest(pairs)) is { } kneeGoal)
+        {
+            pushed += ClearFaces(faceCheck, nodeDelta, pushedBy, ref worstPush, stay, kneeGoal, out var tally);
+            (kneeMoved, kneeWorst) = (tally.Moved, tally.Worst);
+        }
+        Stage("knee-standoff");
 
         // A hem lying on the skin whose edges the new, rounder body comes up through between its corners — see LiftRims.
         // Only with the skin swapped: then the body's own skin is drawn under the rim, where the author's sculpted skin
@@ -1211,7 +1227,7 @@ internal static partial class BodyRetarget
         return new Solved(edit, CountTrue(snapped), transferred, missed, pushed, worstMove, worstPush, sets.HeldCount,
                           laid, folded, stage.Shapes, outfitLayered, layerResidual, stage.DeepCleared, stage.DeepWorst,
                           stage.DeepAt, standoffPulled, standoffWorst, standoffHeld, stage.OpenEdgeFitted,
-                          source.SmallclothesLanded, stage.Fallbacks, seamPin);
+                          source.SmallclothesLanded, stage.Fallbacks, seamPin, kneeMoved, kneeWorst);
     }
 
     /// <summary>

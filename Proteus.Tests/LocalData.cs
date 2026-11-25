@@ -39,6 +39,18 @@ internal static class LocalData
     /// <summary>The game's data, under <see cref="Game"/>: what Lumina opens.</summary>
     internal const string GameData = Game + ":game/sqpack";
 
+    /// <summary><c>PROTEUS_POSES</c>: copies of the owner's live pose dumps (<c>/proteus posedump</c> or the harness's
+    /// <c>posedump</c>), one folder each; never committed (a dump lists local mod paths).</summary>
+    internal const string Poses = "PROTEUS_POSES";
+
+    /// <summary>The owner's idle stance (the coldcase2 dump of 2026-11-21, c0201 with IVCS bones).</summary>
+    internal const string IdlePose = Poses + ":idle/pose.json";
+
+    /// <summary>Captured through the harness in the knee standoff's Phase A: a fresh idle, sitting, sitting on the ground.</summary>
+    internal const string IdleFreshPose = Poses + ":idle-fresh/pose.json";
+    internal const string SitPose = Poses + ":sit/pose.json";
+    internal const string GroundsitPose = Poses + ":groundsit/pose.json";
+
     /// <summary>The sample content pack, under <see cref="ModPacks"/>.</summary>
     internal const string PiercingsPack = ModPacks + ":Neolithe Piercings for Proteus.pmp";
 

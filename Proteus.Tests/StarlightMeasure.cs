@@ -199,4 +199,110 @@ internal static class StarlightMeasure
                               && !BodySurface.IsSmallclothes(p.Material));
 
     private static Vector3 P(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
+
+    // ── the knee standoff's pose measure ──────────────────────────────────
+
+    /// <summary>A posed skin point standing outside its own stocking face.</summary>
+    /// <param name="Facing">The face's way out at rest, z: below 0 the back of the leg (the character faces +z).</param>
+    internal sealed record BentPoint(int Vertex, Vector3 RestAt, float Depth, string Part, float Facing, int A = -1, int B = -1, int C = -1);
+
+    /// <summary>The posed measure: skin points through their own stocking face, and how many skin points were paired.</summary>
+    internal sealed record Bent(IReadOnlyList<BentPoint> Through, int Paired)
+    {
+        public int Count => Through.Count;
+        public float Percentile(float p)
+            => Through.Count == 0 ? 0f : Through.Select(t => t.Depth).OrderBy(d => d).ElementAt(Math.Min(Through.Count - 1, (int)(p * Through.Count)));
+    }
+
+    /// <summary>
+    /// Skin points through the stockings in a pose: each skin vertex under a stocking face at rest
+    /// (<see cref="SkinThroughCloth.Covering"/>'s rules) is paired with that face; posed, it counts when it stands outside
+    /// that same face, posed, by more than 0.2 mm (the face's way out as at rest). <paramref name="posed"/> is in
+    /// <see cref="ModelPartReader"/>'s vertex order.
+    /// </summary>
+    /// <summary>
+    /// <see cref="BentStockingSkinOut(ModelParts, Vector3[])"/> for the knee model against the knob model (decision 6):
+    /// pairs made once, on the knob model, and reused on the knee model — the skin vertex found by its rest position, the
+    /// face by its stocking part's place and the triangle's index in it (the refit never changes topology). Skin the knee
+    /// model draws that the knob model does not is newly drawn: paired on the knee model at rest and counted. Answers both
+    /// measures and the skin keys found in one model only.
+    /// </summary>
+    internal static (Bent Knob, Bent Knee, int OnlyKnob, int OnlyKnee) BentAgainstKnob(ModelParts knobRest, Vector3[] knobPosed,
+                                                                                      ModelParts kneeRest, Vector3[] kneePosed)
+    {
+        var knob = BentStockingSkinOut(knobRest, knobPosed);
+        var knobParts = knobRest.Parts.Where(p => StockingParts(knobRest).Contains(p.Label)).ToList();
+        var kneeParts = kneeRest.Parts.Where(p => StockingParts(kneeRest).Contains(p.Label)).ToList();
+        if (knobParts.Count != kneeParts.Count) throw new InvalidOperationException("the stocking parts differ between the models");
+        static (int, int, int) Key(Vector3 p) => ((int)MathF.Round(p.X / 0.0002f), (int)MathF.Round(p.Y / 0.0002f), (int)MathF.Round(p.Z / 0.0002f));
+        HashSet<int> Skin(ModelParts m) => m.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                                              .SelectMany(p => p.Triangles).ToHashSet();
+        var kneeSkinAt = new Dictionary<(int, int, int), int>();
+        foreach (int v in Skin(kneeRest)) kneeSkinAt.TryAdd(Key(P(kneeRest, v)), v);
+        var knobSkinKeys = Skin(knobRest).Select(v => Key(P(knobRest, v))).ToHashSet();
+
+        var through = new List<BentPoint>();
+        int paired = 0, onlyKnob = 0;
+        var covers = SkinThroughCloth.Covering(knobRest).Where(c => knobParts.Any(p => p.Label == c.Label)).ToList();
+        foreach (var c in covers)
+        {
+            if (!kneeSkinAt.TryGetValue(Key(c.At), out int sv)) { onlyKnob++; continue; }
+            int pi = knobParts.FindIndex(p => p.Label == c.Label);
+            var tris = knobParts[pi].Triangles;
+            int t = -1;
+            for (int i = 0; i + 2 < tris.Length; i += 3)
+                if (tris[i] == c.A && tris[i + 1] == c.B && tris[i + 2] == c.C) { t = i; break; }
+            if (t < 0) continue;
+            var kt = kneeParts[pi].Triangles;
+            paired++;
+            if (Through(kneePosed, sv, kt[t], kt[t + 1], kt[t + 2], c) is { } by)
+                through.Add(new BentPoint(sv, c.At, by, kneeParts[pi].Label, 0f, kt[t], kt[t + 1], kt[t + 2]));
+        }
+        // Newly drawn skin: paired on the knee model at rest, never dropped.
+        var kneeLabels = kneeParts.Select(p => p.Label).ToHashSet();
+        int onlyKnee = 0;
+        foreach (var c in SkinThroughCloth.Covering(kneeRest).Where(c => kneeLabels.Contains(c.Label) && !knobSkinKeys.Contains(Key(c.At))))
+        {
+            onlyKnee++;
+            paired++;
+            if (Through(kneePosed, c.Vertex, c.A, c.B, c.C, c) is { } by) through.Add(new BentPoint(c.Vertex, c.At, by, c.Label, 0f, c.A, c.B, c.C));
+        }
+        return (knob, new Bent(through, paired), onlyKnob, onlyKnee);
+    }
+
+    /// <summary>How far, posed, skin vertex <paramref name="s"/> stands outside face abc (the cover's weights and way out),
+    /// or null when not through.</summary>
+    private static float? Through(Vector3[] posed, int s, int a, int b, int c, SkinThroughCloth.Cover cover)
+    {
+        Vector3 pa = posed[a], pb = posed[b], pc = posed[c];
+        var n = Vector3.Cross(pb - pa, pc - pa);
+        if (n.LengthSquared() < 1e-14f) return null;
+        n = Vector3.Normalize(n);
+        if (cover.Flip) n = -n;
+        float by = Vector3.Dot(posed[s] - (pa * cover.U + pb * cover.V + pc * cover.W), n);
+        return by > SkinThroughCloth.Tolerance ? by : null;
+    }
+
+    internal static Bent BentStockingSkinOut(ModelParts rest, Vector3[] posed)
+    {
+        var stockings = StockingParts(rest);
+        var covers = SkinThroughCloth.Covering(rest).Where(c => stockings.Contains(c.Label)).ToList();
+        var through = new List<BentPoint>();
+        foreach (var c in covers)
+        {
+            Vector3 a = posed[c.A], b = posed[c.B], cc = posed[c.C], s = posed[c.Vertex];
+            var n = Vector3.Cross(b - a, cc - a);
+            if (n.LengthSquared() < 1e-14f) continue;
+            n = Vector3.Normalize(n);
+            if (c.Flip) n = -n;
+            var q = a * c.U + b * c.V + cc * c.W;
+            float by = Vector3.Dot(s - q, n);
+            if (by <= SkinThroughCloth.Tolerance) continue;
+            var ra = P(rest, c.A);
+            var rn = Vector3.Cross(P(rest, c.B) - ra, P(rest, c.C) - ra);
+            float facing = rn.LengthSquared() > 1e-14f ? Vector3.Normalize(rn).Z * (c.Flip ? -1f : 1f) : 0f;
+            through.Add(new BentPoint(c.Vertex, c.At, by, c.Label, facing, c.A, c.B, c.C));
+        }
+        return new Bent(through, covers.Count);
+    }
 }

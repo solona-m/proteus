@@ -107,7 +107,7 @@ public class GoldenCrossBodyLocalTests(ITestOutputHelper output)
             // untouched (the seam rule writes weights alone); judged in SeamWeightsTests.
             // And before 1501's coarse-face sag cap and pressed-skin cut, unless asked for the build as it is.
             var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: !seams && !current,
-                                                                       NoCoarseSag: !current, NoPressedSkinCut: !current),
+                                                                       NoCoarseSag: !current, NoPressedSkinCut: !current, NoKneeStandoff: !current),
                                                () => path == "studio"
                 ? BodyRetarget.Plan(garment, bytes, [pair], "_dwn", held: new HashSet<int>(), replaceSkin: true,
                                     acrossBodies: true, cutHidden: true)

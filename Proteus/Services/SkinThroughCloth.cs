@@ -41,6 +41,22 @@ internal static class SkinThroughCloth
     internal static (int Covered, IReadOnlyList<Point> Outside) Find(ModelParts garment, float reach = Reach,
                                                                      float tolerance = Tolerance)
     {
+        var covers = Covering(garment, reach);
+        var outside = new List<Point>();
+        foreach (var c in covers)
+            if (c.By > tolerance) outside.Add(new Point(c.Vertex, c.At, c.Label, c.By));
+        return (covers.Count, outside);
+    }
+
+    /// <summary>A skin vertex under a cloth face (<see cref="Find"/>'s rules): the face's corners, the nearest point's
+    /// barycentric weights on them, whether the face's winding normal was turned to agree with its corners' normals, and how
+    /// far outside it stands (negative: under it).</summary>
+    internal sealed record Cover(int Vertex, Vector3 At, int A, int B, int C, string Label, float U, float V, float W, bool Flip, float By);
+
+    /// <summary>Every skin vertex <see cref="Find"/> counts as covered, with the face covering it: the pairs a posed check
+    /// reuses (the same face, posed).</summary>
+    internal static IReadOnlyList<Cover> Covering(ModelParts garment, float reach = Reach)
+    {
         Vector3 P(int v) => new(garment.Positions[v * 3], garment.Positions[v * 3 + 1], garment.Positions[v * 3 + 2]);
         Vector3 N(int v) => v * 3 + 2 < garment.Normals.Length
             ? new(garment.Normals[v * 3], garment.Normals[v * 3 + 1], garment.Normals[v * 3 + 2])
@@ -57,7 +73,7 @@ internal static class SkinThroughCloth
             }
         var skin = whole.Where(p => SecondSkinWriter.IsBodySkinMaterial(p.Material))
                         .SelectMany(p => p.Triangles).Distinct().ToList();
-        if (tris.Count == 0 || skin.Count == 0) return (0, []);
+        if (tris.Count == 0 || skin.Count == 0) return [];
 
         // Edges two DIFFERENT cloth faces share, counted once per set of corners (a double-sided sheet draws each twice):
         // an edge only one face uses is a hem. Corners are taken by POSITION: a model splits its vertices along every uv
@@ -102,8 +118,7 @@ internal static class SkinThroughCloth
             }
         }
 
-        int covered = 0;
-        var outside = new List<Point>();
+        var covers = new List<Cover>();
         foreach (int v in skin)
         {
             var s = P(v);
@@ -140,12 +155,12 @@ internal static class SkinThroughCloth
             var face = Vector3.Cross(P(tb) - P(ta), P(tc) - P(ta));
             if (face.LengthSquared() < 1e-14f) continue;
             face = Vector3.Normalize(face);
-            if (Vector3.Dot(face, N(ta) + N(tb) + N(tc)) < 0f) face = -face;
-            covered++;
+            bool flip = Vector3.Dot(face, N(ta) + N(tb) + N(tc)) < 0f;
+            if (flip) face = -face;
             float by = Vector3.Dot(s - bestQ, face);
-            if (by > tolerance) outside.Add(new Point(v, s, label, by));
+            covers.Add(new Cover(v, s, ta, tb, tc, label, bu, bv, bw, flip, by));
         }
-        return (covered, outside);
+        return covers;
     }
 
     private static (int, int) EdgeKey(int a, int b) => a < b ? (a, b) : (b, a);

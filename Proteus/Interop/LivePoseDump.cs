@@ -23,12 +23,25 @@ public static unsafe class LivePoseDump
     /// <summary>What <c>pose.json</c> holds.</summary>
     public sealed record Snapshot(ushort GenderRace, float[] Root, List<Bone> Bones, List<string> Models);
 
-    public static string Dump(IObjectTable objects, PenumbraBridge penumbra, IDataManager data, IPluginLog log, string dir)
+    public static string Dump(IObjectTable objects, PenumbraBridge penumbra, IDataManager data, IPluginLog log, string dir,
+                              bool logFolder = true)
+        => DumpCounted(objects, penumbra, data, log, dir, logFolder).Line;
+
+    /// <summary>What <see cref="DumpCounted"/> did: its log line, and the bones and models written (none when it wrote
+    /// nothing: no player, no skeleton).</summary>
+    public readonly record struct DumpResult(string Line, int Bones, int Models, bool Written);
+
+    /// <summary>
+    /// <see cref="Dump"/>, answering the counts. <paramref name="logFolder"/> false keeps the absolute folder (it carries the
+    /// Windows user name) out of the log line: the test harness's <c>/log</c> returns plugin log lines.
+    /// </summary>
+    public static DumpResult DumpCounted(IObjectTable objects, PenumbraBridge penumbra, IDataManager data, IPluginLog log, string dir,
+                                         bool logFolder)
     {
         var cb = LiveCharacter.Player(objects);
-        if (cb == null) return "posedump: no local player";
+        if (cb == null) return new DumpResult("posedump: no local player", 0, 0, false);
         var pose = new LivePose();
-        if (!pose.Read(cb)) return "posedump: could not read the skeleton";
+        if (!pose.Read(cb)) return new DumpResult("posedump: could not read the skeleton", 0, 0, false);
 
         Directory.CreateDirectory(dir);
         var bones = new List<Bone>(pose.BoneCount);
@@ -64,10 +77,14 @@ public static unsafe class LivePoseDump
             : data.GetFile(LiveCharacter.PbdGamePath)?.Data;
         if (pbd != null) File.WriteAllBytes(Path.Combine(dir, "human.pbd"), pbd);
 
-        var line = $"posedump: {bones.Count} bones, race c{pose.GenderRace:D4}, {models.Count} models -> {dir}";
+        var line = Line(bones.Count, pose.GenderRace, models.Count, dir, logFolder);
         log.Information("[Proteus] {0}", line);
-        return line;
+        return new DumpResult(line, bones.Count, models.Count, true);
     }
+
+    /// <summary>The dump's log line; without <paramref name="logFolder"/> the folder is named, never written out.</summary>
+    internal static string Line(int bones, ushort genderRace, int models, string dir, bool logFolder)
+        => $"posedump: {bones} bones, race c{genderRace:D4}, {models} models -> {(logFolder ? dir : "harness posedump folder")}";
 
     /// <summary>A snapshot read back into a pose, for posing a mesh offline.</summary>
     public static LivePose Load(Snapshot s)

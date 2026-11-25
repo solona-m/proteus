@@ -1481,14 +1481,14 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
         // Before 1501's coarse-face sag cap and pressed-skin cut too.
         var as1357 = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSourceWorn: true, NoTurnFallback: true,
                                                                      NoSeamWeights: true, NoCoarseSag: true,
-                                                                     NoPressedSkinCut: true),
+                                                                     NoPressedSkinCut: true, NoKneeStandoff: true),
                                              () => Run(rule.SeeInside));
         Assert.Equal("DE0986CCDF1235DA5B5FB12C2054A2CA4E120DFEC544E790FDB38245E451F7ED", SkinTuckSheet.Sha(as1357.Model));
         Assert.Equal(1146, as1357.Report.Swap?.Tucked);
         // With 1359's reading: test's own bytes (taken at build 1360; the rule is off on this path, so they are 1359's by
         // construction), as builds before 1365 turned kept pieces.
         var as1364 = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTurnFallback: true, NoSeamWeights: true,
-                                                                     NoCoarseSag: true, NoPressedSkinCut: true),
+                                                                     NoCoarseSag: true, NoPressedSkinCut: true, NoKneeStandoff: true),
                                              () => Run(rule.SeeInside));
         Assert.Equal("C19F540BB2A9765EFA77799D36BC22C34E58367BD74088997D8C2523A71D3FC9", SkinTuckSheet.Sha(as1364.Model));
         Assert.Equal(1155, as1364.Report.Swap?.Tucked);
@@ -1496,7 +1496,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
         // [AC-keep-shape-flat-card-3] And as 1365 made it: the kept pieces the polar fit could not turn are turned truly,
         // and nothing else moves — still nothing drawn where the inside would show, and no more cloth in the body, no more
         // folds. Before 1382's seam weights, which write weights alone: as it is made now, every position and normal the same.
-        var pre1501 = new BodyRetarget.Tuning(NoCoarseSag: true, NoPressedSkinCut: true);
+        var pre1501 = new BodyRetarget.Tuning(NoCoarseSag: true, NoPressedSkinCut: true, NoKneeStandoff: true);
         var plan = BodyRetarget.WithTuning(pre1501 with { NoSeamWeights = true }, () => Run(rule.SeeInside));
         SeamWeightsTests.SameGeometry(plan.Model, BodyRetarget.WithTuning(pre1501, () => Run(rule.SeeInside)).Model);   // [EDGE-seam-weights-15]
         Assert.True(plan.Report.ShapeFallbacks > 0, "Dei Gratia's refit should take quaternion turns, or the pins above say it all");

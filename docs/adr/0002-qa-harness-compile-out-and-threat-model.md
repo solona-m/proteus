@@ -140,6 +140,23 @@ check what Proteus reads from the drive while nothing changes:
   answer, `/state.harnessChanges.holds[].options` and the refusals carry the mod's
   group and option names, scrubbed of session names; the hold's log line carries them
   too (the same class of data as the mod folder names already logged).
+- 2026-11-25 (knee standoff): `emote`, `camera` and `posedump`. `emote` is the first
+  harness route whose effect leaves the client: other players see the character sit.
+  It plays only an allowlisted looping emote (`sit`, `groundsit`, by pinned Emote-sheet
+  rows checked at the first call; a mismatch refuses every emote), at most one every
+  3 s, and refuses in combat, bound by duty, mounted, casting, occupied, in a cutscene,
+  an emote the player started, an unavailable emote and one still settling. `camera`
+  orbits the active camera (yaw, pitch, distance, clamped to the game's limits), held
+  in memory only; `posedump` writes the live pose and drawn models under
+  `test-harness/posedumps/<session>/<label>/`, at most one every 5 s (each dump writes
+  several MB on the framework thread: a frame hitch), never logs its folder, and is
+  never deleted by the harness. Threading: no framework-thread wait; every settle is one
+  hop, one off-thread wait, one hop, with a busy gate (`PoseSettling`) refusing emote,
+  camera, equip, hold, design apply and put-back meanwhile. Put-back stays one hop: the
+  stand-up (the emote played again) and the camera's Before are sent there only while
+  still what the harness left, and confirmed on one later hop; a stop on the framework
+  thread sends them unconfirmed (`stand-requested`); a stop off it posts nothing and
+  logs `emote:<name>` and `camera` as left. All of it compiled out of CI.
 - `auto-refit` switches auto refit for the session in memory only. It is never
   written to the configuration, so no save can keep it; put-back or unload clears
   it, and put-back lists any mod a refit wrote into while it stood (those writes are

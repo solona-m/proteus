@@ -51,6 +51,9 @@ internal sealed record PutBackReport(IReadOnlyList<UndoEntry> Gear, IReadOnlyLis
 
     /// <summary>Mods the worn-refit trigger refitted, each with the job to restore it by (put-back leaves their files).</summary>
     public IReadOnlyList<UndoEntry> JobBackedMods { get; init; } = [];
+
+    /// <summary>What put-back sent for the pose routes (knee standoff QA): the emote and the camera.</summary>
+    public PoseSent Pose { get; init; } = PoseSent.Nothing;
 }
 
 /// <summary>What put-back did about the shell output routes: each held file, the move fault, the shell fault (cleared and
@@ -84,7 +87,7 @@ internal sealed record ChangeResult(int Status, string? Code, string? Message, o
 /// <para/>
 /// Framework thread only, except <see cref="Stopping"/>, which the host sets from wherever <c>Stop</c> runs.
 /// </summary>
-internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPluginLog? log, string? recordRoot = null,
+internal sealed partial class HarnessChanges(IHarnessGame game, SessionNames names, IPluginLog? log, string? recordRoot = null,
                                      string session = "", int build = 0)
 {
     /// <summary>The harness's temporary-setting key: negative (it locks nobody out) and distinct from design binding's.</summary>
@@ -293,6 +296,7 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         if (stopping) return ChangeResult.Fail(503, "harness-stopping", "the test harness is stopping");
         if (jobBusy) return ChangeResult.Fail(409, "busy", "a harness job is running");
         if (applySettling) return ChangeResult.Fail(409, "busy", "a design apply is still settling; wait for its answer");
+        if (poseSettling) return ChangeResult.Fail(409, "busy", SettlingMessage);
         if (autoRefitBusy) return ChangeResult.Fail(409, "auto-refit-busy", "auto refit is working; wait for /state autoRefit.busy == false");
         return null;
     }
@@ -540,10 +544,15 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         catch (Exception ex) { log?.Warning(ex, "[Proteus] test harness: putting back the matcap images failed"); images = []; }
         var mods = matcapMods.ToList();
         matcapMods.Clear();
+
+        // After the existing steps, in the same call: the camera back and the emote stood up (sent only; confirmed later).
+        PoseSent pose;
+        try { pose = PutBackPose(); }
+        catch (Exception ex) { log?.Warning(ex, "[Proteus] test harness: putting back the pose failed"); pose = PoseSent.Nothing; }
         return new PutBackReport(gearResults, holdResults, sweep, redraw || binding?.Restored == true, binding)
                { Studio = studioResults, MatcapImages = images, MatcapMods = mods, Sidecar = sidecars, AutoRefit = autoRefit,
                  Output = output, AutoRefitPreference = preference,
-                 JobBackedMods = TakeJobBackedMods() };
+                 JobBackedMods = TakeJobBackedMods(), Pose = pose };
     }
 
     // ── the Studio ──────────────────────────────────────────────────────────
@@ -703,6 +712,9 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         studio = StudioSessionView(),
         binding = bindings?.View(),
         applySettling,
+        poseSettling,
+        emote = emote is { } em ? new { name = em.Name, mode = em.Mode, settled = em.Settled, atUtc = em.AtUtc } : null,
+        camera = camera is { } cr ? new { atUtc = cr.AtUtc } : null,
         sidecar = sidecar.View(),
         autoRefitOverride = autoRefitOverride is { } o ? new { enabled = o.Enabled, before = o.BeforeEffective, atUtc = o.AtUtc } : null,
         autoRefitPubesOverride = autoRefitPubesOverride is { } po
@@ -728,10 +740,11 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
                                  .Concat(shellFaultArmed ? ["the shell fault"] : [])
                                  .Concat(autoRedrawOverride != null ? ["the auto-redraw override"] : [])
                                  .Concat(autoRefitPreference?.Recorded == true ? ["the auto refit preference (the worn-refit trigger's)"] : [])
-                                 .Concat(jobBackedMods.Select(kv => $"{kv.Key}: restore by job {kv.Value}")));
+                                 .Concat(jobBackedMods.Select(kv => $"{kv.Key}: restore by job {kv.Value}"))
+                                 .Concat(PoseLeftovers()));
 
     internal bool Empty => gear.Count == 0 && holds.Count == 0 && bindings?.HasSession != true && studio == null
                         && sidecar.Empty && autoRefitOverride == null && autoRefitPubesOverride == null
                         && !OutputLocks.Active && !shellFaultArmed && autoRedrawOverride == null
-                        && autoRefitPreference?.Recorded != true && jobBackedMods.Count == 0;
+                        && autoRefitPreference?.Recorded != true && jobBackedMods.Count == 0 && PoseEmpty;
 }

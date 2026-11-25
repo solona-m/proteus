@@ -534,6 +534,55 @@ public class HarnessHostTests : IDisposable
         Assert.Contains(warned, w => w.Contains("glamourer state") && w.Contains("binding.json"));
     }
 
+    private static readonly HarnessTimings PoseTimings = HarnessFixture.FastTimings with
+    {
+        EmoteSettle = TimeSpan.FromMilliseconds(40), CameraSettle = TimeSpan.FromMilliseconds(30),
+        PutBackConfirm = TimeSpan.FromMilliseconds(40), EmoteInterval = TimeSpan.Zero,
+    };
+
+    private HarnessHost PoseHost() => new(configDir, true, game, dispatcher, o => observer = o, log, 1411, "stamp", PoseTimings);
+
+    [Fact]
+    [Trait("Plan", "AC-knee-standoff-8")]
+    [Trait("Plan", "EDGE-knee-standoff-22")]
+    public async Task On_thread_stop_requests_the_stand_up_without_waiting()
+    {
+        using var host = PoseHost();
+        host.Command("on");
+        await Post(SessionFile!, "/actions/emote", """{"emote":"groundsit"}""");
+        await Post(SessionFile!, "/actions/camera", """{"yaw":180}""");
+        int hops = dispatcher.Hops;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        dispatcher.Run(() => host.Command("off"));
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(1));
+        Assert.Equal([(ushort)52, 52], game.Played);
+        Assert.Equal(2, game.CameraWrites.Count);
+        Assert.Equal(hops, dispatcher.Hops);   // no confirming hop
+        Assert.Contains(Logged("Information"), l => l.Contains("pose: emote stand-requested, camera restored"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-knee-standoff-8")]
+    [Trait("Plan", "AC-knee-standoff-9")]
+    [Trait("Plan", "EDGE-knee-standoff-22")]
+    [Trait("Plan", "EDGE-knee-standoff-23")]
+    public async Task Off_thread_stop_calls_no_game_method_and_queues_nothing()
+    {
+        var host = PoseHost();
+        host.Command("on");
+        await Post(SessionFile!, "/actions/emote", """{"emote":"groundsit"}""");
+        await Post(SessionFile!, "/actions/camera", """{"yaw":180}""");
+        int hops = dispatcher.Hops, posts = dispatcher.Unabandonables, played = game.Played.Count, writes = game.CameraWrites.Count;
+        await Task.Run(host.Dispose);
+        dispatcher.Run(() => 0);   // drain
+        Assert.Equal(played, game.Played.Count);
+        Assert.Equal(writes, game.CameraWrites.Count);
+        Assert.Equal(hops, dispatcher.Hops);
+        Assert.Equal(posts, dispatcher.Unabandonables);
+        var warned = Logged("Warning");
+        Assert.Contains(warned, w => w.Contains("emote:groundsit") && w.Contains("camera"));
+    }
+
     [Fact]
     public async Task Stop_OffFramework_SkipsPutBack_LogsLeftovers_DoesNotBlock()
     {

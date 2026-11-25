@@ -28,10 +28,13 @@ public sealed class Plugin : IDalamudPlugin
 #if PROTEUS_TEST_HARNESS
     /// <summary>The QA test harness's screenshot readback (dev builds only).</summary>
     [PluginService] public static ITextureReadbackProvider TextureReadback { get; private set; } = null!;
+
+    /// <summary>The QA test harness's emote route: which conditions forbid an emote (dev builds only).</summary>
+    [PluginService] public static ICondition Condition { get; private set; } = null!;
 #endif
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1502;
+    public const int BuildNumber = 1504;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -314,7 +317,8 @@ public sealed class Plugin : IDalamudPlugin
                                                pluginInterface, designBindings, editRouter, presets, discovery,
                                                partsPanel.AsHarnessStudio(statusWindow.OpenToStudio,
                                                                         () => statusWindow.IsOpen,
-                                                                        () => statusWindow.IsOpen = false)),
+                                                                        () => statusWindow.IsOpen = false),
+                                               Condition, DataManager),
             new TestHarness.DalamudFrameworkDispatcher(framework), observer => capture.LineObserver = observer, log,
             BuildNumber, BuildStamp);
 #endif

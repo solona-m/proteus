@@ -30,10 +30,10 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     /// <summary>A game top as it was before the standoff pass: everything else on but the game chest's bra read and the
     /// relax guard, which came after (and build 1501's sag cap and pressed-skin cut: its coarse case changed).</summary>
     private static readonly BodyRetarget.Tuning NoPull = new(NoKeepStandoff: true, NoSourceWorn: true, NoRelaxSinkGuard: true,
-                                                            NoCoarseSag: true, NoPressedSkinCut: true);
+                                                            NoCoarseSag: true, NoPressedSkinCut: true, NoKneeStandoff: true);
 
     /// <summary>The coarse-face sag cap and the pressed-skin cut (build 1501) off: what a case pinned before them needs.</summary>
-    private static readonly BodyRetarget.Tuning Pre1501 = new(NoCoarseSag: true, NoPressedSkinCut: true);
+    private static readonly BodyRetarget.Tuning Pre1501 = new(NoCoarseSag: true, NoPressedSkinCut: true, NoKneeStandoff: true);
 
     private string Pinned(byte[] model, string expected)
     {
@@ -460,7 +460,7 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
         // Before 1382's seam weights too (measured at 1382: 108 vertices on 32 seams took one weighting, the most any moved
         // 0.098, positions untouched).
         var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoOpenEdgeFit: true, NoSeamWeights: true,
-                                                                   NoCoarseSag: true, NoPressedSkinCut: true),
+                                                                   NoCoarseSag: true, NoPressedSkinCut: true, NoKneeStandoff: true),
                                            () => MaimingCut(garment, bytes, pair));
         Pinned(plan.Model, MaimingStudioCut);
     }
@@ -482,7 +482,7 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
                         ("target", File.ReadAllBytes(target), NeobellyMSha))) return;
         // As pinned on 1323: before 1382's seam weights (measured at 1382: 109 vertices on 33 seams, at most 0.099).
         // And before 1501's coarse-face sag cap and pressed-skin cut.
-        var pinned = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: true, NoCoarseSag: true, NoPressedSkinCut: true),
+        var pinned = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: true, NoCoarseSag: true, NoPressedSkinCut: true, NoKneeStandoff: true),
                                              () => MaimingCut(ModelPartReader.Read(bytes)!, bytes, pair)).Model;
         Pinned(pinned, MaimingStudioCutFitted);
         // [EDGE-seam-weights-15] With them: the same cut, weights apart.
@@ -506,7 +506,7 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
         var garment = ModelPartReader.Read(bytes)!;
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
         // The new body's piercings carried, as every refit did when this was pinned.
-        var plan = BodyRetarget.WithTuning(Before with { NoCoarseSag = true, NoPressedSkinCut = true },
+        var plan = BodyRetarget.WithTuning(Before with { NoCoarseSag = true, NoPressedSkinCut = true, NoKneeStandoff = true },
             () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _,
                                       carryPiercings: true));
         Pinned(RefitCore.MatchSkinToBody(plan.Model, source, target, uv, false, log), DirndlGameRefit);

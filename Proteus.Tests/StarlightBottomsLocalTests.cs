@@ -27,7 +27,7 @@ public sealed class StarlightBottomsLocalTests(StarlightBottomsLocalTests.Runs r
     internal const string TreMedium = "files\\common\\15\\c0201e0000_dwn.mdl";
 
     /// <summary>The build before the fix.</summary>
-    internal const string Before = "NoCoarseSag,NoPressedSkinCut";
+    internal const string Before = "NoCoarseSag,NoPressedSkinCut,NoKneeStandoff";
 
     /// <summary>The inputs the references below were measured on (SHA-256): a change of any is a re-measure, not a pass.</summary>
     internal static readonly (string Mod, string Rel, string Sha)[] Inputs =
@@ -84,7 +84,8 @@ public sealed class StarlightBottomsLocalTests(StarlightBottomsLocalTests.Runs r
         public ModelParts Model(string tune = "")
         {
             if (models.TryGetValue(tune, out var m)) return m;
-            string outDir = Path.Combine(Dir, tune.Length == 0 ? "as-is" : "before");
+            // Each tune its own folder (its name, sanitised): two tunes never write over each other.
+            string outDir = Path.Combine(Dir, tune.Length == 0 ? "as-is" : new string(tune.Select(ch => char.IsLetterOrDigit(ch) ? ch : '-').ToArray()));
             Directory.CreateDirectory(outDir);
             var args = new List<string>
             {
@@ -199,7 +200,9 @@ public sealed class StarlightBottomsLocalTests(StarlightBottomsLocalTests.Runs r
         {
             bool stocking = stockings.Contains(part);
             var before = StarlightMeasure.OutOfLine(runs.Original, runs.Model(Before), [part], perLength: stocking);
-            var now = StarlightMeasure.OutOfLine(runs.Original, runs.Model(), [part], perLength: stocking);
+            // The 1501 fix as it was: the knee pass moves the stockings by design and is bounded against its knob
+            // instead (StarlightBottomsDiagnosticTests.Knee_pass_per_size, AC-knee-standoff-4).
+            var now = StarlightMeasure.OutOfLine(runs.Original, runs.Model("NoKneeStandoff"), [part], perLength: stocking);
             float slack = stocking ? CoarseSlopeSlack : OutOfLineSlack;
             string unit = stocking ? "" : " mm";
             float k = stocking ? 1f : 1000f;
@@ -208,5 +211,58 @@ public sealed class StarlightBottomsLocalTests(StarlightBottomsLocalTests.Runs r
             Assert.True(now.Max <= before.Max + slack, $"part {part}: max {now.Max * k:F3}{unit}");
             Assert.True(now.P99 <= before.P99 + slack, $"part {part}: p99 {now.P99 * k:F3}{unit}");
         }
+    }
+
+    /// <summary>The Tre Medium refit as build 1502 (test d56f7f46) writes it with these arguments (SHA-256, its own CLI run
+    /// 2026-11-25): the knob restores those bytes exactly.</summary>
+    internal const string TreMediumAt1502 = "ee5fd55e848755f21db68042c545f1e8efa2e025806cd577f66603373acd915c";
+
+    [LocalDataFact(LocalData.StarlightMod, LocalData.TightFirmMod, LocalData.TreMod, LocalData.UvMaps)]
+    [Trait("Plan", "AC-knee-standoff-2")]
+    [Trait("Plan", "AC-knee-standoff-3")]
+    [Trait("Plan", "AC-knee-standoff-4")]
+    [Trait("Plan", "AC-knee-standoff-5")]
+    [Trait("Plan", "EDGE-knee-standoff-10")]
+    [Trait("Plan", "EDGE-knee-standoff-11")]
+    public void The_knee_pass_on_Tre_Medium_against_its_knob()
+    {
+        // What ships, at rest, judged against the knob (no pose needed): still clean, the stockings bounded, the skin
+        // cut as the knob cuts it, the knob's own bytes those of 1502.
+        InputsAreTheMeasuredOnes();
+        var now = runs.Model();
+        var knob = runs.Model("NoKneeStandoff");
+        string knobSha = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(Path.Combine(runs.Dir, "NoKneeStandoff", "TreM.mdl"))));
+        o.WriteLine($"knob sha {knobSha}");
+        Assert.Equal(TreMediumAt1502, knobSha);
+
+        Assert.Equal(0, StarlightMeasure.StockingSkinOut(now));
+        System.Numerics.Vector3 P(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
+        var stocking = StarlightMeasure.StockingParts(knob).SelectMany(l => knob.Parts.First(p => p.Label == l).Triangles).ToHashSet();
+        float most = 0f, mostStocking = 0f;
+        for (int v = 0; v < knob.Positions.Length / 3; v++)
+        {
+            float d = System.Numerics.Vector3.Distance(P(knob, v), P(now, v));
+            most = MathF.Max(most, d);
+            if (stocking.Contains(v)) mostStocking = MathF.Max(mostStocking, d);
+        }
+        o.WriteLine($"largest move {most * 1000f:F2} mm, stockings {mostStocking * 1000f:F2} mm");
+        Assert.True(mostStocking > 0.001f, "the knee pass moved nothing");
+        Assert.True(most <= BodyRetarget.KneeBudget + 1e-4f, $"a vertex moved {most * 1000f:F2} mm");
+        Assert.True(mostStocking <= BodyRetarget.KneeStandoffMost + 0.001f, $"a stocking point moved {mostStocking * 1000f:F2} mm");
+
+        foreach (string part in StarlightMeasure.LegsParts(runs.Original).Where(StarlightMeasure.CoarseParts(runs.Original).Contains))
+        {
+            var lineNow = StarlightMeasure.OutOfLine(runs.Original, now, [part], perLength: true);
+            var lineKnob = StarlightMeasure.OutOfLine(runs.Original, knob, [part], perLength: true);
+            Assert.True(lineNow.Max <= lineKnob.Max + CoarseSlopeSlack && lineNow.P99 <= lineKnob.P99 + CoarseSlopeSlack,
+                        $"part {part} out of line {lineNow.Max:F3}/{lineNow.P99:F3}, knob {lineKnob.Max:F3}/{lineKnob.P99:F3}");
+        }
+        var turnedKnob = StarlightMeasure.TurnedOver(runs.Original, knob);
+        foreach (var (part, n) in StarlightMeasure.TurnedOver(runs.Original, now))
+            Assert.True(n <= turnedKnob.GetValueOrDefault(part), $"part {part} folds more");
+        Assert.True(StarlightMeasure.LeftOutInAuthorsHole(runs.Body, now) >= StarlightMeasure.LeftOutInAuthorsHole(runs.Body, knob));
+        Assert.True(StarlightMeasure.LeftOutAboveLegs(runs.Body, now) >= StarlightMeasure.LeftOutAboveLegs(runs.Body, knob));
+        Assert.DoesNotContain(StarlightMeasure.LeftOutBodySkin(runs.Body, now),
+                              p => p.Y is > 0.70f and < 0.90f && !StarlightMeasure.InCrotch(p));
     }
 }

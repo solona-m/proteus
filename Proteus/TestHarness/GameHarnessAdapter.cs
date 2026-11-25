@@ -63,6 +63,8 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     private readonly SidecarDiscoveryService discovery;
     private readonly GlamourerApplyDesign applyDesign;
     private readonly GlamourerApplyState applyState;
+    private readonly ICondition? condition;
+    private readonly IDataManager? data;
     private long designApplied;
 
     private readonly RedrawCounter redraws = new();
@@ -79,9 +81,11 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
                               UVRemapService uvRemap, Func<string, byte[]?> readGameFile, Action<string> onModChanged,
                               IPluginLog log, IDalamudPluginInterface pluginInterface, DesignBindingService designBindings,
                               OverlayEditRouter editRouter, PresetService presets, SidecarDiscoveryService discovery,
-                              IStudioHarness? studio = null)
+                              IStudioHarness? studio = null, ICondition? condition = null, IDataManager? data = null)
     {
         Studio = studio;
+        this.condition = condition;
+        this.data = data;
         this.discovery = discovery;
         this.penumbra = penumbra;
         this.glamourer = glamourer;
@@ -528,6 +532,112 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     public void SetAutoRedrawOverride(bool? enabled) => compositor.HarnessAutoRedrawOverride = enabled;
 
     public object RecoveryState() => compositor.HarnessRecoveryState();
+
+    // ── poses and the camera (knee standoff QA): typed ClientStructs members only, no raw offsets ──
+
+    public unsafe EmoteNow? EmoteState()
+    {
+        // The local character's game object: Mode (CharacterModes) and its EmoteController's current emote row.
+        var player = objects.LocalPlayer;
+        if (player == null) return null;
+        var chara = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)player.Address;
+        if (chara == null) return null;
+        return new EmoteNow(chara->Mode.ToString(), chara->EmoteController.EmoteId);
+    }
+
+    public string? EmoteBlocked()
+    {
+        if (condition == null) return "conditions-unreadable";
+        foreach (var (flag, name) in EmoteBlockers)
+            if (condition[flag]) return name;
+        return null;
+    }
+
+    private static readonly (Dalamud.Game.ClientState.Conditions.ConditionFlag Flag, string Name)[] EmoteBlockers =
+    [
+        (Dalamud.Game.ClientState.Conditions.ConditionFlag.InCombat, "InCombat"),
+        (Dalamud.Game.ClientState.Conditions.ConditionFlag.BoundByDuty, "BoundByDuty"),
+        (Dalamud.Game.ClientState.Conditions.ConditionFlag.Mounted, "Mounted"),
+        (Dalamud.Game.ClientState.Conditions.ConditionFlag.Casting, "Casting"),
+        (Dalamud.Game.ClientState.Conditions.ConditionFlag.Occupied, "Occupied"),
+        (Dalamud.Game.ClientState.Conditions.ConditionFlag.WatchingCutscene, "WatchingCutscene"),
+        (Dalamud.Game.ClientState.Conditions.ConditionFlag.OccupiedInCutSceneEvent, "OccupiedInCutSceneEvent"),
+    ];
+
+    public IReadOnlyDictionary<ushort, string>? EmoteRows(IEnumerable<ushort> ids)
+    {
+        try
+        {
+            var sheet = data?.GetExcelSheet<Lumina.Excel.Sheets.Emote>();
+            if (sheet == null) return null;
+            var rows = new Dictionary<ushort, string>();
+            foreach (var id in ids)
+            {
+                if (sheet.GetRowOrDefault(id) is not { } row || row.TextCommand.ValueNullable is not { } t) continue;
+                // Every form the row answers to: "Sit" is /lounge with /sit as its alias.
+                rows[id] = HarnessPose.JoinCommands(t.Command.ExtractText(), t.ShortCommand.ExtractText(),
+                                                    t.Alias.ExtractText(), t.ShortAlias.ExtractText());
+            }
+            return rows;
+        }
+        catch (Exception e)
+        {
+            log.Warning(e, "[Proteus] test harness: reading the Emote sheet failed");
+            return null;
+        }
+    }
+
+    public unsafe bool CanUseEmote(ushort id)
+    {
+        // AgentEmote's own check (unlocked and usable here), the one the emote window uses.
+        var agent = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentEmote.Instance();
+        return agent != null && agent->CanUseEmote(id);
+    }
+
+    public unsafe bool PlayEmote(ushort id)
+    {
+        // As the emote window plays it: untargeted, not added to the history.
+        var agent = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentEmote.Instance();
+        if (agent == null) return false;
+        agent->ExecuteEmote(id, null, false, false);
+        return true;
+    }
+
+    public unsafe CameraNow? Camera()
+    {
+        if (clientState.IsGPosing) return null;
+        if (condition != null && (condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.WatchingCutscene]
+                                  || condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.OccupiedInCutSceneEvent])) return null;
+        var manager = FFXIVClientStructs.FFXIV.Client.Game.Control.CameraManager.Instance();
+        if (manager == null) return null;
+        var camera = manager->GetActiveCamera();
+        if (camera == null) return null;
+        return new CameraNow(camera->DirH, camera->DirV, camera->Distance, camera->MinDistance, camera->MaxDistance,
+                             camera->DirVMin, camera->DirVMax);
+    }
+
+    public unsafe bool SetCamera(CameraPose pose)
+    {
+        var manager = FFXIVClientStructs.FFXIV.Client.Game.Control.CameraManager.Instance();
+        if (manager == null) return false;
+        var camera = manager->GetActiveCamera();
+        if (camera == null) return false;
+        camera->DirH = pose.DirH;
+        camera->DirV = pose.DirV;
+        // Both: the game eases Distance toward InterpDistance, so writing one alone is undone by the next frame.
+        camera->Distance = pose.Distance;
+        camera->InterpDistance = pose.Distance;
+        return true;
+    }
+
+    public float? PlayerRotation() => objects.LocalPlayer?.Rotation;
+
+    public (int Bones, int Models)? PoseDump(string dir)
+    {
+        if (data == null) return null;
+        var r = LivePoseDump.DumpCounted(objects, penumbra, data, log, dir, logFolder: false);
+        return r.Written ? (r.Bones, r.Models) : null;
+    }
 
     private void OnStateFinalized(StateFinalizationType type)
     {

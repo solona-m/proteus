@@ -78,6 +78,17 @@ public class HarnessDocsTests
         string adr = File.ReadAllText(Path.Combine(RepoRoot, "docs", "adr", "0002-qa-harness-compile-out-and-threat-model.md"));
         Assert.Contains("`mod-settings` takes `options`", adr);
 
+        // [AC-knee-standoff-8] [AC-knee-standoff-9] [AC-knee-standoff-10] the pose routes and their guide section.
+        foreach (var required in new[]
+                 {
+                     "/actions/emote", "/actions/camera", "/actions/posedump", "emote-busy", "emote-settling", "stand-requested",
+                     "camera-unavailable", "posedump-settling", "a pose change is still settling", "delete them by hand",
+                     "never quote a posedump path", "Poses and the camera",
+                 })
+            Assert.True(doc.Contains(required, StringComparison.Ordinal), $"adversarial-qa.md must mention '{required}'");
+        Assert.Contains("first\n  harness route whose effect leaves the client", adr.Replace("\r\n", "\n"));
+        Assert.Contains("the character's emote and camera", agents);
+
 #if PROTEUS_TEST_HARNESS
         // Every route the router serves has its row in the guide's table: "`GET /log?…`", "`POST /actions/refit`".
         foreach (var (method, path) in Proteus.TestHarness.HarnessRouter.Routes)
