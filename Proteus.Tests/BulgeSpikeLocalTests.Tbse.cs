@@ -138,4 +138,78 @@ public partial class BulgeSpikeLocalTests
                              + $"{SourceFolds(pair, source)}; cloth folds {CrossSexRefit.ClothFolded(garment, plan)}, missed {plan.Report.Missed}");
         }
     }
+
+    /// <summary>
+    /// Diagnostic (plan genital-switches, Phase 0.2a): every TBSE-X IVCS2 legs file — each skin submesh's tags, size, window
+    /// share, mean penis weight and rule, and each candidate piece's rim against the TBSE bulge's hole — the data the XL
+    /// plug decision and the re-stitch reach are taken from.
+    /// </summary>
+    [LocalDataFact(LocalData.Mods)]
+    [Trait("Suite", "Diagnostic")]
+    public void Tbsex_hole_probe()
+    {
+        var bulge = TbseBulge.Shared!;
+        string root = LocalData.Path(M + "The Body SE-X IVCS2 V1_1_0");
+        if (!Directory.Exists(root)) { output.WriteLine("TBSE-X not installed"); return; }
+        output.WriteLine($"bulge hole points: {bulge.Hole.Length}");
+        foreach (var f in Directory.GetFiles(root, "c0101e0000_dwn.mdl", SearchOption.AllDirectories).OrderBy(x => x, StringComparer.Ordinal))
+        {
+            var bytes = File.ReadAllBytes(f);
+            var parts = ModelPartReader.Read(bytes);
+            var skin = ModelSkinReader.Read(bytes, null, null);
+            string rel = Path.GetRelativePath(root, f);
+            if (parts == null || skin == null) { output.WriteLine($"{rel}: unreadable"); continue; }
+            var reading = GenitalParts.Read(parts, skin);
+            output.WriteLine($"{rel}: penis {reading?.Penis}");
+            if (reading == null) continue;
+            float OnPenis(int v)
+            {
+                float w = 0f;
+                for (int k = 0; k < XivLiveMesh.SkinnedMesh.MaxInfluences; k++)
+                    if (skin.BoneWeights[v * 8 + k] > 0f && GenitalParts.IsPenisBone(skin.BoneNames[skin.BoneIndices[v * 8 + k]]))
+                        w += skin.BoneWeights[v * 8 + k];
+                return w;
+            }
+            var skinParts = parts.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)).ToList();
+            var largest = skinParts.MaxBy(p => p.Triangles.Length);
+            foreach (var p in skinParts)
+            {
+                var vs = p.Triangles.Distinct().ToArray();
+                float window = vs.Count(v => GenitalParts.InWindow(At(parts, v), reading.Anchor)) / (float)vs.Length;
+                float mean = vs.Average(OnPenis);
+                var g = reading.Genitals.FirstOrDefault(x => x.Part == p);
+                output.WriteLine($"   {p.Label} mask {p.AttributeMask:x} tris {p.Triangles.Length / 3}{(p == largest ? " (largest)" : "")} "
+                                 + $"window {window:P0} penis weight {mean:0.00} rule {g?.Rule ?? "-"} ({g?.Triangles.Count ?? 0} tris)");
+                bool narrow = p.AttributeMask == 0 && p != largest && mean >= GenitalParts.PenisWeight;
+                if (g?.Rule != "c" && !narrow) continue;
+                var (count, worst) = RimAgainst(parts, p, bulge.Hole);
+                var match = BulgeSwap.MatchHole(parts, p, bulge.Hole);
+                output.WriteLine($"      candidate ({(g?.Rule == "c" ? "rule c" : "narrow rule")}): rim {count} points, worst nearest "
+                                 + $"{worst * 1000f:0.0} mm, MatchHole {(match != null ? "accepts" : "refuses")}");
+            }
+        }
+    }
+
+    /// <summary>A piece's rim on the body's other skin: its point count and the worst distance from one to the nearest hole point.</summary>
+    private static (int Count, float Worst) RimAgainst(ModelParts parts, ModelPart piece, IReadOnlyList<Vector3> hole)
+    {
+        (long, long, long) K(Vector3 p) => ((long)MathF.Round(p.X * 1e5f), (long)MathF.Round(p.Y * 1e5f), (long)MathF.Round(p.Z * 1e5f));
+        var other = new Dictionary<(long, long, long), Vector3>();
+        foreach (var part in parts.Parts.Where(p => p.Island < 0 && p != piece && SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+            foreach (int v in part.Triangles) other.TryAdd(K(At(parts, v)), At(parts, v));
+        var use = new Dictionary<((long, long, long), (long, long, long)), int>();
+        for (int t = 0; t + 2 < piece.Triangles.Length; t += 3)
+            for (int k = 0; k < 3; k++)
+            {
+                var a = K(At(parts, piece.Triangles[t + k]));
+                var b = K(At(parts, piece.Triangles[t + (k + 1) % 3]));
+                var e = a.CompareTo(b) < 0 ? (a, b) : (b, a);
+                use[e] = (use.TryGetValue(e, out int c) ? c : 0) + 1;
+            }
+        var pts = new HashSet<(long, long, long)>();
+        foreach (var (e, n) in use)
+            if (n == 1 && other.ContainsKey(e.Item1) && other.ContainsKey(e.Item2)) { pts.Add(e.Item1); pts.Add(e.Item2); }
+        float worst = pts.Count == 0 ? float.NaN : pts.Max(p => hole.Min(h => Vector3.Distance(h, other[p])));
+        return (pts.Count, worst);
+    }
 }

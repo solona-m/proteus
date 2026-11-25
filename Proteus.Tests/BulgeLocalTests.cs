@@ -163,6 +163,30 @@ public partial class BulgeLocalTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// The exact path, byte for byte as before the re-stitch (plan genital-switches, Phase 0.1): TBSE Gen B and TBSE-X
+    /// Flaccid M A (a real warp, 1.9 mm) made featureless, against hashes captured on the code before the change.
+    /// </summary>
+    [LocalDataFact(TbseOpt + "gen b" + E0, TbseXOpt + "flaccid m a" + E0)]
+    [Trait("Plan", "AC-genital-switches-6")]
+    [Trait("Plan", "EDGE-genital-switches-17")]
+    public void Exact_fits_are_byte_identical_to_today()
+    {
+        string Of(string need)
+        {
+            var swapped = BulgeSwap.Featureless(File.ReadAllBytes(LocalData.Path(need)), TbseBulge.Shared!, out var why);
+            Assert.True(swapped != null, why);
+            return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(swapped!.Model));
+        }
+        string genB = Of(TbseOpt + "gen b" + E0), flaccidMA = Of(TbseXOpt + "flaccid m a" + E0);
+        output.WriteLine($"gen b {genB}\nflaccid m a {flaccidMA}");
+        Assert.Equal(TodayGenB, genB);
+        Assert.Equal(TodayFlaccidMA, flaccidMA);
+    }
+
+    private const string TodayGenB = "47F6AC41EB4B5E53A63DDBB0AB215B59970C8C816B4718E9B4D2C5127CF797E8";
+    private const string TodayFlaccidMA = "FEFEEFBB0A948EF520FA1ADBC4ECF80FBAB8AEC8C1F0B5A6122FEEC3A6949155";
+
+    /// <summary>
     /// Men's pants moved between men's bodies (AC-4): Twill Trousers, made on TBSE SFW, onto TBSE Gen A (within one body
     /// mod) and onto TBSE-X Flaccid M A (across body mods), as Studio's Body size builds the pair and plans it — fewer
     /// folds than today, no penis skin left, the bulge's log line said.
