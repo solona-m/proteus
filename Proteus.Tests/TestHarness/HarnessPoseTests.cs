@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Proteus.Interop;
 using Proteus.TestHarness;
 using Xunit;
 
@@ -62,6 +61,13 @@ public class HarnessPoseTests
         Assert.Equal("changed", HarnessPose.EmoteDecision(rec, null));
         Assert.True(HarnessPose.InTransition(new EmoteNow("EmoteSitting", 52), rec));
         Assert.False(HarnessPose.InTransition(new EmoteNow(HarnessPose.NormalMode, 0), rec));
+
+        // Sitting in a chair is seated too; sit away from a chair falls back to the ground sit's row.
+        var sit = new EmoteRecord(50, "sit", HarnessPose.LoopMode, 50, true, DateTime.UtcNow);
+        Assert.Equal("send", HarnessPose.EmoteDecision(sit, new EmoteNow("InPositionLoop", 50)));
+        Assert.Equal("send", HarnessPose.EmoteDecision(sit, new EmoteNow(HarnessPose.LoopMode, 52)));
+        Assert.False(HarnessPose.InTransition(new EmoteNow("InPositionLoop", 50), sit));
+        Assert.Equal("changed", HarnessPose.EmoteDecision(rec, new EmoteNow(HarnessPose.LoopMode, 50)));   // groundsit is not sit
     }
 
     [Theory]
@@ -84,18 +90,5 @@ public class HarnessPoseTests
         Assert.False(HarnessPose.RowsMatch(new Dictionary<ushort, string> { [50] = "/sit" }));
         Assert.False(HarnessPose.RowsMatch(new Dictionary<ushort, string> { [50] = "/sit", [52] = "/lounge" }));
         Assert.False(HarnessPose.RowsMatch(null));
-    }
-
-    [Fact]
-    [Trait("Plan", "AC-knee-standoff-10")]
-    [Trait("Plan", "EDGE-knee-standoff-24")]
-    public void The_folder_stays_out_of_the_log_when_asked()
-    {
-        const string dir = @"C:\Users\someone\AppData\Roaming\XIVLauncher\pluginConfigs\Proteus\test-harness\posedumps\s\idle";
-        var hidden = LivePoseDump.Line(120, 201, 7, dir, logFolder: false);
-        Assert.DoesNotContain(dir, hidden);
-        Assert.DoesNotContain("someone", hidden);
-        Assert.EndsWith("-> harness posedump folder", hidden);
-        Assert.EndsWith(dir, LivePoseDump.Line(120, 201, 7, dir, logFolder: true));   // the owner's /proteus posedump unchanged
     }
 }

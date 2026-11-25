@@ -226,6 +226,61 @@ public class HarnessPoseRoutesTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-knee-standoff-9")]
+    [Trait("Plan", "EDGE-knee-standoff-31")]
+    public async Task Busy_while_the_camera_settles()
+    {
+        Use(Fast with { CameraSettle = TimeSpan.FromMilliseconds(800) });
+        var camera = fx.Post("/actions/camera", """{"yaw":180}""");
+        await WaitUntil(() => fx.Changes.PoseSettling);
+        foreach (var (path, json) in new[]
+                 {
+                     ("/actions/emote", """{"emote":"sit"}"""), ("/actions/equip", """{"slot":"Body","item":500}"""),
+                     ("/actions/put-back", "{}"), ("/actions/camera", """{"yaw":90}"""),
+                 })
+        {
+            var (s, b) = await fx.Post(path, json);
+            Assert.True((s, Code(b)) == (409, "busy"), $"{path}: {s} {b}");
+        }
+        Assert.Equal(200, (await fx.Post("/actions/posedump", """{"label":"camera-settle"}""")).Status);
+        Assert.Equal(200, (await camera).Status);
+        Assert.False(fx.Changes.PoseSettling);
+
+        // Stopping during the settle: harness-stopping, the camera still recorded (so put-back or the leftovers know it).
+        var again = fx.Post("/actions/camera", """{"yaw":90}""");
+        await WaitUntil(() => fx.Changes.PoseSettling);
+        fx.Changes.BeginStop();
+        var (status, body) = await again;
+        Assert.Equal((503, "harness-stopping"), (status, Code(body)));
+        Assert.NotNull(fx.Changes.CameraRecordNow);
+        Assert.False(fx.Changes.PoseSettling);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-knee-standoff-22")]
+    public async Task An_emote_is_recorded_as_soon_as_it_is_played()
+    {
+        Use(Fast with { EmoteSettle = TimeSpan.FromMilliseconds(600) });
+        var emote = fx.Post("/actions/emote", """{"emote":"groundsit"}""");
+        await WaitUntil(() => fx.Changes.PoseSettling);
+        Assert.Contains("emote:groundsit", fx.Changes.Leftovers());
+        fx.Changes.BeginStop();
+        var (status, body) = await emote;
+        Assert.Equal((503, "harness-stopping"), (status, Code(body)));
+        Assert.Contains("emote:groundsit", fx.Changes.Leftovers());
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-knee-standoff-21")]
+    public async Task An_unreadable_sheet_is_asked_again_not_taken_as_changed()
+    {
+        Game.Rows = null;
+        Assert.Equal((409, "emote-unavailable"), await Refusal("""{"emote":"sit"}"""));
+        Game.Rows = new() { [50] = "/lounge|/sit", [52] = "/groundsit" };
+        Assert.Equal(200, (await fx.Post("/actions/emote", """{"emote":"sit"}""")).Status);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-knee-standoff-31")]
     public async Task The_gate_clears_when_the_read_hop_throws()
     {

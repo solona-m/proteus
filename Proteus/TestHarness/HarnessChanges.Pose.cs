@@ -49,18 +49,27 @@ internal sealed partial class HarnessChanges
         if (poseSettling) return (0, ChangeResult.Fail(409, "busy", SettlingMessage));
         if (!HarnessPose.Allowlist.TryGetValue(name, out var row))
             return (0, ChangeResult.Fail(400, "emote-not-allowed", $"emote must be one of {string.Join(", ", HarnessPose.Allowlist.Keys)}"));
-        emoteRowsMatch ??= HarnessPose.RowsMatch(game.EmoteRows(HarnessPose.Allowlist.Values.Select(v => v.Id)));
+        if (emoteRowsMatch == null)
+        {
+            // Cached only once the sheet was read: a failed read is asked again next time, never taken as a changed table.
+            var rows = game.EmoteRows(HarnessPose.Allowlist.Values.Select(v => v.Id));
+            if (rows == null) return (0, ChangeResult.Fail(409, "emote-unavailable", "the game's Emote sheet could not be read"));
+            emoteRowsMatch = HarnessPose.RowsMatch(rows);
+        }
         if (emoteRowsMatch != true)
             return (0, ChangeResult.Fail(409, "emote-table-changed", "the game's Emote sheet no longer has the pinned rows; the harness plays none"));
         if (game.EmoteState() is not { } now) return (0, ChangeResult.Fail(409, "no-player", "no local character"));
         if (game.EmoteBlocked() is { } blocked) return (0, ChangeResult.Fail(409, $"emote-blocked:{blocked}", $"an emote is not allowed now ({blocked})"));
         if (DateTime.UtcNow - lastEmoteUtc < interval || HarnessPose.InTransition(now, emote))
             return (0, ChangeResult.Fail(429, "emote-settling", "the last emote is still settling; wait a few seconds"));
-        if (now.Mode == HarnessPose.LoopMode)
+        if (HarnessPose.IsLoopMode(now.Mode))
             return (0, ChangeResult.Fail(409, "emote-busy", "the character is already in an emote loop; put back (or stand up) first"));
         if (!game.CanUseEmote(row.Id)) return (0, ChangeResult.Fail(409, "emote-unavailable", $"the game does not allow {name} now"));
         if (!game.PlayEmote(row.Id)) return (0, ChangeResult.Fail(409, "emote-unavailable", "the emote agent is not available"));
         lastEmoteUtc = DateTime.UtcNow;
+        // Recorded at once (as the camera is): a stop during the settle still knows the character sat, puts it back on the
+        // framework thread, or lists it as left off it. The read hop fills in what it read.
+        emote = new EmoteRecord(row.Id, name, now.Mode, 0, false, DateTime.UtcNow);
         poseSettling = true;   // set in this hop, so nothing lands before the router's wait; it clears it in a finally
         log?.Information("[Proteus] test harness: played emote {0}", name);
         return (row.Id, null);
