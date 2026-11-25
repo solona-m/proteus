@@ -377,6 +377,37 @@ internal interface IHarnessGame
 
     /// <summary>The write-retry latch, the drawn check's steps, the shell fault and the move fault, for /state. Any thread.</summary>
     object RecoveryState();
+
+    // ── poses and the camera (knee standoff QA); framework thread, inside a hop only ──
+
+    /// <summary>The local character's mode and the emote it plays; null with no character.</summary>
+    EmoteNow? EmoteState();
+
+    /// <summary>The condition that forbids an emote now (in combat, bound by duty, mounted, casting, occupied, in a
+    /// cutscene), by name; null when none does.</summary>
+    string? EmoteBlocked();
+
+    /// <summary>The Emote sheet's text commands for the given rows (id → command, lower-case); null when unreadable.</summary>
+    IReadOnlyDictionary<ushort, string>? EmoteRows(IEnumerable<ushort> ids);
+
+    /// <summary>Whether the game lets the player use this emote now (unlocked, usable here).</summary>
+    bool CanUseEmote(ushort id);
+
+    /// <summary>Play an emote as the player would (untargeted, not added to history); a looping one played again stands up.</summary>
+    bool PlayEmote(ushort id);
+
+    /// <summary>The active camera's orbit and limits; null with no active camera, in GPose or a cutscene.</summary>
+    CameraNow? Camera();
+
+    /// <summary>Write the active camera's orbit (distance and its interpolated value together).</summary>
+    bool SetCamera(CameraPose pose);
+
+    /// <summary>The local character's facing (radians); null with no character.</summary>
+    float? PlayerRotation();
+
+    /// <summary>Dump the live pose and drawn models into <paramref name="dir"/> without logging the folder; null with no
+    /// character or no readable skeleton.</summary>
+    (int Bones, int Models)? PoseDump(string dir);
 }
 
 /// <summary>A mod's own (permanent) settings in a collection. <see cref="Own"/> false: the collection has no setting of its

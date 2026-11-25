@@ -178,8 +178,31 @@ internal sealed partial class HarnessRouter
     {
         var (_, bad) = JsonBody(request);
         if (bad != null) return bad;
-        var report = await OnFramework(() => changes.ApplySettling ? null : changes.PutBack());
-        if (report == null) return HarnessResponse.Error(409, "busy", "a design apply is still settling; wait for its answer");
+        string? busy = null;
+        var report = await OnFramework(() =>
+        {
+            if (changes.ApplySettling) { busy = "a design apply is still settling; wait for its answer"; return null; }
+            if (changes.PoseSettling) { busy = "a pose change is still settling; wait for its answer"; return null; }
+            var r = changes.PutBack();
+            // Set in this same hop, so nothing lands between the stand-up and its confirming read.
+            if (r.Pose.Any) changes.PoseSettling = true;
+            return r;
+        });
+        if (report == null) return HarnessResponse.Error(409, "busy", busy ?? "busy");
+
+        // The pose put-back was only sent: one wait off the framework thread, then one hop confirms both.
+        (string Emote, string Camera) pose = (report.Pose.Emote, report.Pose.Camera);
+        string? confirm = null;
+        if (report.Pose.Any)
+        {
+            try
+            {
+                await Task.Delay(jobs.Timings.PutBackConfirm);
+                if (changes.Stopping) confirm = "harness-stopping";
+                else pose = await OnFramework(() => changes.ConfirmPose(report.Pose));
+            }
+            finally { changes.PoseSettling = false; }
+        }
         var b = report.Binding;
         return Scrubbed(200, new
         {
@@ -213,6 +236,7 @@ internal sealed partial class HarnessRouter
                     autoRedraw = new { result = o.AutoRedraw },
                 }
                 : null,
+            pose = new { emote = pose.Emote, camera = pose.Camera, confirm },
         });
     }
 

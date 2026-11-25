@@ -76,8 +76,14 @@ internal sealed class FakeFrameworkDispatcher : IFrameworkDispatcher, IDisposabl
     /// sidecar lock).</summary>
     public Func<bool>? RefuseHopWhen { get; set; }
 
+    /// <summary>How many <see cref="RunAsync{T}"/> hops and unabandonable posts were asked for.</summary>
+    public int Hops => Volatile.Read(ref hops);
+    public int Unabandonables => Volatile.Read(ref unabandonables);
+    private int hops, unabandonables;
+
     public Task<T> RunAsync<T>(Func<T> work, TimeSpan startTimeout, CancellationToken ct = default)
     {
+        Interlocked.Increment(ref hops);
         if (RefuseHopWhen?.Invoke() == true)
             throw new InvalidOperationException("a framework hop was asked for while the sidecar lock is held");
         var ticket = new DispatchTicket();
@@ -93,6 +99,7 @@ internal sealed class FakeFrameworkDispatcher : IFrameworkDispatcher, IDisposabl
 
     public Task<bool> RunUnabandonable(Action work, Func<bool> skip)
     {
+        Interlocked.Increment(ref unabandonables);
         if (FaultNextUnabandonable)
         {
             FaultNextUnabandonable = false;

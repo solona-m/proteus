@@ -95,6 +95,9 @@ four requests were open at once: retry when one finishes; it is never a busy run
 | `POST /actions/output-lock` | `{"files":["textures/ss_*_*.tex"],"ms":1..120000}` (hold the files), `{"files":[…],"failMoves":1..20}` (fail their next moves) or `{"release":true}` → 200 `{mode:"lock", held:[{file,bytes}], untilUtc}` / `{mode:"fail-moves", patterns, failMoves, untilUtc}` / `{released:[file], movesLeft}`. Paths are into Proteus's **own** output mod: `textures`, `materials` or `models`, a slash, and a leaf that may hold `*`. `ms` holds up to 32 existing files read-only (no write or delete sharing): a replace fails as when the game holds them. `failMoves` makes the next N moves of matching files into place fail with a sharing violation (patterns may name files not yet written); only moves into Proteus's own output folder are ever failed, never a user's mod. One set at a time; released at expiry, on release, at put-back, on `off` and on unload. 400 `invalid-field`; 404 `no-match` (`ms` only); 409 `locks-held`; 503 `harness-stopping`. |
 | `POST /actions/shell-fault` | `{"shell":"ss_1"\|"any","slot":"norm\|mask\|id\|base\|catc" (default norm),"until":"auto-redraw\|put-back"}` or `{"clear":true}` → 200 `{armed, shell, slot, until}` / `{cleared, recomposite}`. Every publishing composite while armed leaves that shell texture out of Proteus's own manifest, so the shell's material fails to load and the shell is partly drawn. `auto-redraw`: healed just before Proteus's automatic redraw (manifest rebuilt from the live one, manipulations kept), so the redraw draws it; `put-back`: stays withheld, so the named message follows. Clear, put-back and `off` clear it and recomposite; an unload or a stop off the framework thread clears it without one (the next composite after reload publishes in full). Never counts as a write failure. 400 `invalid-field`; 409 `fault-armed`; 503 `harness-stopping`. |
 | `POST /actions/auto-redraw` | `{"enabled":true\|false}` → 200 `{config, harnessOverride, effective, before, recomposite}`. Switches auto redraw for the compositor for this harness session only: in memory, never saved; put-back or unload clears it. Switching it back on recomposites (`recomposite: true`), as the Settings checkbox does. 400 `invalid-field`; 503 `harness-stopping`. |
+| `POST /actions/emote` | `{"emote":"sit"\|"groundsit"}` → 200 `{applied, emote, mode, settled}` after ~3 s. Plays an allowlisted looping emote (other players see it). 400 `emote-not-allowed`, `invalid-field`; 409 `busy`, `no-player`, `emote-blocked:<condition>`, `emote-unavailable`, `emote-busy` (already in an emote loop), `emote-table-changed`; 429 `emote-settling` (one every 3 s; or still sitting down / standing up); 503 `harness-stopping`. See **Poses and the camera**. |
+| `POST /actions/camera` | `{"yaw":deg,"pitch":deg,"distance":m}` (any of them; yaw relative to the character's facing, 0 = in front, 180 = behind) → 200 `{applied:{yaw,pitch,distance}, settled:{…}, clamped:[field…]}` after ~0.5 s. 400 `bad-value`, `invalid-field`; 409 `busy`, `camera-unavailable` (GPose, a cutscene, no camera); 503 `harness-stopping`. |
+| `POST /actions/posedump` | `{"label":"[a-z0-9-]{1,32}"}` → 200 `{folder, bones, models}` (folder relative to the harness data folder). 400 `bad-label`; 409 `exists`, `no-player`; 429 `posedump-settling` (one every 5 s). Never refused by `busy`. |
 | `GET /jobs/{id}` | `{id, kind, modDir, state: queued\|running\|done\|failed\|cancelled, progress, backup, reloaded, redrawRequested, redrawObserved, autoRefitFollowed, result, restored, error}` |
 
 `mod` is the **folder name** Penumbra keeps the mod in (case-insensitive), never its
@@ -528,6 +531,37 @@ lastHeal: healed|gave-up}` and `moveFault {patterns, movesLeft}`.
   further toggle gives no second redraw and no second line.
 - **Auto redraw off:** `auto-redraw {"enabled":false}` → no automatic redraw and the "Auto redraw is off" message; no
   retry timer and `scheduledRetries60s` unchanged.
+
+## Poses and the camera
+
+For fit checks from behind and in a bent pose (knee standoff). Other players see an
+emote: keep it to what the check needs.
+
+- `POST /actions/emote {"emote":"groundsit"}` (or `sit`; nothing else) sits the
+  character; the answer comes after ~3 s with `settled: true` once `mode` is the loop.
+  One emote every 3 s; refused while sitting down or standing up (`emote-settling`),
+  when already in an emote loop (`emote-busy`: put back first), and in combat, duty,
+  mounted, casting, occupied or a cutscene (`emote-blocked:<condition>`).
+- `POST /actions/camera {"yaw":180}` turns the camera to look at the back (90 / -90:
+  the sides; `pitch` and `distance` too, clamped and listed in `clamped`). The game's
+  auto-adjusting camera options may move it again later: a put-back then reports
+  `changed` and leaves it.
+- Recipe for a back/side screenshot: `emote` (or not), `camera {"yaw":180}`, wait for
+  the answer, `/screenshot`, `camera {"yaw":90}`, `/screenshot`, then `put-back`.
+- While an emote or camera change settles, or a put-back confirms, other changes
+  answer 409 `busy` ("a pose change is still settling; wait for its answer"); reads and
+  `posedump` still answer.
+- HTTP `put-back` stands the character up (the emote played again) and puts the camera
+  back while they are still what the harness left, then confirms ~4 s later:
+  `pose.emote` `stood` / `failed` / `changed` / `none`, `pose.camera` `restored` /
+  `changed` / `none`. A `failed` stand-up stays recorded: read `/state.pose` again after
+  5 s, and put back again if still seated. `stand-requested` is only ever seen in the
+  log after a stop on the framework thread (`off`), never in an HTTP answer; a stop off
+  it (an unload) sends nothing and logs `emote:<name>` and `camera` as left.
+- `POST /actions/posedump {"label":"idle"}` writes the live pose and drawn models under
+  the harness data folder (`posedumps/<session>/<label>/`). The harness never deletes
+  them: delete them by hand when done. They list your mod files:
+  never quote a posedump path in a report, issue or commit.
 
 ## Waiting for the game
 

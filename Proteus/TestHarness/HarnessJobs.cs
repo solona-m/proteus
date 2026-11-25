@@ -92,6 +92,15 @@ internal sealed record HarnessTimings(TimeSpan FrameworkStart, TimeSpan RedrawWa
     /// tests set it short.</summary>
     public TimeSpan AutoRefitNowWait { get; init; } = TimeSpan.FromMinutes(5);
 
+    /// <summary>The pose routes' off-thread waits and rate limits (knee standoff QA): an emote settles 3 s before it is
+    /// read; a camera write 0.5 s; put-back's stand-up and camera restore 4 s before they are confirmed; one emote every
+    /// 3 s and one pose dump every 5 s per session. Tests set them short.</summary>
+    public TimeSpan EmoteSettle { get; init; } = TimeSpan.FromSeconds(3);
+    public TimeSpan CameraSettle { get; init; } = TimeSpan.FromMilliseconds(500);
+    public TimeSpan PutBackConfirm { get; init; } = TimeSpan.FromSeconds(4);
+    public TimeSpan EmoteInterval { get; init; } = TimeSpan.FromSeconds(3);
+    public TimeSpan PoseDumpInterval { get; init; } = TimeSpan.FromSeconds(5);
+
     public static readonly HarnessTimings Default = new(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10),
                                                         TimeSpan.FromSeconds(5), TimeSpan.FromMilliseconds(500),
                                                         TimeSpan.FromSeconds(10));

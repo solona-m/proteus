@@ -197,10 +197,19 @@ internal sealed class HarnessHost : IDisposable
                                                 .Concat(r.Studio.Select(s => $"Studio {s.Mod} files {s.Files}, panel {s.Panel}{(s.Code is { } code ? $" ({code})" : "")}"))),
                             (r.Binding is { } b ? $"; binding: glamourer {b.Glamourer}, live {b.Live}, {b.Permanent.Count} permanent" : "")
                             + (r.AutoRefitPreference != "none" ? $"; auto refit preference {r.AutoRefitPreference}" : "")
-                            + (r.JobBackedMods.Count > 0 ? "; restore by job: " + string.Join(", ", r.JobBackedMods.Select(m => $"{m.Name} ({m.Code})")) : ""));
+                            + (r.JobBackedMods.Count > 0 ? "; restore by job: " + string.Join(", ", r.JobBackedMods.Select(m => $"{m.Name} ({m.Code})")) : "")
+                            + (r.Pose.Emote != "none" || r.Pose.Camera != "none" ? $"; pose: emote {StopPoseWord(r.Pose.Emote)}, camera {StopPoseWord(r.Pose.Camera)}" : ""));
         }
         catch (Exception e) { log.Warning(e, "[Proteus] test harness: putting back as it stopped failed"); }
     }
+
+    /// <summary>A stop never waits for the pose put-back it sent: the stand-up is only requested, the camera restore unconfirmed.</summary>
+    internal static string StopPoseWord(string sent) => sent switch
+    {
+        "stand-sent" => "stand-requested",
+        "restore-sent" => "restored",
+        _ => sent,
+    };
 
     /// <summary>
     /// Plugin unload, possibly off the framework thread. Never waits on a framework hop: a queued after-change sees
