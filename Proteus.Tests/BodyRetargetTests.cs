@@ -727,7 +727,7 @@ public partial class BodyRetargetTests
         var traced = BodyRetarget.Solve(garment, pairs, "_top", replaceSkin: true,
                                         trace: (stage, delta) => { stages.Add(stage); last = delta; });
 
-        Assert.Equal(["transfer", "knit", "layer-knit", "lay", "follow", "push", "unfold", "relax", "face-settle",
+        Assert.Equal(["transfer", "knit", "layer-knit", "lay", "follow", "push", "unfold", "relax", "face-settle", "knee-standoff",
                       "rim-lift", "standoff", "layer-order"], stages);
         Assert.True(plain.WorstMove > 0f, "the garment should have moved");
         Assert.Equal(plain.Pushed, traced.Pushed);

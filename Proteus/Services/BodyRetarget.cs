@@ -990,7 +990,7 @@ internal static partial class BodyRetarget
     /// <param name="swapMeshes">The skin meshes the swap replaces (<see cref="PartedSkinMeshes"/>), as <see cref="Plan"/>
     /// works them out once for both the solve and the rebuild; null works them out here.</param>
     /// <param name="trace">Each stage by name — "transfer", "knit", "layer-knit", "lay", "follow", "push", "unfold",
-    /// "relax", "face-settle", "rim-lift", "standoff", "layer-order" — with a copy of every node's move so far, indexed as
+    /// "relax", "face-settle", "knee-standoff", "rim-lift", "standoff", "layer-order" — with a copy of every node's move so far, indexed as
     /// <see cref="Sets.NodeOf"/> maps vertices — and "outfit-order" after them when <paramref name="outfit"/> is given.
     /// Changes nothing; null skips the copies.</param>
     /// <param name="outfit">The other piece of the garment's outfit, which it was authored over and must stay outside

@@ -197,9 +197,18 @@ public partial class BodyRetargetTests
         float[] nrm = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, -1, 0];
         var garment = Build(pos, nrm, [0, 1, 2, 1, 0, 3], ClothMaterial);
         var (check, delta, sets) = FaceSetup(garment, Cube(0.20f, SkinMaterial), Bumped(0.0005f));
-        float worst = 0f;
-        BodyRetarget.ClearFaces(check, delta, new float[sets.NodeCount], ref worst, null, Goal(0), out _);
+        var traced = Traced(() => { float worst = 0f; BodyRetarget.ClearFaces(check, delta, new float[sets.NodeCount], ref worst, null, Goal(0), out _); });
+        Assert.Contains("knee-turned-over", traced);   // the guard fired
         Assert.Equal(0, Folded(garment, delta, sets));
+    }
+
+    private static List<string> Traced(Action run)
+    {
+        var traced = new List<string>();
+        BodyRetarget.FaceTrace.Value = (_, why) => traced.Add(why);
+        try { run(); }
+        finally { BodyRetarget.FaceTrace.Value = null; }
+        return traced;
     }
 
     [Fact]
@@ -217,8 +226,8 @@ public partial class BodyRetargetTests
         float[] nrm = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1];
         var garment = Build(pos, nrm, [0, 1, 2, 3, 4, 5], ClothMaterial);
         var (check, delta, sets) = FaceSetup(garment, Cube(0.20f, SkinMaterial), Bumped(0.0005f));
-        float worst = 0f;
-        BodyRetarget.ClearFaces(check, delta, new float[sets.NodeCount], ref worst, null, Goal(0), out _);
+        var traced = Traced(() => { float worst = 0f; BodyRetarget.ClearFaces(check, delta, new float[sets.NodeCount], ref worst, null, Goal(0), out _); });
+        Assert.Contains("knee-layer-guard", traced);   // the guard fired
         for (int v = 0; v < 3; v++)
         {
             float z = At(garment, v).Z + delta[sets.NodeOf[v]].Z;

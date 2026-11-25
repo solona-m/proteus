@@ -240,7 +240,7 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
     /// <summary>The knee pass against its knob, per size: the bent counts in every pose (pairs made on the knob model),
     /// at rest still clean, the largest move against the knob, and the benefit gate's idle cut.</summary>
     [LocalDataTheory(LocalData.StarlightMod, LocalData.TightFirmMod, LocalData.NeolitheMod, LocalData.BiboPlusMod,
-                     LocalData.RueMod, LocalData.YabMod, LocalData.TreMod, LocalData.RosalineMod, LocalData.UvMaps, LocalData.IdlePose)]
+                     LocalData.RueMod, LocalData.YabMod, LocalData.TreMod, LocalData.RosalineMod, LocalData.UvMaps, LocalData.IdlePose, LocalData.IdleFreshPose)]
     [MemberData(nameof(Names))]
     [Trait("Suite", "Diagnostic")]
     [Trait("Plan", "AC-knee-standoff-1")]
