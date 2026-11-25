@@ -84,6 +84,10 @@ public class HarnessPoseTests
     [InlineData("a b", false)]
     [InlineData("abcdefghijabcdefghijabcdefghijabc", false)]
     [InlineData(null, false)]
+    [InlineData("con", false)]
+    [InlineData("com1", false)]
+    [InlineData("nul", false)]
+    [InlineData("console", true)]
     [Trait("Plan", "EDGE-knee-standoff-24")]
     public void Labels_are_plain(string? label, bool ok) => Assert.Equal(ok, HarnessPose.ValidLabel(label));
 

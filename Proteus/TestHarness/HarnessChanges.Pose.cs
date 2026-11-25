@@ -130,7 +130,16 @@ internal sealed partial class HarnessChanges
         if (Directory.Exists(dir)) return ChangeResult.Fail(409, "exists", $"a dump labelled {label} exists this session");
         lastDumpUtc = DateTime.UtcNow;
         if (game.PoseDump(dir) is not { } counts) return ChangeResult.Fail(409, "no-player", "no local character or skeleton");
-        return ChangeResult.Ok(new { folder = relative.Replace('\\', '/'), bones = counts.Bones, models = counts.Models });
+        // What the character was doing, beside the dump: a dump taken standing or on the idle camera is told apart from a
+        // real sit (the measure's copies are chosen by it).
+        var (pose, camera) = PoseView();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "harness.json"),
+                              System.Text.Json.JsonSerializer.Serialize(new { label, pose, camera, atUtc = DateTime.UtcNow }));
+        }
+        catch (Exception ex) { log?.Warning(ex, "[Proteus] test harness: writing the dump's harness.json failed"); }
+        return ChangeResult.Ok(new { folder = relative.Replace('\\', '/'), bones = counts.Bones, models = counts.Models, pose });
     }
 
     /// <summary>The harness data folder (<c>…/test-harness</c>): the backups' parent.</summary>
@@ -215,7 +224,8 @@ internal sealed partial class HarnessChanges
         var now = game.EmoteState();
         var cam = game.Camera();
         float rotation = game.PlayerRotation() ?? 0f;
-        string? name = now is { } n && n.EmoteId != 0
+        // Only while seated: the controller keeps the last emote's row after the character stands (and on the idle camera).
+        string? name = now is { } n && n.EmoteId != 0 && HarnessPose.IsLoopMode(n.Mode)
             ? HarnessPose.Allowlist.FirstOrDefault(kv => kv.Value.Id == n.EmoteId).Key ?? $"#{n.EmoteId}"
             : null;
         return (new { emote = name, mode = now?.Mode ?? "unknown" },

@@ -48,7 +48,10 @@ internal static class HarnessPose
     private static readonly Regex LabelRule = new("^[a-z0-9-]{1,32}$", RegexOptions.CultureInvariant);
 
     /// <summary>A posedump label: lower-case letters, digits and hyphens, 1 to 32.</summary>
-    public static bool ValidLabel(string? label) => label != null && LabelRule.IsMatch(label);
+    public static bool ValidLabel(string? label) => label != null && LabelRule.IsMatch(label) && !Reserved.IsMatch(label);
+
+    /// <summary>Windows' reserved device names: a folder named so misbehaves on older Windows.</summary>
+    private static readonly Regex Reserved = new("^(con|prn|aux|nul|com[0-9]|lpt[0-9])$", RegexOptions.CultureInvariant);
 
     /// <summary>Whether each allowlisted row answers to its text command (rows: id → every command, alias and short form
     /// the row has, '|'-joined; null when unreadable).</summary>

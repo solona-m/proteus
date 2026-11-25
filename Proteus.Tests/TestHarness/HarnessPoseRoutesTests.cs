@@ -361,9 +361,14 @@ public class HarnessPoseRoutesTests : IDisposable
         Assert.Equal("posedumps/session-a/idle-fresh", folder);
         Assert.Equal(120, body.GetProperty("bones").GetInt32());
         Assert.Equal(7, body.GetProperty("models").GetInt32());
-        Assert.DoesNotContain(":", body.GetRawText().Replace("\"bones\":", "").Replace("\"models\":", "").Replace("\"folder\":", ""));
+        Assert.DoesNotContain(":\\\\", body.GetRawText());          // no absolute path
+        Assert.DoesNotContain(fx.Temp.Path.Replace("\\", "\\\\"), body.GetRawText());
         var dir = Game.Dumps.Single();
         Assert.StartsWith(Path.Combine(fx.Temp.Path, "config", "test-harness", "posedumps", "session-a"), dir);
+        // What the character was doing is written beside the dump (and answered).
+        var beside = File.ReadAllText(Path.Combine(dir, "harness.json"));
+        Assert.Contains("\"mode\":\"Normal\"", beside);
+        Assert.Equal(HarnessPose.NormalMode, body.GetProperty("pose").GetProperty("mode").GetString());
 
         Assert.Equal((409, "exists"), await DumpRefusal("""{"label":"idle-fresh"}"""));
         foreach (var bad in new[] { "../x", "", "Idle", new string('a', 33), "a b" })
@@ -402,5 +407,10 @@ public class HarnessPoseRoutesTests : IDisposable
         Assert.Equal(HarnessPose.LoopMode, state.GetProperty("pose").GetProperty("mode").GetString());
         Assert.Equal(180f, MathF.Abs(state.GetProperty("camera").GetProperty("yaw").GetSingle()), 2);
         Assert.Equal("groundsit", state.GetProperty("harnessChanges").GetProperty("emote").GetProperty("name").GetString());
+
+        // Standing with a stale emote row on the controller: no emote shown.
+        Game.EmoteValue = new EmoteNow(HarnessPose.NormalMode, 107);
+        var (_, standing) = await fx.Get("/state");
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, standing.GetProperty("pose").GetProperty("emote").ValueKind);
     }
 }

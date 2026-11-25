@@ -559,7 +559,9 @@ emote: keep it to what the check needs.
   log after a stop on the framework thread (`off`), never in an HTTP answer; a stop off
   it (an unload) sends nothing and logs `emote:<name>` and `camera` as left.
 - `POST /actions/posedump {"label":"idle"}` writes the live pose and drawn models under
-  the harness data folder (`posedumps/<session>/<label>/`). The harness never deletes
+  the harness data folder (`posedumps/<session>/<label>/`), with `harness.json` beside it saying what the character
+  was doing (emote, mode, camera): check it before using a dump as a sit (Windows device names such as `con` are
+  refused as labels). `/state.pose.emote` names an emote only while seated. The harness never deletes
   them: delete them by hand when done. They list your mod files:
   never quote a posedump path in a report, issue or commit.
 
