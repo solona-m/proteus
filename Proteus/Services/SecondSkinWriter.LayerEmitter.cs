@@ -306,6 +306,9 @@ public static partial class SecondSkinWriter
                 {
                     foreach (var geo in def.Geometry)
                     {
+                        // Copies under the garment's switches carry those tags; geometry emitted untagged could not.
+                        if (geo.OwnAttributes && geo.Switches is { Count: > 0 })
+                            throw new InvalidOperationException("switches on geometry emitted untagged (OwnAttributes)");
                         var gsrc = build.geomByModel[geo.Model];
                         var gs = gsrc.S;
                         int gEnd = gsrc.Lod0MeshIndex + gsrc.Lod0MeshCount;
@@ -321,7 +324,8 @@ public static partial class SecondSkinWriter
                             build.EmitMesh(gsrc, m, matIndex, 0f, preserve: true, cov: null,
                                 mirrorUv1: geo.MirrorUv1,
                                 hiddenAttrs: geo.HiddenAttributes, clearAttrs: geo.OwnAttributes,
-                                dropVariantAttrs: geo.DropVariantAttributes, dropAttrs: geo.DropAttributes);
+                                dropVariantAttrs: geo.DropVariantAttributes, dropAttrs: geo.DropAttributes,
+                                switches: geo.Switches);
                         }
                     }
                     return false;

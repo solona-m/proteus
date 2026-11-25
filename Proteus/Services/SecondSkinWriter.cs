@@ -137,6 +137,9 @@ public static partial class SecondSkinWriter
         /// how many were given up, which is otherwise invisible.
         /// </summary>
         public int Trimmed { get; internal set; }
+
+        /// <summary>Submeshes written as copies under a switch set (<see cref="ContentGeometry.Switches"/>), every copy counted.</summary>
+        public int SwitchCopies { get; internal set; }
     }
 
     /// <summary>

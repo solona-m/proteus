@@ -118,10 +118,28 @@ public sealed class SecondSkinLayer
 /// that a body swapped in whole does not put back the faces the garment's author deleted under the cloth. Unlike
 /// <paramref name="KeepMaterial"/> this belongs to the MODEL, so two geometries cut from one model share the first's.
 /// </param>
+/// <param name="Switches">
+/// Triangles emitted once per tag set rather than once (plan genital-switches): each listed triangle that survives the
+/// cut leaves its submesh and is written again in a submesh of its own per set, tagged with the tags it would carry
+/// anyway plus the set's names. How a refit gives the new body's genitals the switches the garment's own had, so the
+/// garment's options still hide and show them. The copies share the mesh's vertices. Null or empty emits as before.
+/// Not with <paramref name="OwnAttributes"/>.
+/// </param>
 public sealed record ContentGeometry(
     byte[] Model, Func<string, bool> KeepMaterial, bool MirrorUv1 = false,
     IReadOnlySet<string>? HiddenAttributes = null, bool OwnAttributes = false, bool DropVariantAttributes = false,
-    Dictionary<int, HashSet<ushort>>? DrawOnly = null, IReadOnlySet<string>? DropAttributes = null);
+    Dictionary<int, HashSet<ushort>>? DrawOnly = null, IReadOnlySet<string>? DropAttributes = null,
+    IReadOnlyList<SubmeshSwitch>? Switches = null);
+
+/// <summary>
+/// One submesh's triangles to emit once per tag set (see <see cref="ContentGeometry.Switches"/>).
+/// </summary>
+/// <param name="Mesh">The mesh, numbered as the geometry model's own table numbers it (<see cref="ModelPart.Mesh"/>).</param>
+/// <param name="Submesh">The submesh within it (<see cref="ModelPart.Submesh"/>).</param>
+/// <param name="Ordinals">The triangles, by ordinal in the submesh's own index range (<see cref="ModelPart.Ordinals"/>);
+/// null for every one.</param>
+/// <param name="TagSets">One copy per set, each tagged with every name in it. Empty emits no copy.</param>
+public sealed record SubmeshSwitch(int Mesh, int Submesh, IReadOnlySet<int>? Ordinals, IReadOnlyList<IReadOnlySet<string>> TagSets);
 
 /// <summary>
 /// A host's shell came out with no meshes. <see cref="ByToggle"/> separates a fault (coverage trimming
