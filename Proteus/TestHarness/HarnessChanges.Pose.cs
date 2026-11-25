@@ -60,7 +60,7 @@ internal sealed partial class HarnessChanges
             return (0, ChangeResult.Fail(409, "emote-table-changed", "the game's Emote sheet no longer has the pinned rows; the harness plays none"));
         if (game.EmoteState() is not { } now) return (0, ChangeResult.Fail(409, "no-player", "no local character"));
         if (game.EmoteBlocked() is { } blocked) return (0, ChangeResult.Fail(409, $"emote-blocked:{blocked}", $"an emote is not allowed now ({blocked})"));
-        if (DateTime.UtcNow - lastEmoteUtc < interval || HarnessPose.InTransition(now, emote))
+        if (DateTime.UtcNow - lastEmoteUtc < interval || HarnessPose.InTransition(now))
             return (0, ChangeResult.Fail(429, "emote-settling", "the last emote is still settling; wait a few seconds"));
         if (HarnessPose.IsLoopMode(now.Mode))
             return (0, ChangeResult.Fail(409, "emote-busy", "the character is already in an emote loop; put back (or stand up) first"));

@@ -112,8 +112,14 @@ internal static class HarnessPose
 
     /// <summary>Put-back for the emote: "send" when the character still plays the harness's emote in its loop (playing it
     /// again stands it up); else "changed" (the player, or the game, moved on: left alone).</summary>
+    /// Once the settle read the emote back, only that row counts (a ground sit the player started after the harness's own
+    /// <c>sit</c> is theirs, left alone); before it, the asked row or its fallback.
     public static string EmoteDecision(EmoteRecord record, EmoteNow? now)
-        => now is { } n && InLoop(n, record.Id) ? "send" : "changed";
+    {
+        if (now is not { } n || !IsLoopMode(n.Mode)) return "changed";
+        bool ours = record.Settled && record.ReadBackId != 0 ? n.EmoteId == record.ReadBackId : SameEmote(record.Id, n.EmoteId);
+        return ours ? "send" : "changed";
+    }
 
     /// <summary>The seated modes: an emote loop, and sitting in a chair (InPositionLoop, UNVERIFIED until the Phase A
     /// capture reads it).</summary>
@@ -127,6 +133,5 @@ internal static class HarnessPose
     public static bool InLoop(EmoteNow now, ushort id) => IsLoopMode(now.Mode) && SameEmote(id, now.EmoteId);
 
     /// <summary>Between modes: neither standing nor seated (sitting down, standing up).</summary>
-    public static bool InTransition(EmoteNow now, EmoteRecord? last)
-        => now.Mode != NormalMode && !IsLoopMode(now.Mode);
+    public static bool InTransition(EmoteNow now) => now.Mode != NormalMode && !IsLoopMode(now.Mode);
 }

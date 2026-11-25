@@ -59,14 +59,19 @@ public class HarnessPoseTests
         Assert.Equal("changed", HarnessPose.EmoteDecision(rec, new EmoteNow(HarnessPose.NormalMode, 0)));
         Assert.Equal("changed", HarnessPose.EmoteDecision(rec, new EmoteNow(HarnessPose.LoopMode, 50)));
         Assert.Equal("changed", HarnessPose.EmoteDecision(rec, null));
-        Assert.True(HarnessPose.InTransition(new EmoteNow("EmoteSitting", 52), rec));
-        Assert.False(HarnessPose.InTransition(new EmoteNow(HarnessPose.NormalMode, 0), rec));
+        Assert.True(HarnessPose.InTransition(new EmoteNow("EmoteSitting", 52)));
+        Assert.False(HarnessPose.InTransition(new EmoteNow(HarnessPose.NormalMode, 0)));
 
         // Sitting in a chair is seated too; sit away from a chair falls back to the ground sit's row.
         var sit = new EmoteRecord(50, "sit", HarnessPose.LoopMode, 50, true, DateTime.UtcNow);
         Assert.Equal("send", HarnessPose.EmoteDecision(sit, new EmoteNow("InPositionLoop", 50)));
-        Assert.Equal("send", HarnessPose.EmoteDecision(sit, new EmoteNow(HarnessPose.LoopMode, 52)));
-        Assert.False(HarnessPose.InTransition(new EmoteNow("InPositionLoop", 50), sit));
+        // Settled as row 50: a ground sit now is the player's own, left alone; unsettled, the fallback row counts.
+        Assert.Equal("changed", HarnessPose.EmoteDecision(sit, new EmoteNow(HarnessPose.LoopMode, 52)));
+        var unsettled = sit with { ReadBackId = 0, Settled = false };
+        Assert.Equal("send", HarnessPose.EmoteDecision(unsettled, new EmoteNow(HarnessPose.LoopMode, 52)));
+        var fellBack = sit with { ReadBackId = 52 };
+        Assert.Equal("send", HarnessPose.EmoteDecision(fellBack, new EmoteNow(HarnessPose.LoopMode, 52)));
+        Assert.False(HarnessPose.InTransition(new EmoteNow("InPositionLoop", 50)));
         Assert.Equal("changed", HarnessPose.EmoteDecision(rec, new EmoteNow(HarnessPose.LoopMode, 50)));   // groundsit is not sit
     }
 
