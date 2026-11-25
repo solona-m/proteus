@@ -19,8 +19,10 @@ namespace Proteus.Tests;
 /// file the run itself wrote, by hash. Only the files this run wrote count — the copy carries the mod's own earlier
 /// "Body Retarget" output, which changes whenever the size set is run on the real mod in game.
 /// <para/>
-/// A table is never re-captured to make it pass. The one legitimate change is a row a later plan makes on purpose, named
-/// in its allow-list (or a leave-out) with the plan that made it.
+/// A table is never re-captured to make it pass. A row a later plan makes on purpose is named in its allow-list (or a
+/// leave-out) with the plan that made it. The one legitimate re-capture is on a newer test head's own unchanged code, as
+/// a commit of its own, after the later changes' knobs have shown every moved row back at its old bytes with them off;
+/// the change that moved each row is named beside its new value (as for BehaviourPinLocalTests).
 /// </summary>
 [Trait("Speed", "Slow")]
 public class TbseSizeSetPinLocalTests(ITestOutputHelper o)
@@ -61,7 +63,8 @@ public class TbseSizeSetPinLocalTests(ITestOutputHelper o)
         "chara/equipment/e0633/model/c0101e0633_top.mdl|tbse|TBSE|Made||LavaBod+ 2.2 — Omit · Yiggle - Teardrop|1.000",
     ];
     // _dwn, _sho and _top re-captured on test f04d524a (build 1504), with NoBulge as the no-bulge test runs them: _dwn
-    // moved by redo-starlight's coarse sag (1501) with the layer floor (1495) or the pressed-skin cut (1501), _sho by the
+    // moved by redo-starlight's coarse sag (1501) with the layer floor (1495) and/or the pressed-skin cut (1501), not
+    // separated, _sho by the
     // coarse sag with knee-standoff (1504), _top by the coarse sag alone. With NoCoarseSag, NoLayerFloor, NoPressedSkinCut
     // and NoKneeStandoff all four are the earlier 3B2B3ADD..., 0BEF4A43..., A47AAC51..., 908AC32C... exactly.
     private static readonly string[] StormblessedFiles =

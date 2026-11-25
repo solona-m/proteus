@@ -26,9 +26,9 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
     private const string LumberjackPin = "1FE367DFEFEB9D1277223A57D2AD7AB637FF1EB515EAC99B7B0BD8271578C214";
     private const string SheerTopPin = "066EE8258755CEF2E21223A47AF1B9D90160978CF2464DC2C6DA14659DBE8351";
     private const string StormblessedLegsPin = "C6127850AE23D53BD9B4EA8B839B13293028630D578BBD19CA0E8B655E065A17";
-    /// <summary>featureless-bulge: the pin before the bulge, which Stormblessed's legs still make with it switched off.
+    /// <summary>featureless-bulge: Stormblessed's legs with the bulge switched off, today's output.
     /// Re-captured on test f04d524a (build 1504): moved by redo-starlight's coarse sag (1501) with the layer floor (1495)
-    /// or the pressed-skin cut (1501); with NoCoarseSag, NoLayerFloor, NoPressedSkinCut and NoKneeStandoff it is the
+    /// and/or the pressed-skin cut (1501), not separated; with NoCoarseSag, NoLayerFloor, NoPressedSkinCut and NoKneeStandoff it is the
     /// earlier 3B2B3ADD... exactly.</summary>
     private const string StormblessedLegsNoBulgePin = "A8A5D2BF5B4716753F12D155A5470D6638D6BC5E5913FAC737C36676505BDCEA";
     private const string HeelsSizeSetPin = "E53697A7A3235D1FB3EF57DF52FCA160BF6C3BAF193C8E49507F252B6A42F955";
