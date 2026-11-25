@@ -66,7 +66,8 @@ public class HarnessDocsTests
         Assert.Contains("Proteus/TestHarness/", agents);
         Assert.True(File.Exists(Path.Combine(RepoRoot, "docs", "adr", "0002-qa-harness-compile-out-and-threat-model.md")));
 
-        // [AC-harness-option-hold-8] [EDGE-harness-option-hold-24] the hold's options and the recipe for checking sizes.
+        // [AC-harness-option-hold-8] [EDGE-harness-option-hold-24] [EDGE-harness-option-hold-26] [EDGE-harness-option-hold-27]
+        // the hold's options and the recipe for checking sizes (drawn file read after the redraw, auto redraw on first).
         foreach (var required in new[]
                  {
                      "\"options\":{\"<group>\":[\"<option>\"]}", "Checking other sizes", "option-not-found", "mod-unreadable",

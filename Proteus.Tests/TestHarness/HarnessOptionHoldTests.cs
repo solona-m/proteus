@@ -110,6 +110,7 @@ public class HarnessOptionHoldTests : IDisposable
         Assert.Equal(["Rue WC"], sent.Options[Size]);
         Assert.Equal(["Bow"], sent.Options["Extras"]);
         Assert.True(body.GetProperty("before").GetProperty("configured").GetBoolean());
+        Assert.False(body.GetProperty("before").GetProperty("temporary").GetBoolean());   // the first read's, not rebuilt
         var (_, state) = await fx.Get("/state");
         var listed = Pairs(state.GetProperty("harnessChanges").GetProperty("holds")[0].GetProperty("options"));
         Assert.Equal(["Rue WC"], listed[Size]);
@@ -125,6 +126,7 @@ public class HarnessOptionHoldTests : IDisposable
     [InlineData("""{"mod":"Skirt","options":{"Extras":[1]}}""")]
     [InlineData("""{"mod":"Skirt","options":{"Extras":[""]}}""")]
     [InlineData("""{"mod":"Skirt","options":{"Extras":[["Belt"]]}}""")]
+    [InlineData("""{"mod":"Skirt","options":{"":["Belt"]}}""")]
     public async Task Bad_options_shapes_400_nothing_held(string json)
     {
         var (status, body) = await fx.Post("/actions/mod-settings", json);
@@ -165,6 +167,9 @@ public class HarnessOptionHoldTests : IDisposable
         var (status, _) = await fx.Post("/actions/mod-settings", """{"mod":"Skirt","options":{"Extras":[],"Lace":[]}}""");
         Assert.Equal(200, status);
         Assert.Empty(Game.HoldSets.Single().Options["Extras"]);
+        var (two, _) = await fx.Post("/actions/mod-settings", """{"mod":"Skirt","options":{"Extras":["Belt","Bow"]}}""");
+        Assert.Equal(200, two);
+        Assert.Equal(["Belt", "Bow"], Game.HoldSets.Last().Options["Extras"]);
     }
 
     [Fact]
@@ -280,8 +285,13 @@ public class HarnessOptionHoldTests : IDisposable
 
     [Fact]
     [Trait("Plan", "EDGE-harness-option-hold-17")]
-    public async Task Options_while_stopping_refused_nothing_held()
+    public async Task Options_while_busy_or_stopping_refused_nothing_held()
     {
+        Assert.True(fx.Jobs.TryReserve());
+        var (busy, busyBody) = await fx.Post("/actions/mod-settings", """{"mod":"Skirt","options":{"Extras":["Bow"]}}""");
+        Assert.Equal((409, "busy"), (busy, Code(busyBody)));
+        Assert.Empty(Game.HoldSets);
+        fx.Jobs.Release();
         fx.Changes.BeginStop();
         var (status, body) = await fx.Post("/actions/mod-settings", """{"mod":"Skirt","options":{"Extras":["Bow"]}}""");
         Assert.Equal((503, "harness-stopping"), (status, Code(body)));
@@ -315,12 +325,31 @@ public class HarnessOptionHoldTests : IDisposable
     [Trait("Plan", "EDGE-harness-option-hold-23")]
     public async Task Echoed_names_are_scrubbed_Penumbra_gets_the_real_ones()
     {
+        // Two group names that scrub to the same placeholder stay two pairs (a dictionary would fold them into one).
         fx.Names.Add("Rue", NameKind.Collection);
-        var (status, body) = await fx.Post("/actions/mod-settings", """{"mod":"Skirt","options":{"Body — Skirt / Model(s)":["Rue WC"]}}""");
+        fx.Names.Add("Extras", NameKind.Collection);
+        fx.Names.Add("Lace", NameKind.Collection);
+        var (status, body) = await fx.Post("/actions/mod-settings",
+            """{"mod":"Skirt","options":{"Body — Skirt / Model(s)":["Rue WC"],"Extras":["Bow"],"Lace":["A"]}}""");
         Assert.Equal(200, status);
-        string echoed = body.GetProperty("options").GetRawText();
-        Assert.DoesNotContain("Rue", echoed);
-        Assert.Equal(["Rue WC"], Game.HoldSets.Single().Options[Size]);
+        var (_, state) = await fx.Get("/state");
+        foreach (var list in new[] { body.GetProperty("options"), state.GetProperty("harnessChanges").GetProperty("holds")[0].GetProperty("options") })
+        {
+            string raw = list.GetRawText();
+            Assert.DoesNotContain("Rue", raw);
+            Assert.DoesNotContain("Extras", raw);
+            Assert.DoesNotContain("Lace", raw);
+            var pairs = list.EnumerateArray()
+                            .Select(p => (p.GetProperty("group").GetString()!, string.Join("|", p.GetProperty("options").EnumerateArray().Select(o => o.GetString()))))
+                            .ToList();
+            Assert.Contains((Size, "<COLLECTION> WC"), pairs);
+            Assert.Contains(("<COLLECTION>", "Bow"), pairs);
+            Assert.Contains(("<COLLECTION>", "A"), pairs);
+        }
+        var sent = Game.HoldSets.Single().Options;
+        Assert.Equal(["Rue WC"], sent[Size]);
+        Assert.Equal(["Bow"], sent["Extras"]);
+        Assert.Equal(["A"], sent["Lace"]);
         var (_, b404) = await fx.Post("/actions/mod-settings", """{"mod":"Skirt","options":{"Body — Skirt / Model(s)":["Nope"]}}""");
         Assert.DoesNotContain("Rue", Message(b404));
     }
