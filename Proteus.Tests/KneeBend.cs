@@ -123,6 +123,9 @@ internal static class KneeBend
     internal static LivePose Scaled(LivePose p, float addedDegrees, string baseSide = "r")
     {
         var dumped = Angles(p, baseSide);
+        // A leg barely flexed beyond bind gives no axis to scale (k would run away or flip sign).
+        if (!(dumped.Added >= 1f))
+            throw new InvalidDataException($"the {baseSide} knee is only {dumped.Added:F1}° beyond bind in this dump: nothing to scale");
         float k = addedDegrees / dumped.Added;
         // Locals of every bone as posed; the knee bones' rotations scaled.
         var local = new Matrix4x4[p.BoneCount];

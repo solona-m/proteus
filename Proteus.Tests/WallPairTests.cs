@@ -376,4 +376,33 @@ public class WallPairTests
             Assert.True(Z(n + v) <= Z(2 * n + v) + 1e-5f, $"point {v}: inner wall {Z(n + v) * 1000f:F2} mm, outer {Z(2 * n + v) * 1000f:F2}");
         }
     }
+
+    [Fact]
+    [Trait("Plan", "EDGE-knee-standoff-8")]
+    public void A_thick_shell_keeps_its_walls_through_the_knee_pass()
+    {
+        // The bumped shell, every face the knee pass's: a corner it holds off the skin carries the other wall's point with
+        // it, within the knee budget, so the shell keeps its thickness.
+        var (shell, pairs) = Bumped(0.0005f);
+        var sets = BodyRetarget.Sets.From(shell);
+        var before = BodyRetarget.TargetBody.Build(pairs, null, null, before: true);
+        var after = BodyRetarget.TargetBody.Build(pairs, null, null, before: false);
+        var authored = new float[sets.NodeCount];
+        Array.Fill(authored, float.MaxValue);
+        var check = new BodyRetarget.FaceCheck(sets, sets.ClothNodes, before, after, authored, clearBody: false);
+        var delta = new Vec3[sets.NodeCount];
+        var goal = new BodyRetarget.FaceGoal(Enumerable.Range(0, check.Faces.Count).ToHashSet(), BodyRetarget.KneeStandoff,
+                                             BodyRetarget.KneeBudget);
+        float worst = 0f;
+        BodyRetarget.ClearFaces(check, delta, new float[sets.NodeCount], ref worst, null, goal, out var tally);
+        Assert.True(tally.Moved > 0);
+        Assert.All(delta, d => Assert.True(new Vector3(d.X, d.Y, d.Z).Length() <= BodyRetarget.KneeBudget + 1e-6f));
+        for (int n = 0; n < sets.NodeCount; n++)
+        {
+            int p = check.WallPartner[n];
+            if (p < 0 || delta[n].Z <= 1e-5f) continue;
+            Assert.True(delta[p].Z >= delta[n].Z - 1e-5f || delta[p].Z >= BodyRetarget.KneeBudget - 1e-5f,
+                        $"node {n} moved {delta[n].Z * 1000f:F2} mm, its wall partner {delta[p].Z * 1000f:F2}");
+        }
+    }
 }

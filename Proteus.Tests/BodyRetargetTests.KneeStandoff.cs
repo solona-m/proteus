@@ -141,20 +141,88 @@ public partial class BodyRetargetTests
         Assert.Equal(0, now.KneeMoved);
     }
 
-    [Fact]
-    [Trait("Plan", "EDGE-knee-standoff-10")]
-    public void Without_a_goal_the_face_settle_is_unchanged()
+    // ── which faces the pass takes (KneeFaces) ──────────────────────────────
+
+    /// <summary>A sheet 1 mm under the cube's bottom (-z) face, its way out down: the back of a leg, as the pass reads it.</summary>
+    private static ModelParts UnderSheet(float half = 0.15f)
     {
-        // The goal-less overload and the goal path with null are one path: the same deltas, the same count.
-        var garment = CoarseSheet();
-        var (check, delta, sets) = FaceSetup(garment, Cube(0.20f, SkinMaterial), Bumped(0.004f));
-        var (check2, delta2, sets2) = FaceSetup(garment, Cube(0.20f, SkinMaterial), Bumped(0.004f));
-        float w1 = 0f, w2 = 0f;
-        int a = BodyRetarget.ClearFaces(check, delta, new float[sets.NodeCount], ref w1);
-        int b = BodyRetarget.ClearFaces(check2, delta2, new float[sets2.NodeCount], ref w2, null, null, out var tally);
-        Assert.Equal(a, b);
-        Assert.Equal(delta, delta2);
-        Assert.Equal(w1, w2);
-        Assert.Equal(0, tally.Moved);
+        float z = -SheetZ;
+        float[] pos = [-half, -half, z, 0f, half, z, half, -half, z];
+        float[] nrm = [0, 0, -1, 0, 0, -1, 0, 0, -1];
+        return Build(pos, nrm, [0, 1, 2], ClothMaterial);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-knee-standoff-3")]
+    [Trait("Plan", "EDGE-knee-standoff-2")]
+    [Trait("Plan", "EDGE-knee-standoff-9")]
+    [Trait("Plan", "EDGE-knee-standoff-17")]
+    public void The_pass_takes_coarse_faces_over_the_knee_band_that_look_back()
+    {
+        // Looking back (its way out, the skin under it, points down -z here), coarse, over the band: taken.
+        var (back, delta, _) = FaceSetup(UnderSheet(), Cube(0.20f, SkinMaterial), Cube(0.20f, SkinMaterial));
+        Assert.Equal([0], BodyRetarget.KneeFaces(back, delta, () => _ => true)!.Faces);
+        // Not over the band: none.
+        Assert.Null(BodyRetarget.KneeFaces(back, delta, () => _ => false));
+        // No body carries the bones: none.
+        Assert.Null(BodyRetarget.KneeFaces(back, delta, () => null));
+        // Only its centroid over the band: taken (any sample counts).
+        var centroid = (back.At(back.Faces[0].A, delta) + back.At(back.Faces[0].B, delta) + back.At(back.Faces[0].C, delta)) / 3f;
+        Assert.NotNull(BodyRetarget.KneeFaces(back, delta, () => p => Vector3.Distance(p, centroid) < 1e-4f));
+
+        // Looking forward (the front of the knee, +z): none, and the band is never read.
+        var (front, frontDelta, _) = FaceSetup(CoarseSheet(), Cube(0.20f, SkinMaterial), Cube(0.20f, SkinMaterial));
+        int asked = 0;
+        Assert.Null(BodyRetarget.KneeFaces(front, frontDelta, () => { asked++; return _ => true; }));
+        Assert.Equal(0, asked);
+
+        // A fine face (20 mm) looking back: not coarse, none.
+        var (fine, fineDelta, _) = FaceSetup(UnderSheet(0.010f), Cube(0.20f, SkinMaterial), Cube(0.20f, SkinMaterial));
+        Assert.Null(BodyRetarget.KneeFaces(fine, fineDelta, () => _ => true));
+    }
+
+    // ── the face settle's guards, on the goal path ──────────────────────────
+
+    [Fact]
+    [Trait("Plan", "EDGE-knee-standoff-6")]
+    public void The_knee_pass_turns_nothing_over()
+    {
+        // The pleat scene of Clearing_faces_never_turns_a_neighbour_over: lifting the big face's near edge by the standoff
+        // tips the pleat onto its back, so those corners are put back; nothing ends turned over.
+        float[] pos =
+        [
+            -0.15f, -0.15f, SheetZ, 0.15f, -0.15f, SheetZ, 0f, 0.15f, SheetZ,
+            0f, -0.1505f, SheetZ + 0.001f,
+        ];
+        float[] nrm = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, -1, 0];
+        var garment = Build(pos, nrm, [0, 1, 2, 1, 0, 3], ClothMaterial);
+        var (check, delta, sets) = FaceSetup(garment, Cube(0.20f, SkinMaterial), Bumped(0.0005f));
+        float worst = 0f;
+        BodyRetarget.ClearFaces(check, delta, new float[sets.NodeCount], ref worst, null, Goal(0), out _);
+        Assert.Equal(0, Folded(garment, delta, sets));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-knee-standoff-7")]
+    public void The_knee_pass_never_pushes_through_the_layer_over_it()
+    {
+        // A lining 1 mm over the cube and a shell 1.5 mm over the lining: holding the lining 4 mm off the skin would take
+        // it through the shell, so the layer guard puts it back.
+        const float shellZ = SheetZ + 0.0015f;
+        float[] pos =
+        [
+            -0.15f, -0.15f, SheetZ, 0.15f, -0.15f, SheetZ, 0f, 0.15f, SheetZ,
+            -0.18f, -0.18f, shellZ, 0.18f, -0.18f, shellZ, 0f, 0.18f, shellZ,
+        ];
+        float[] nrm = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1];
+        var garment = Build(pos, nrm, [0, 1, 2, 3, 4, 5], ClothMaterial);
+        var (check, delta, sets) = FaceSetup(garment, Cube(0.20f, SkinMaterial), Bumped(0.0005f));
+        float worst = 0f;
+        BodyRetarget.ClearFaces(check, delta, new float[sets.NodeCount], ref worst, null, Goal(0), out _);
+        for (int v = 0; v < 3; v++)
+        {
+            float z = At(garment, v).Z + delta[sets.NodeOf[v]].Z;
+            Assert.True(z < shellZ, $"lining corner {v} went through the shell, to z={z:F5}");
+        }
     }
 }

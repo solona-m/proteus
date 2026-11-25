@@ -212,7 +212,7 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
         string dir = Path.Combine(Path.GetTempPath(), "proteus-starlight-bent-" + Guid.NewGuid().ToString("N"));
         try
         {
-            string file = RefitFile(dir, mod, rel, "");
+            string file = RefitFile(dir, mod, rel, "NoKneeStandoff");   // 1502: the build before the knee pass
             var bytes = File.ReadAllBytes(file);
             var rest = ModelPartReader.Read(bytes)!;
             var mesh = ModelSkinReader.Read(bytes, null, null)!;
@@ -256,8 +256,26 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
             // [AC-knee-standoff-6] The report says what the pass did, and nothing with the knob.
             Assert.Contains("knee standoff: ", nowReport);
             Assert.DoesNotContain("knee standoff: ", knobReport);
+            InputsAndPosesAreTheMeasuredOnes(size);
             var now = ModelPartReader.Read(nowBytes)!;
             var knob = ModelPartReader.Read(knobBytes)!;
+            var body = ModelPartReader.Read(File.ReadAllBytes(Path.Combine(LocalData.Path(mod), rel)))!;
+            // [AC-knee-standoff-2] [EDGE-knee-standoff-11] The skin cut on the moved cloth: no skin left out at the band,
+            // the crotch hole and the waist edge as the knob cuts them, the smallclothes the same.
+            Assert.DoesNotContain(StarlightMeasure.LeftOutBodySkin(body, now), InBand);
+            Assert.True(StarlightMeasure.LeftOutInAuthorsHole(body, now) >= StarlightMeasure.LeftOutInAuthorsHole(body, knob), "the crotch hole lost triangles");
+            Assert.True(StarlightMeasure.LeftOutAboveLegs(body, now) >= StarlightMeasure.LeftOutAboveLegs(body, knob), "the waist edge lost triangles");
+            Assert.Equal(Smallclothes(knob), Smallclothes(now));
+            // [AC-knee-standoff-3] Every vertex that moved lies within 100 mm of a stocking vertex the pass moved.
+            var movedStocking = new List<Vector3>();
+            var stockingVerts = StarlightMeasure.StockingParts(knob).SelectMany(l => knob.Parts.First(p => p.Label == l).Triangles).ToHashSet();
+            Vector3 KP(int v) => new(knob.Positions[v * 3], knob.Positions[v * 3 + 1], knob.Positions[v * 3 + 2]);
+            Vector3 NP(int v) => new(now.Positions[v * 3], now.Positions[v * 3 + 1], now.Positions[v * 3 + 2]);
+            for (int v = 0; v < knob.Positions.Length / 3; v++)
+                if (stockingVerts.Contains(v) && Vector3.Distance(KP(v), NP(v)) > 1e-5f) movedStocking.Add(KP(v));
+            for (int v = 0; v < knob.Positions.Length / 3; v++)
+                if (Vector3.Distance(KP(v), NP(v)) > 1e-5f)
+                    Assert.True(movedStocking.Any(m => Vector3.Distance(m, KP(v)) <= 0.1f), $"vertex {v} moved far from the knee faces");
             float most = 0;
             foreach (var label in StarlightMeasure.StockingParts(knob))
             {
@@ -295,8 +313,8 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
             int idleKnob = 0, idleNow = 0;
             foreach (var (name, pose) in MeasuredPoses())
             {
-                var (k, n, onlyKnob, onlyKnee) = StarlightMeasure.BentAgainstKnob(knob, KneeBend.Posed(knobBytes, pose).Posed,
-                                                                                  now, KneeBend.Posed(nowBytes, pose).Posed);
+                var (k, n, onlyKnob, onlyKnee) = StarlightMeasure.BentAgainstKnob(knob, PosedChecked(knobBytes, pose),
+                                                                                  now, PosedChecked(nowBytes, pose));
                 if (name is "idle" or "idle-mirrored") { idleKnob += k.Count; idleNow += n.Count; }
                 o.WriteLine($"  {name,-18} {k.Count,4} -> {n.Count,4}; p90 {k.Percentile(0.9f) * 1000:F1} -> {n.Percentile(0.9f) * 1000:F1} mm; "
                             + $"skin keys only knob {onlyKnob}, only knee {onlyKnee}");
@@ -305,6 +323,8 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
                 Assert.True(n.Count <= bar, $"{name}: {n.Count} through, bar {bar} ({k.Count} at 1502)");
                 Assert.True(onlyKnob + onlyKnee <= 0.01f * Math.Max(1, k.Paired), $"{name}: the cut changed ({onlyKnob}/{onlyKnee} keys)");
             }
+            // [EDGE-knee-standoff-14] The knob reproduces the 1502 figures the bars were recorded against.
+            Assert.Equal(IdleAt1502[size], idleKnob);
             bool passes = idleNow <= idleKnob * 0.3f || idleNow <= 5;
             o.WriteLine($"  gate: idle {idleKnob} -> {idleNow} ({(idleKnob == 0 ? 0 : 100f * (idleKnob - idleNow) / idleKnob):F0}% cut): {(passes ? "passes" : "FAILS")}");
             Assert.True(passes, "the benefit gate");
@@ -313,6 +333,47 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
         {
             try { Directory.Delete(dir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
+    }
+
+    /// <summary>Skin points through the stockings at 1502 (the knob) in the owner's idle, as dumped plus mirrored (measured
+    /// 2026-11-25, pairs on the knob model): the bars and the benefit gate are judged against these.</summary>
+    internal static readonly Dictionary<string, int> IdleAt1502 = new()
+    {
+        ["Neolithe S"] = 185, ["Neolithe M"] = 185, ["Neolithe L"] = 182, ["Bibo S"] = 131, ["Bibo M"] = 128, ["Bibo L"] = 113,
+        ["Rue WC"] = 116, ["YAB WC"] = 116, ["YAB SC"] = 123, ["Tre Medium"] = 235, ["Tre Large"] = 235, ["Rosaline"] = 180,
+    };
+
+    /// <summary>The pose dumps as measured (SHA-256 of each pose.json): a replaced dump is a re-measure, not a pass.</summary>
+    internal static readonly Dictionary<string, string> PoseSha = new()
+    {
+        [LocalData.IdlePose] = "47a9e2ffaf463f99ac08cc2915f8e2bac35415b651c098e4813876413686187d",
+        [LocalData.IdleFreshPose] = "83a7ca5a78e8afbb7d221663c86c21a90e7d003982659ceea884ecb631abb5ed",
+    };
+
+    /// <summary>The garment, the made-on body, the size's body and the pose dumps are the measured ones.</summary>
+    private static void InputsAndPosesAreTheMeasuredOnes(string size)
+    {
+        var (mod, rel) = Sizes[size];
+        string Sha(string path) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
+        foreach (var (inMod, inRel, sha) in new[]
+                 {
+                     (LocalData.StarlightMod, StarlightBottomsLocalTests.Garment, StarlightBottomsLocalTests.Inputs[0].Sha),
+                     (LocalData.TightFirmMod, StarlightBottomsLocalTests.MadeOn, StarlightBottomsLocalTests.Inputs[1].Sha),
+                     (mod, rel, BodySha[size]),
+                 })
+            Assert.True(Sha(Path.Combine(LocalData.Path(inMod), inRel)) == sha, $"inputs changed ({inRel}): re-measure");
+        foreach (var (need, sha) in PoseSha)
+            if (LocalData.Missing([need]) == null)
+                Assert.True(Sha(LocalData.Path(need)) == sha, $"the pose dump changed ({need}): re-measure");
+    }
+
+    /// <summary>A model posed, failing — naming the bone — when a mesh bone the pose lacks and no fallback names carries
+    /// weight (its vertices would follow only the root and read as still).</summary>
+    private static Vector3[] PosedChecked(byte[] mdl, LivePose pose)
+    {
+        var (posed, unmapped) = KneeBend.Posed(mdl, pose);
+        Assert.True(unmapped.Count == 0, $"mesh bones the pose lacks, with no fallback: {string.Join(", ", unmapped)}");
+        return posed;
     }
 
     /// <summary>The bone sets the knee band may read (decision 2), smallest first.</summary>
@@ -353,7 +414,7 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
         {
             foreach (var (size, (mod, rel)) in Sizes)
             {
-                var bytes = File.ReadAllBytes(RefitFile(Path.Combine(dir, size.Replace(' ', '-')), mod, rel, ""));
+                var bytes = File.ReadAllBytes(RefitFile(Path.Combine(dir, size.Replace(' ', '-')), mod, rel, "NoKneeStandoff"));
                 var rest = ModelPartReader.Read(bytes)!;
                 var mesh = ModelSkinReader.Read(bytes, null, null)!;
                 var skin = rest.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
@@ -372,7 +433,7 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
                 }
                 foreach (var (_, pose) in poses)
                 {
-                    var bent = StarlightMeasure.BentStockingSkinOut(rest, KneeBend.Posed(bytes, pose).Posed);
+                    var bent = StarlightMeasure.BentStockingSkinOut(rest, PosedChecked(bytes, pose));
                     foreach (var t in bent.Through)
                     {
                         Vector3 a = V(t.A), b = V(t.B), c = V(t.C);
@@ -396,6 +457,10 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
                 var row = new[] { 0.05f, 0.1f, 0.2f, 0.3f, 0.5f }.Select(th => $"≥{th:F2}: {100f * list.Count(s => s >= th) / Math.Max(1, list.Count):F1}%");
                 o.WriteLine($"{label} {name,-22} {list.Count} points; {string.Join("  ", row)}");
             }
+        // [AC-knee-standoff-1] Decision 2: the chosen set, as the pass selects (faces), covers at least 95% at KneeWeight.
+        var chosen = faceShares["j_asi_b+j_asi_c"];
+        float covered = (float)chosen.Count(s => s >= BodyRetarget.KneeWeight) / Math.Max(1, chosen.Count);
+        Assert.True(covered >= 0.95f, $"the knee band covers {covered:P1} of the poke-through points");
     }
 
     [LocalDataFact(LocalData.IdlePose)]

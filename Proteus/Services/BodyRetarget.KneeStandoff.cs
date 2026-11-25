@@ -61,19 +61,27 @@ internal static partial class BodyRetarget
     /// <see cref="ClearFaceCap(float)"/> above the <see cref="ClearFaceDeepest"/> floor), any of its corners, edge
     /// midpoints or centroid over the band, and looking back. Null when there are none.
     /// </summary>
-    internal static FaceGoal? KneeFaces(FaceCheck check, Vec3[] nodeDelta, Func<Vector3, bool> isKnee)
+    /// <param name="kneeTest">Builds the knee band's test (<see cref="KneeTest"/>), asked only once a coarse face looking
+    /// back is found: reading every body's weights is not free, and most garments have no such face.</param>
+    internal static FaceGoal? KneeFaces(FaceCheck check, Vec3[] nodeDelta, Func<Func<Vector3, bool>?> kneeTest)
     {
-        var faces = new HashSet<int>();
+        // Coarse and looking back first: the cheap tests.
+        var back = new List<int>();
         for (int f = 0; f < check.Faces.Count; f++)
         {
-            var face = check.Faces[f];
-            if (!(ClearFaceCap(check.LongestEdge(face, nodeDelta)) > ClearFaceDeepest)) continue;
-            Vector3 a = check.At(face.A, nodeDelta), b = check.At(face.B, nodeDelta), c = check.At(face.C, nodeDelta);
-            if (!isKnee(a) && !isKnee(b) && !isKnee(c) && !isKnee((a + b) * 0.5f) && !isKnee((b + c) * 0.5f)
-                && !isKnee((c + a) * 0.5f) && !isKnee((a + b + c) / 3f)) continue;
+            if (!(ClearFaceCap(check.LongestEdge(check.Faces[f], nodeDelta)) > ClearFaceDeepest)) continue;
             var (_, outward) = check.Signed(f, nodeDelta);
             if (outward == default || !(outward.Z < KneeFacing)) continue;
-            faces.Add(f);
+            back.Add(f);
+        }
+        if (back.Count == 0 || kneeTest() is not { } isKnee) return null;
+        var faces = new HashSet<int>();
+        foreach (int f in back)
+        {
+            var face = check.Faces[f];
+            Vector3 a = check.At(face.A, nodeDelta), b = check.At(face.B, nodeDelta), c = check.At(face.C, nodeDelta);
+            if (isKnee(a) || isKnee(b) || isKnee(c) || isKnee((a + b) * 0.5f) || isKnee((b + c) * 0.5f)
+                || isKnee((c + a) * 0.5f) || isKnee((a + b + c) / 3f)) faces.Add(f);
         }
         return faces.Count == 0 ? null : new FaceGoal(faces, KneeStandoff, KneeBudget);
     }

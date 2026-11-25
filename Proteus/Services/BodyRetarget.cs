@@ -1116,15 +1116,19 @@ internal static partial class BodyRetarget
                 pushed += LiftUnderbust(faceCheck, drawn, nodeDelta, pushedBy, ref worstPush, stay, isBreast, isHip);
             }
             pushed += ClearFaces(faceCheck, nodeDelta, pushedBy, ref worstPush, stay);
-            // Then the coarse cloth behind the knees held its standoff off the skin, so it still covers it as the knee
-            // bends — see KneeFaces. Before the rim lift and the layer order, which keep any layer over it outside.
-            if (!Tuned.NoKneeStandoff && KneeTest(pairs) is { } isKnee && KneeFaces(faceCheck, nodeDelta, isKnee) is { } kneeGoal)
-            {
-                pushed += ClearFaces(faceCheck, nodeDelta, pushedBy, ref worstPush, stay, kneeGoal, out var tally);
-                (kneeMoved, kneeWorst) = (tally.Moved, tally.Worst);
-            }
         }
         Stage("face-settle");
+
+        // Then the coarse cloth behind the knees held its standoff off the skin, so it still covers it as the knee bends —
+        // see KneeFaces. Before the rim lift and the layer order, which keep any layer over it outside. The knee band is
+        // read off the bodies only once a coarse face looking back is found.
+        if (faceCheck != null && pushedBy != null && !Tuned.NoFaceSettle && !Tuned.NoKneeStandoff
+            && KneeFaces(faceCheck, nodeDelta, () => KneeTest(pairs)) is { } kneeGoal)
+        {
+            pushed += ClearFaces(faceCheck, nodeDelta, pushedBy, ref worstPush, stay, kneeGoal, out var tally);
+            (kneeMoved, kneeWorst) = (tally.Moved, tally.Worst);
+        }
+        Stage("knee-standoff");
 
         // A hem lying on the skin whose edges the new, rounder body comes up through between its corners — see LiftRims.
         // Only with the skin swapped: then the body's own skin is drawn under the rim, where the author's sculpted skin
