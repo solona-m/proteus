@@ -40,11 +40,10 @@ internal sealed class ShaderUpgradePanel(ShaderUpgradeWatcher watcher, Configura
             if (ImGui.Button(s.GearShadersUpgradeNow)) watcher.UpgradeWornNow();
             if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
                 ImGui.SetTooltip(view.Busy ? s.GearShadersBusy : s.GearShadersUpgradeNowTip);
-            ImGui.SameLine();
-            if (ImGui.Button(s.GearShadersUndoWorn)) watcher.UndoWorn();
-            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                ImGui.SetTooltip(view.Busy ? s.GearShadersBusy : s.GearShadersUndoWornTip);
         }
+        ImGui.SameLine();
+        if (ProteusStyle.ArmedButton(s.GearShadersUndoWorn, s.GearShadersUndoWornTip, blocked: view.Busy, blockedTip: s.GearShadersBusy))
+            watcher.UndoWorn();
         if (ResultText(view) is { } result) ImGui.TextWrapped(result);
     }
 

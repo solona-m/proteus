@@ -210,7 +210,7 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
             if (ImGui.Button(s.Port, new Vector2(-1, 0))) Start(modRoot, modDir, source, afterChange);
 
         if (rows.Any(row => row.State is State.Ported or State.Stale))
-            if (ImGui.Button(s.Remove)) Remove(modRoot, source);
+            if (ProteusStyle.ArmedButton(s.Remove)) Remove(modRoot, source);
 
         if (result.Length > 0)
         {

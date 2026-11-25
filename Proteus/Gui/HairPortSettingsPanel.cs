@@ -50,15 +50,12 @@ internal sealed class HairPortSettingsPanel(HairPortWatcher watcher, Configurati
             if (view.Warning.Length > 0)
                 using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                     ImGui.TextWrapped(view.Warning);
-            using (ImRaii.Disabled(view.Busy))
+            if (ProteusStyle.ArmedButton(s.Undo, s.UndoTip, blocked: view.Busy, blockedTip: s.Working)) watcher.Undo();
+            if (view.PortsInMod > 1)
             {
-                if (ImGui.Button(s.Undo)) watcher.Undo();
-                if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(s.UndoTip);
-                if (view.PortsInMod > 1)
-                {
-                    ImGui.SameLine();
-                    if (ImGui.Button(string.Format(s.UndoAllFmt, view.PortsInMod))) watcher.UndoAll();
-                }
+                ImGui.SameLine();
+                if (ProteusStyle.ArmedButton(string.Format(s.UndoAllFmt, view.PortsInMod), blocked: view.Busy, blockedTip: s.Working))
+                    watcher.UndoAll();
             }
         }
         else ImGui.TextWrapped(WornText(view));
@@ -108,9 +105,7 @@ internal sealed class HairPortSettingsPanel(HairPortWatcher watcher, Configurati
             if (row.State is not (HairPortScan.RowState.Refused or HairPortScan.RowState.Undone))
             {
                 ImGui.SameLine();
-                using (ImRaii.Disabled(!can))
-                    if (ImGui.SmallButton(s.Undo)) watcher.UndoRow(row);
-                if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(s.UndoTip);
+                if (ProteusStyle.ArmedButton(s.Undo, s.UndoTip, blocked: !can, small: true)) watcher.UndoRow(row);
             }
             ImGui.PopID();
         }

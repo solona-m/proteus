@@ -418,9 +418,7 @@ internal sealed class MatcapPanel
         if (anySuperseded)
             using (ImRaii.Disabled(ctx.Busy))
                 if (ImGui.Button(s.Forget)) ctx.Forget();
-        using (ImRaii.Disabled(ctx.Busy))
-            if (ImGui.Button(s.Undo)) ctx.Undo();
-        if (ctx.GroupFiles.Count > 0 && ImGui.IsItemHovered())
-            ImGui.SetTooltip(string.Format(s.UndoGroupFmt, string.Join(", ", ctx.GroupFiles)));
+        var groupTip = ctx.GroupFiles.Count > 0 ? string.Format(s.UndoGroupFmt, string.Join(", ", ctx.GroupFiles)) : null;
+        if (ProteusStyle.ArmedButton(s.Undo, groupTip, blocked: ctx.Busy, blockedTip: Strings.Matcap.Working)) ctx.Undo();
     }
 }
