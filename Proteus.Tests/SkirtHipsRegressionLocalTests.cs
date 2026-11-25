@@ -16,7 +16,7 @@ namespace Proteus.Tests;
 /// own size — and the same garment across body mods, against its own folds and cloth inside.
 /// </summary>
 [Trait("Speed", "Slow")]
-public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
+public partial class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
 {
     private const string Geometric = LocalData.Mods + ":Geometric - by Solona";
     private const string OldThing = LocalData.Mods + ":This Old Thing - by Solona";
@@ -44,7 +44,11 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
 
     /// <summary><paramref name="fromRel"/> refitted onto the body option the author's <paramref name="toRel"/> was made
     /// on, as the size set refits it (the skin taken, its default Keep shape pieces).</summary>
-    private static Runs Refit(string mod, string fromRel, string toRel, string slot, string[] bodyNeeds)
+    /// <param name="now">The refit compared (the rule under test on); <see cref="RuleOff"/> when null.</param>
+    /// <param name="before">The refit it is compared against; <see cref="Old"/> when null.</param>
+    /// <param name="fitted">Run the made-on body's reading too (<see cref="Runs.Fitted"/>); off, it is the refit as it is.</param>
+    private static Runs Refit(string mod, string fromRel, string toRel, string slot, string[] bodyNeeds,
+                              BodyRetarget.Tuning? now = null, BodyRetarget.Tuning? before = null, bool fitted = true)
     {
         var bodies = bodyNeeds.Select(b => (Dir: Path.GetFileName(LocalData.Path(b)), Catalog: BodySizeCatalog.Read(LocalData.Path(b))))
                               .ToList();
@@ -82,12 +86,13 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
             return new Refitted(model, BodyRetarget.FoldedTriangles(sets, final!), BodySizeMatch.ClothAgainst(model, target)!.Value.Inside,
                                 SkinTuckSheet.Laid(bytes, plan), plan.Report.WorstMove);
         }
-        return new Runs(Run(RuleOff), Run(Old), author, BodySizeMatch.ClothAgainst(author, target)!.Value.Inside,
-                        Run(new BodyRetarget.Tuning()), garment);
+        var nowRun = Run(now ?? RuleOff);
+        return new Runs(nowRun, Run(before ?? Old), author, BodySizeMatch.ClothAgainst(author, target)!.Value.Inside,
+                        fitted ? Run(new BodyRetarget.Tuning()) : nowRun, garment);
     }
 
     /// <summary>The mean distance from each cloth point of the author's own size to the nearest cloth point of the refit.</summary>
-    private static float FromAuthor(ModelParts author, ModelParts refit)
+    internal static float FromAuthor(ModelParts author, ModelParts refit)
     {
         static List<Vector3> Cloth(ModelParts m)
         {

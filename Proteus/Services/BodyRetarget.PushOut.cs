@@ -580,6 +580,13 @@ internal static partial class BodyRetarget
         /// <summary>Where node <paramref name="n"/> stands now.</summary>
         public Vector3 At(int n, Vec3[] nodeDelta) => Placed(sets, nodeDelta, n);
 
+        /// <summary>The longest edge of a face where it stands now (see <see cref="ClearFaceCap(float)"/>).</summary>
+        public float LongestEdge((int A, int B, int C, bool EdgeA, bool EdgeB, bool EdgeC) face, Vec3[] nodeDelta)
+        {
+            Vector3 a = At(face.A, nodeDelta), b = At(face.B, nodeDelta), c = At(face.C, nodeDelta);
+            return MathF.Max(Vector3.Distance(a, b), MathF.Max(Vector3.Distance(b, c), Vector3.Distance(c, a)));
+        }
+
         /// <summary>Where node <paramref name="n"/> stands with <paramref name="delta"/> applied.</summary>
         public Vector3 AtWith(int n, Vec3 delta)
             => new(sets.NodeAt[n].X + delta.X, sets.NodeAt[n].Y + delta.Y, sets.NodeAt[n].Z + delta.Z);
@@ -1043,11 +1050,55 @@ internal static partial class BodyRetarget
     /// faces. Chasing it pushed the rim out by up to 20 mm — "Sirius" refitted to Neolithe S had cloth movement over the
     /// top of the cups 13 mm out of line with its neighbours (5.9 without the pass), onto Rue+ Large 19: the jagged top
     /// edge of the cups in game, back again after the layer guard.
+    /// <para/>
+    /// The floor of <see cref="ClearFaceCap"/>: a COARSE face sags deeper than this between its corners, by about the
+    /// sagitta of its longest edge over the body's curve (see <see cref="ClearFaceSagRadius"/>).
     /// </summary>
     internal const float ClearFaceDeepest = 0.002f;
 
-    /// <summary>The most <see cref="ClearFaces"/> moves any one node in all, over every round (3 mm).</summary>
+    /// <summary>The most <see cref="ClearFaces"/> moves any one node in all, over every round, for a face at the
+    /// <see cref="ClearFaceDeepest"/> floor (3 mm); a coarser face's own budget is <see cref="ClearFaceBudget"/>.</summary>
     internal const float ClearFaceMost = 0.003f;
+
+    /// <summary>The most any face may ask of <see cref="ClearFaces"/>, however coarse (12 mm, as <see cref="CutSagMax"/>).</summary>
+    internal const float ClearFaceSagMax = 0.012f;
+
+    /// <summary>
+    /// The curve a coarse face's sag is read against (50 mm): <see cref="ClearFaceCap"/> lets a face ask for L²/8r, the
+    /// sagitta of its longest edge L over a curve of this radius. An empirical fit to the sag measured at coarse faces'
+    /// edge midpoints, not a body radius — the deepest point of a well-shaped face is its middle, which sags a third more.
+    /// <para/>
+    /// Measured on "Starlight"'s Valentione Skirt, whose stockings are drawn in faces 40-80 mm across over the author's
+    /// equally coarse skin (Tight&amp;Firm Gen2 Large): refitted onto rounder, finer bodies the skin came up through the
+    /// middle of the faces 2-6 mm while every corner stood clear. Skin standing through the stockings, Tre Medium 658
+    /// points, YAB Skull Crushers 508, Neolithe M 215 — every one of the twelve sizes clipped in game. A face of 20 mm
+    /// or less asks no more than the old 2 mm at any radius down to 25.5 mm, so garments drawn finer are untouched.
+    /// </summary>
+    internal const float ClearFaceSagRadius = 0.05f;
+
+    /// <summary>
+    /// How deep the skin may be through a face whose longest edge is <paramref name="longestEdge"/> for
+    /// <see cref="ClearFaces"/> to lift it: max(<see cref="ClearFaceDeepest"/>, min(<see cref="ClearFaceSagMax"/>,
+    /// L²/(8·<see cref="ClearFaceSagRadius"/>))). The floor is returned as the constant itself whenever the sag does not
+    /// pass it, so a fine face takes exactly the old cap and budget, bit for bit.
+    /// </summary>
+    internal static float ClearFaceCap(float longestEdge) => ClearFaceCap(longestEdge, ClearFaceSagRadius);
+
+    /// <summary><see cref="ClearFaceCap(float)"/> read against a given curve (tests).</summary>
+    internal static float ClearFaceCap(float longestEdge, float radius)
+    {
+        float sag = longestEdge * longestEdge / (8f * radius);
+        if (!(sag > ClearFaceDeepest)) return ClearFaceDeepest;
+        return MathF.Min(ClearFaceSagMax, sag);
+    }
+
+    /// <summary>
+    /// How far in all, over every round, a corner pushed for a face whose cap is <paramref name="cap"/> may be moved:
+    /// <see cref="ClearFaceMost"/> exactly for the floor, else the cap plus the same 1 mm of headroom. Per face, not per
+    /// node: a fine face beside a coarse one never takes a shared corner past 3 mm on its own account.
+    /// </summary>
+    internal static float ClearFaceBudget(float cap)
+        => cap == ClearFaceDeepest ? ClearFaceMost : cap + (ClearFaceMost - ClearFaceDeepest);
 
     /// <summary>
     /// How far off the underside of the breast <see cref="LiftUnderbust"/> holds the cloth, whether or not the skin is
@@ -1381,6 +1432,7 @@ internal static partial class BodyRetarget
         int count = pushedBy.Length;
         var need = new float[count];
         var dir = new Vector3[count];
+        var budgetOf = new float[count];   // the budget of the face that set need[n] this round
         var held = stay != null ? (bool[])stay.Clone() : new bool[count];
         var cleared = new float[count];
         var touched = new List<int>();
@@ -1401,7 +1453,10 @@ internal static partial class BodyRetarget
             {
                 var face = check.Faces[f];
                 var (push, outward) = check.Need(face, nodeDelta, SettleTolerance);
-                if (push <= 0f || push > ClearFaceDeepest)   // not sag: see ClearFaceDeepest
+                // How deep a face this coarse may sag: see ClearFaceCap.
+                float cap = Tuned.NoCoarseSag ? ClearFaceDeepest : ClearFaceCap(check.LongestEdge(face, nodeDelta));
+                float budget = ClearFaceBudget(cap);
+                if (push <= 0f || push > cap)   // not sag: see ClearFaceDeepest
                 {
                     FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), push <= 0f ? "clear" : "too-deep");
                     continue;
@@ -1410,13 +1465,14 @@ internal static partial class BodyRetarget
                 foreach (int n in new[] { face.A, face.B, face.C })
                 {
                     if (held[n]) { FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), "held"); continue; }
-                    // Never more than ClearFaceMost in all, over every round.
-                    float allowed = MathF.Min(push, ClearFaceMost - cleared[n]);
+                    // Never more than this face's budget in all, over every round (see ClearFaceBudget).
+                    float allowed = MathF.Min(push, budget - cleared[n]);
                     if (allowed <= 0f) { FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), "capped"); continue; }
                     if (need[n] == 0f) touched.Add(n);
                     if (allowed <= need[n]) continue;
                     need[n] = allowed;
                     dir[n] = outward;
+                    budgetOf[n] = budget;
                 }
             }
             if (touched.Count == 0) break;
@@ -1430,11 +1486,12 @@ internal static partial class BodyRetarget
             {
                 int n = touched[i], p = check.WallPartner[n];
                 if (p < 0 || held[p]) continue;
-                float carried = MathF.Min(need[n], ClearFaceMost - cleared[p]);
+                float carried = MathF.Min(need[n], budgetOf[n] - cleared[p]);
                 if (carried <= need[p]) continue;
                 if (need[p] == 0f) touched.Add(p);
                 need[p] = carried;
                 dir[p] = dir[n];
+                budgetOf[p] = budgetOf[n];
             }
 
             // How deep the skin is through each triangle beside a push that nothing would lift again, before the push.

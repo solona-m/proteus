@@ -203,23 +203,23 @@ public class WallPairTests
     // ── the walls moved together when the skin is cleared out of a face ──────────────────────────────────────────────
 
     /// <summary>The bump: 2.2 mm high, 10 mm across, under the middle of one of the shell's 40 mm faces.</summary>
-    private static float Bump(float x, float y)
+    private static float Bump(float x, float y, float height = 0.0022f)
     {
         float r = MathF.Sqrt(x * x + y * y) / 0.01f;
-        return r >= 1f ? 0f : 0.0022f * (1f - r * r) * (1f - r * r);
+        return r >= 1f ? 0f : height * (1f - r * r) * (1f - r * r);
     }
 
     /// <summary>A thick shell (inner wall 1.5 mm off the skin facing in, outer 2.5 mm facing out, joined at a rim) of
     /// 40 mm faces over a flat body that the refit grows a bump into, under the middle of a face.</summary>
-    private static (ModelParts Shell, List<BodyRetarget.SlotPair> Pairs) Bumped()
+    private static (ModelParts Shell, List<BodyRetarget.SlotPair> Pairs) Bumped(float height = 0.0022f)
     {
         var flat = Build(Skin, [new(81, 0.0025f, 0f, true)]);
         var grown = (float[])flat.Positions.Clone();
-        for (int v = 0; v < grown.Length / 3; v++) grown[v * 3 + 2] = Bump(grown[v * 3], grown[v * 3 + 1]);
+        for (int v = 0; v < grown.Length / 3; v++) grown[v * 3 + 2] = Bump(grown[v * 3], grown[v * 3 + 1], height);
         var target = new ModelParts
         {
             Positions = grown, Normals = flat.Normals, MeshSpans = flat.MeshSpans, Parts = flat.Parts,
-            AttributeNames = flat.AttributeNames, Min = flat.Min, Max = flat.Max with { Z = 0.0022f },
+            AttributeNames = flat.AttributeNames, Min = flat.Min, Max = flat.Max with { Z = height },
             ShatteredSubmeshes = flat.ShatteredSubmeshes,
         };
         Assert.True(IdentityCorrespondence.TryBuild(flat, target, "legs", out var grow, out string why), why);
@@ -230,7 +230,7 @@ public class WallPairTests
     }
 
     /// <summary>How many of the shell's faces the bump comes through the middle of, after the refit.</summary>
-    private static int Through(ModelParts shell, BodyRetarget.Solved solved)
+    private static int Through(ModelParts shell, BodyRetarget.Solved solved, float height = 0.0022f)
     {
         int count = 0;
         var t = shell.Parts[0].Triangles;
@@ -245,7 +245,7 @@ public class WallPairTests
             for (int w = 0; u + w <= 20 && !through; w++)
             {
                 var s = a + (b - a) * (u / 20f) + (c - a) * (w / 20f);
-                through = s.Z < Bump(s.X, s.Y) - 1e-5f;
+                through = s.Z < Bump(s.X, s.Y, height) - 1e-5f;
             }
             if (through) count++;
         }
@@ -278,6 +278,51 @@ public class WallPairTests
         }
         // The diagnostic saw it pushed.
         Assert.Contains("pushed", traced);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-starlight-bottoms-6")]
+    public void A_coarse_shell_clears_a_deeper_sag_with_both_walls_within_its_budget()
+    {
+        // The face clearing alone, on the shell over the grown body: the bump 5 mm high, 3.5 mm through the inner wall's
+        // 40 mm faces (56 mm across the diagonal, cap 7.8 mm) — past the old 2 mm, within the coarse cap. The inner wall
+        // goes out carrying its partner on the outer wall, the outer always over the inner, and no point further than
+        // the face's budget; under the old cap the inner wall's faces are left.
+        const float height = 0.005f;
+        var (shell, pairs) = Bumped(height);
+        (BodyRetarget.FaceCheck, SecondSkinWriter.Vec3[], BodyRetarget.Sets) Setup()
+        {
+            var sets = BodyRetarget.Sets.From(shell);
+            var before = BodyRetarget.TargetBody.Build(pairs, null, null, before: true);
+            var after = BodyRetarget.TargetBody.Build(pairs, null, null, before: false);
+            var authored = new float[sets.NodeCount];
+            Array.Fill(authored, float.MaxValue);
+            return (new BodyRetarget.FaceCheck(sets, sets.ClothNodes, before, after, authored, clearBody: false),
+                    new SecondSkinWriter.Vec3[sets.NodeCount], sets);
+        }
+
+        var (check, delta, sets) = Setup();
+        Assert.Contains(Enumerable.Range(0, sets.NodeCount), n => check.WallPartner[n] >= 0);
+        float worst = 0f;
+        BodyRetarget.ClearFaces(check, delta, new float[sets.NodeCount], ref worst);
+        var (oldCheck, oldDelta, oldSets) = Setup();
+        BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoCoarseSag: true),
+            () => BodyRetarget.ClearFaces(oldCheck, oldDelta, new float[oldSets.NodeCount], ref worst));
+
+        // Under the old cap no corner goes past 3 mm (the inner wall's own face is left); now the inner wall clears.
+        Assert.All(oldDelta, d => Assert.True(d.Z <= BodyRetarget.ClearFaceMost + 1e-6f));
+        Assert.Contains(delta, d => d.Z > BodyRetarget.ClearFaceMost);
+        float budget = BodyRetarget.ClearFaceBudget(BodyRetarget.ClearFaceCap(0.04f * MathF.Sqrt(2f)));
+        for (int v = 0; v < 169; v++)
+        {
+            var di = delta[sets.NodeOf[v]];
+            var dout = delta[sets.NodeOf[169 + v]];
+            float inner = shell.Positions[v * 3 + 2] + di.Z;
+            float outer = shell.Positions[(169 + v) * 3 + 2] + dout.Z;
+            Assert.True(outer > inner, $"point {v}: outer wall {outer * 1000f:F2} mm, inner {inner * 1000f:F2}");
+            Assert.True(new Vector3(di.X, di.Y, di.Z).Length() <= budget + 1e-6f, $"point {v} moved too far");
+            Assert.True(new Vector3(dout.X, dout.Y, dout.Z).Length() <= budget + 1e-6f, $"point {169 + v} moved too far");
+        }
     }
 
     [Fact]

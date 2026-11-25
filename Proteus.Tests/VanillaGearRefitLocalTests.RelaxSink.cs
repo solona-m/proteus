@@ -510,7 +510,9 @@ public partial class VanillaGearRefitLocalTests
         var g = GiletOnTbse();
         // As build 1373 made them: before 1382's seam weights too (measured at 1382: 1 and 3 vertices on 5 seams took one
         // weighting, the most any moved 0.067).
-        var asBuilt = new BodyRetarget.Tuning(NoSeamWeights: true);
+        // And before 1501's coarse-face sag cap and pressed-skin cut.
+        var pre1501 = new BodyRetarget.Tuning(NoCoarseSag: true, NoPressedSkinCut: true);
+        var asBuilt = pre1501 with { NoSeamWeights = true };
         var off = asBuilt with { NoRelaxSinkGuard = true };
         BodyRetarget.Planned Mod() => RefitCore.PlanRefit(g.Garment, g.Bytes, g.Pairs, "_top", across: true, gameGear: false, out _);
         BodyRetarget.Planned Accessory() => RefitCore.PlanAccessoryRefit(g.Garment, g.Bytes, g.Pairs, "_top", across: true, out _);
@@ -520,8 +522,9 @@ public partial class VanillaGearRefitLocalTests
         Assert.Equal(GiletMod1373, mod);
         Assert.Equal(GiletAccessory1373, accessory);
         // [EDGE-seam-weights-15] With the seam weights: the same refits, weights apart.
-        SeamWeightsTests.SameGeometry(BodyRetarget.WithTuning(asBuilt, Mod).Model, Mod().Model);
-        SeamWeightsTests.SameGeometry(BodyRetarget.WithTuning(asBuilt, Accessory).Model, Accessory().Model);
+        SeamWeightsTests.SameGeometry(BodyRetarget.WithTuning(asBuilt, Mod).Model, BodyRetarget.WithTuning(pre1501, Mod).Model);
+        SeamWeightsTests.SameGeometry(BodyRetarget.WithTuning(asBuilt, Accessory).Model,
+                                      BodyRetarget.WithTuning(pre1501, Accessory).Model);
         Assert.Equal(mod, SkinTuckSheet.Sha(BodyRetarget.WithTuning(off, Mod).Model));
         Assert.Equal(accessory, SkinTuckSheet.Sha(BodyRetarget.WithTuning(off, Accessory).Model));
     }

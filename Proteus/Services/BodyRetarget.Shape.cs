@@ -86,6 +86,10 @@ internal static partial class BodyRetarget
     /// builds before the shared seam did (see <see cref="PinSharedSeam"/>).</param>
     /// <param name="NoLayerFloor">Let the layer order's lift, faded onto a neighbour, take that point deeper into the
     /// drawn skin than it stood, as builds before 1495 did (see <see cref="KeepLayerOrder"/>).</param>
+    /// <param name="NoCoarseSag">Hold every face to the 2 mm <see cref="ClearFaceDeepest"/> however coarse, as builds before
+    /// 1501 did (see <see cref="ClearFaceCap(float)"/>).</param>
+    /// <param name="NoPressedSkinCut">Cut the new body's skin wherever the author's laid skin is further off it than the
+    /// chord rule allows, pressed in under a band or not, as builds before 1501 did (see <see cref="PressedUnder"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -103,7 +107,8 @@ internal static partial class BodyRetarget
                                   bool NoCutOpenSkin = false, bool CutOpenSkinUnderCloth = false,
                                   bool CutOpenSkinAnyFacing = false, bool NoCutInside = false,
                                   bool NoReshapeEnds = false, bool NoSharedSeam = false, bool NoBulge = false,
-                                  bool BulgeFault = false, bool BulgeForceGuard = false, bool NoLayerFloor = false);
+                                  bool BulgeFault = false, bool BulgeForceGuard = false, bool NoLayerFloor = false,
+                                  bool NoCoarseSag = false, bool NoPressedSkinCut = false);
 
     private static readonly Tuning DefaultTuning = new();
 

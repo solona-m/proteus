@@ -505,10 +505,25 @@ internal static partial class BodyRetarget
         var baseOf = new Dictionary<int, int>();
         foreach (var span in parts.MeshSpans) baseOf[span.Mesh] = span.BaseVertex;
 
+        // What the author's skin covers, by the chord rule (Covers): the tuck and the open skin judge by this alone.
+        // What the cut keeps and draws also takes in the skin the author pressed in under a band (PressedUnder).
         var covered = new bool[parts.Positions.Length / 3];
+        var drawnBy = new bool[covered.Length];
+        var normals = Tuned.NoPressedSkinCut ? null : SkinVertexNormals(parts);
+        var onBody = normals == null ? null : new BodySurface(parts, BodySurface.CellFor(MeanEdgeOf(parts)));
+        var standsOff = new Dictionary<int, float>();
+        float Pressed(int laid)
+        {
+            if (standsOff.TryGetValue(laid, out float known)) return known;
+            var q = drawn.PositionOf(laid);
+            return standsOff[laid] = onBody!.Nearest(q, CutSagMax, out var h) ? h.Distance : CutSagMax;
+        }
         foreach (int v in parts.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
                                      .SelectMany(p => p.Triangles).Distinct())
+        {
             covered[v] = Covers(drawn, At(parts, v), edges);
+            drawnBy[v] = covered[v] || (normals != null && PressedUnder(drawn, At(parts, v), normals[v], edges, Pressed));
+        }
 
         var sets = new Dictionary<int, HashSet<ushort>>();
         var drawnCorners = new HashSet<int>();
@@ -530,9 +545,9 @@ internal static partial class BodyRetarget
                 // every corner of one fell under a strap — cut, with its middle in the open between them. Kept when
                 // its middle or an edge's lies on the author's skin with no cloth crowding it there: under cloth (the
                 // Pioneer's Bottoms' coarse hem) the triangle and the ones around its corners came through the hem.
-                bool inside = !covered[a] && !covered[b] && !covered[c] && !Tuned.NoCutInside
+                bool inside = !drawnBy[a] && !drawnBy[b] && !drawnBy[c] && !Tuned.NoCutInside
                            && OpenInside(drawn, edges, cloth, parts, a, b, c);
-                if (!covered[a] && !covered[b] && !covered[c] && !inside) { cut++; continue; }
+                if (!drawnBy[a] && !drawnBy[b] && !drawnBy[c] && !inside) { cut++; continue; }
                 kept++;
                 // The emit loop reads MESH-LOCAL indices, which is what the file stores. A triangle kept for its inside
                 // has no corner the author drew, and the writer draws a triangle only for a corner in the set.
@@ -588,7 +603,7 @@ internal static partial class BodyRetarget
 
         void Keep(HashSet<ushort> set, int v, int bv, bool always)
         {
-            if ((covered[v] || always) && v - bv is >= 0 and <= ushort.MaxValue) set.Add((ushort)(v - bv));
+            if ((drawnBy[v] || always) && v - bv is >= 0 and <= ushort.MaxValue) set.Add((ushort)(v - bv));
         }
     }
 
@@ -604,6 +619,91 @@ internal static partial class BodyRetarget
         var normal = NormalAt(parts, a) + NormalAt(parts, b) + NormalAt(parts, c);
         bool Open(Vector3 p) => Covers(drawn, p, edges) && !cloth.Crowds(p, normal);
         return Open((pa + pb + pc) / 3f) || Open((pa + pb) * 0.5f) || Open((pb + pc) * 0.5f) || Open((pc + pa) * 0.5f);
+    }
+
+    /// <summary>
+    /// How squarely the author's laid skin must face the way a body vertex does for <see cref="PressedUnder"/> to count
+    /// it (cosine 0.5, 60°): the skin of the other thigh, as near across the gap between the legs, faces the other way.
+    /// </summary>
+    internal const float PressedSkinFacing = 0.5f;
+
+    /// <summary>
+    /// How far off the new body a corner of the author's laid skin must stand for <see cref="PressedUnder"/> to read the
+    /// triangle as pressed in (2 mm): laid skin sits on the new body, save where the author pressed it in further than
+    /// the lay reaches — Starlight's stocking crease, 7-8 mm inside the rounder thighs. A triangle whose corners all sit
+    /// on the body spans the body's own detail, which the author never drew over.
+    /// </summary>
+    internal const float PressedCornerOff = 0.002f;
+
+    /// <summary>
+    /// Whether the author's laid skin draws over a body vertex <see cref="Covers"/> rejects, because the author pressed
+    /// that skin in: the nearest laid skin within <see cref="CutSagMax"/> lands inside one of its triangles or on an edge
+    /// two of them share (<see cref="ChordUnder"/>, never the author's own edge or a corner, so a cut the author made
+    /// stands); that triangle touches none of the author's edge; a corner of it stands at least
+    /// <see cref="PressedCornerOff"/> into the new body, far enough that the gap left over is within the chord rule; the
+    /// new body stands out through it, not behind it; and it faces the vertex's way (<see cref="PressedSkinFacing"/>).
+    /// <para/>
+    /// "Starlight"'s Valentione Skirt presses the thighs in under its stocking band, in coarse skin (chords 29-35 mm).
+    /// Laid onto a rounder body that skin sat 7-8 mm inside it, past the chord rule's 20% of the chord, and the cut took
+    /// the new body's skin out at the front of the thighs (Tre), the hip sides (YAB Skull Crushers) and the inner thigh
+    /// (Neolithe M) though the author's skin there was whole. A zero normal on either side gives the old rule.
+    /// </summary>
+    /// <param name="drawn">The author's skin, laid onto the new body.</param>
+    /// <param name="p">The body vertex.</param>
+    /// <param name="normal">Its normal (see <see cref="SkinVertexNormals"/>); zero for none.</param>
+    /// <param name="edges">Which of <paramref name="drawn"/>'s edges two of its triangles share.</param>
+    /// <param name="standsOff">How far a vertex of <paramref name="drawn"/> stands off the new body (metres; 0 on it).</param>
+    internal static bool PressedUnder(BodySurface drawn, Vector3 p, Vector3 normal, SkinEdges? edges, Func<int, float> standsOff)
+    {
+        if (normal.LengthSquared() <= 1e-12f) return false;
+        if (!drawn.Nearest(p, CutSagMax, out var hit) || ChordUnder(drawn, hit, edges) is not float chord) return false;
+        // The author's skin itself pressed in, and pressed far enough to explain the gap: what is left once the press is
+        // taken off is within the chord rule. Not a chord laid over the new body's own detail (every corner on the body),
+        // nor skin a little off it reaching across to detail further away — the skirt's crotch on Rue, YAB and Neolithe,
+        // the new body's genitals 10-12 mm from inner-thigh skin pressed 2-4 mm, inside the author's crotch cut.
+        float press = MathF.Max(standsOff(hit.A), MathF.Max(standsOff(hit.B), standsOff(hit.C)));
+        if (press < PressedCornerOff || hit.Distance - press > MathF.Min(CutSagMax, CutSagShare * chord)) return false;
+        // A reshape inside the author's skin, never at its edge: a triangle with a corner on the author's own edge is the
+        // rim of a cut — Tre's crotch, inside the skirt's crotch hole, landed on the inner thighs' rim triangles.
+        if (edges == null || edges.OnBoundary(hit.A) || edges.OnBoundary(hit.B) || edges.OnBoundary(hit.C)) return false;
+        if (hit.Normal.LengthSquared() <= 1e-12f) return false;
+        var laidNormal = Vector3.Normalize(hit.Normal);
+        // The new body standing out through the author's skin, not tucked behind it: under the skirt's crotch the skin
+        // faces down and the new body's genitals sat 10 mm above it, inside — the author's cut.
+        if (Vector3.Dot(p - hit.Point, laidNormal) <= 0f) return false;
+        return Vector3.Dot(laidNormal, Vector3.Normalize(normal)) >= PressedSkinFacing;
+    }
+
+    /// <summary>
+    /// Per vertex of a body model, its normal on the skin: its own, or — where the file has none — the sum of its skin
+    /// triangles' faces; zero where neither gives a direction (and for every vertex off the skin).
+    /// </summary>
+    internal static Vector3[] SkinVertexNormals(ModelParts parts)
+    {
+        int vc = parts.Positions.Length / 3;
+        var faceSum = new Vector3[vc];
+        foreach (var part in parts.Parts)
+        {
+            if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
+                var face = Vector3.Cross(At(parts, b) - At(parts, a), At(parts, c) - At(parts, a));
+                faceSum[a] += face;
+                faceSum[b] += face;
+                faceSum[c] += face;
+            }
+        }
+        var normals = new Vector3[vc];
+        for (int v = 0; v < vc; v++)
+        {
+            var n = v * 3 + 2 < parts.Normals.Length
+                ? new Vector3(parts.Normals[v * 3], parts.Normals[v * 3 + 1], parts.Normals[v * 3 + 2])
+                : Vector3.Zero;
+            normals[v] = n.LengthSquared() > 1e-12f ? Vector3.Normalize(n)
+                       : faceSum[v].LengthSquared() > 1e-20f ? Vector3.Normalize(faceSum[v]) : Vector3.Zero;
+        }
+        return normals;
     }
 
     private static Vector3 NormalAt(ModelParts m, int v)
