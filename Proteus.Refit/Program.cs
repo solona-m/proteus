@@ -1199,6 +1199,7 @@ internal static class Program
                     "NoLayerFloor" => tuning with { NoLayerFloor = true },
                     "NoCoarseSag" => tuning with { NoCoarseSag = true },
                     "NoPressedSkinCut" => tuning with { NoPressedSkinCut = true },
+                    "NoKneeStandoff" => tuning with { NoKneeStandoff = true },
                     "NoRelease" => tuning with { NoRelease = true },
                     "NoNippleSmooth" => tuning with { NoNippleSmooth = true },
                     "NoSnapPush" => tuning with { NoSnapPush = true },

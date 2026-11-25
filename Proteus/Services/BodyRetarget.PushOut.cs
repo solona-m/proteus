@@ -634,6 +634,21 @@ internal static partial class BodyRetarget
             return (depth + standoff, outward);
         }
 
+        /// <summary>
+        /// How far each corner of the face has to go out for the drawn skin to stand <paramref name="standoff"/> behind it,
+        /// which way is out, and the skin's raw depth through it (positive: out through the face); no push when no skin is
+        /// under it or it already stands that far off (the knee standoff, see <see cref="KneeFaces"/>).
+        /// </summary>
+        public (float Push, Vector3 Outward, float RawDepth) NeedOff((int A, int B, int C, bool EdgeA, bool EdgeB, bool EdgeC) face,
+                                                                    Vec3[] nodeDelta, float standoff)
+        {
+            var (depth, outward) = Through(drawn, Placed(sets, nodeDelta, face.A), Placed(sets, nodeDelta, face.B),
+                                           Placed(sets, nodeDelta, face.C), face.EdgeA, face.EdgeB, face.EdgeC);
+            if (outward == default) return (0f, default, 0f);
+            float push = depth + standoff;
+            return push <= SettleTolerance ? (0f, default, depth) : (push, outward, depth);
+        }
+
         // The skin's points, bucketed so a face only looks at the skin near it.
         private static Dictionary<(int, int, int), List<(Vector3 At, Vector3 Normal)>> Grid(
             IEnumerable<(Vector3 At, Vector3 Normal)> points)
@@ -1433,7 +1448,18 @@ internal static partial class BodyRetarget
     /// <returns>How many nodes it pushed that nothing before it had.</returns>
     internal static int ClearFaces(FaceCheck check, Vec3[] nodeDelta, float[] pushedBy, ref float worst,
                                    bool[]? stay = null)
+        => ClearFaces(check, nodeDelta, pushedBy, ref worst, stay, null, out _);
+
+    /// <inheritdoc cref="ClearFaces(FaceCheck, Vec3[], float[], ref float, bool[])"/>
+    /// <param name="goal">A second, opt-in pass (the knee standoff): only these faces, in every round; each asked to stand
+    /// its standoff off the skin rather than to clear it; left as too deep when the skin's raw depth through it (the
+    /// standoff not added) is past its <see cref="ClearFaceCap(float)"/>; every corner within the goal's budget. Null: the
+    /// face settle as it always ran.</param>
+    /// <param name="tally">With a goal, the distinct nodes the pass moved and its largest move of one.</param>
+    internal static int ClearFaces(FaceCheck check, Vec3[] nodeDelta, float[] pushedBy, ref float worst,
+                                   bool[]? stay, FaceGoal? goal, out KneeTally tally)
     {
+        string tag = goal == null ? "" : "knee-";
         int count = pushedBy.Length;
         var need = new float[count];
         var dir = new Vector3[count];
@@ -1448,7 +1474,8 @@ internal static partial class BodyRetarget
         for (int t = 0; t < check.Tris.Count; t++) foldedBefore[t] = check.TurnedOver(t, nodeDelta);
 
         var candidates = new HashSet<int>();
-        for (int f = 0; f < check.Faces.Count; f++) candidates.Add(f);
+        if (goal != null) candidates.UnionWith(goal.Faces);
+        else for (int f = 0; f < check.Faces.Count; f++) candidates.Add(f);
 
         for (int round = 0; round < ClearFaceRounds && candidates.Count > 0; round++)
         {
@@ -1457,22 +1484,38 @@ internal static partial class BodyRetarget
             foreach (int f in candidates)
             {
                 var face = check.Faces[f];
-                var (push, outward) = check.Need(face, nodeDelta, SettleTolerance);
-                // How deep a face this coarse may sag: see ClearFaceCap.
-                float cap = Tuned.NoCoarseSag ? ClearFaceDeepest : ClearFaceCap(check.LongestEdge(face, nodeDelta));
-                float budget = ClearFaceBudget(cap);
-                if (push <= 0f || push > cap)   // not sag: see ClearFaceDeepest
+                float push, cap, budget;
+                Vector3 outward;
+                bool tooDeep;
+                if (goal == null)
                 {
-                    FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), push <= 0f ? "clear" : "too-deep");
+                    (push, outward) = check.Need(face, nodeDelta, SettleTolerance);
+                    // How deep a face this coarse may sag: see ClearFaceCap.
+                    cap = Tuned.NoCoarseSag ? ClearFaceDeepest : ClearFaceCap(check.LongestEdge(face, nodeDelta));
+                    budget = ClearFaceBudget(cap);
+                    tooDeep = push > cap;   // not sag: see ClearFaceDeepest
+                }
+                else
+                {
+                    // Held off by the standoff; too deep only by the skin's own depth through it, never the standoff added.
+                    float raw;
+                    (push, outward, raw) = check.NeedOff(face, nodeDelta, goal.Standoff);
+                    cap = ClearFaceCap(check.LongestEdge(face, nodeDelta));
+                    budget = goal.Budget;
+                    tooDeep = raw > cap;
+                }
+                if (push <= 0f || tooDeep)
+                {
+                    FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), tag + (push <= 0f ? "clear" : "too-deep"));
                     continue;
                 }
-                FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), "pushed");
+                FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), tag + "pushed");
                 foreach (int n in new[] { face.A, face.B, face.C })
                 {
-                    if (held[n]) { FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), "held"); continue; }
+                    if (held[n]) { FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), tag + "held"); continue; }
                     // Never more than this face's budget in all, over every round (see ClearFaceBudget).
                     float allowed = MathF.Min(push, budget - cleared[n]);
-                    if (allowed <= 0f) { FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), "capped"); continue; }
+                    if (allowed <= 0f) { FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), tag + "capped"); continue; }
                     if (need[n] == 0f) touched.Add(n);
                     if (allowed <= need[n]) continue;
                     need[n] = allowed;
@@ -1549,9 +1592,9 @@ internal static partial class BodyRetarget
                     if (FaceTrace.Value is { } traceGuard)
                     {
                         foreach (int f in check.FacesOf[n])
-                            traceGuard(Sorted(check.Faces[f].A, check.Faces[f].B, check.Faces[f].C), "layer-guard");
+                            traceGuard(Sorted(check.Faces[f].A, check.Faces[f].B, check.Faces[f].C), tag + "layer-guard");
                         var (xa, xb, xc) = check.Tris[crossed];
-                        traceGuard(Sorted(xa, xb, xc), "crossed-by:" + n);
+                        traceGuard(Sorted(xa, xb, xc), tag + "crossed-by:" + n);
                     }
                 }
 
@@ -1574,7 +1617,7 @@ internal static partial class BodyRetarget
                             if (FaceTrace.Value is { } traceBack)
                                 foreach (int f in check.FacesOf[m])
                                     traceBack(Sorted(check.Faces[f].A, check.Faces[f].B, check.Faces[f].C),
-                                              folds ? "turned-over" : "sinks");
+                                              tag + (folds ? "turned-over" : "sinks"));
                         }
                     }
                 }
@@ -1588,9 +1631,16 @@ internal static partial class BodyRetarget
                 pushedBy[n] += need[n];
                 cleared[n] += need[n];
                 if (pushedBy[n] > worst) worst = pushedBy[n];
-                foreach (int f in check.FacesOf[n]) candidates.Add(f);
+                foreach (int f in check.FacesOf[n]) if (goal == null || goal.Faces.Contains(f)) candidates.Add(f);
             }
         }
+        // The pass's own tally (never newly, which skips nodes an earlier pass pushed, nor the shared worst).
+        int moved = 0;
+        float most = 0f;
+        if (goal != null)
+            for (int n = 0; n < count; n++)
+                if (cleared[n] > 1e-5f) { moved++; most = MathF.Max(most, cleared[n]); }
+        tally = new KneeTally(moved, most);
         return newly;
     }
 

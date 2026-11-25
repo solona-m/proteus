@@ -15,7 +15,7 @@ namespace Proteus.Tests;
 public partial class SkirtHipsRegressionLocalTests
 {
     /// <summary>The build before the coarse-face sag cap and the pressed-skin cut.</summary>
-    private static readonly BodyRetarget.Tuning Pre1501 = new(NoCoarseSag: true, NoPressedSkinCut: true);
+    private static readonly BodyRetarget.Tuning Pre1501 = new(NoCoarseSag: true, NoPressedSkinCut: true, NoKneeStandoff: true);
 
     /// <summary>How much steeper a garment's cloth movement may be out of line with its neighbours (0.005: 0.5 mm over
     /// 100 mm, rounding across the passes).</summary>
@@ -55,7 +55,7 @@ public partial class SkirtHipsRegressionLocalTests
         => CoarseSagNoWorse($"Sirius L -> {size}",
                             Refit(Sirius, "size/Sirius/L/chara/equipment/e0154/model/c0201e0154_top.mdl",
                                   $"size/Sirius/{size}/chara/equipment/e0154/model/c0201e0154_top.mdl", "_top",
-                                  [Neolithe, Rue, Yab], now: new BodyRetarget.Tuning(), before: Pre1501, fitted: false),
+                                  [Neolithe, Rue, Yab], now: new BodyRetarget.Tuning(NoKneeStandoff: true), before: Pre1501, fitted: false),
                             againstAuthor: true);
 
     [LocalDataFact(OldThing, Rue, Neolithe)]
@@ -66,7 +66,7 @@ public partial class SkirtHipsRegressionLocalTests
         => CoarseSagNoWorse("This Old Thing Neolithe L -> Rue L",
                             Refit(OldThing, "size/neolithe l/chara/equipment/e6255/model/c0201e6255_top.mdl",
                                   "size/rue l/chara/equipment/e6255/model/c0201e6255_top.mdl", "_top", [Rue, Neolithe],
-                                  now: new BodyRetarget.Tuning(), before: Pre1501, fitted: false),
+                                  now: new BodyRetarget.Tuning(NoKneeStandoff: true), before: Pre1501, fitted: false),
                             againstAuthor: false);
 
     [LocalDataFact(Geometric, Bibo)]
@@ -77,7 +77,7 @@ public partial class SkirtHipsRegressionLocalTests
         => CoarseSagNoWorse("Geometric skirt Small -> Large",
                             Refit(Geometric, "leg size/small/chara/equipment/e6010/model/c0201e6010_dwn.mdl",
                                   "leg size/large/chara/equipment/e6010/model/c0201e6010_dwn.mdl", "_dwn", [Bibo],
-                                  now: new BodyRetarget.Tuning(), before: Pre1501, fitted: false),
+                                  now: new BodyRetarget.Tuning(NoKneeStandoff: true), before: Pre1501, fitted: false),
                             // Accepted (build 1501): the sag cap alone puts one skin point 0.95 mm through the skirt at the
                             // hip side (y 0.93 m), where the skirt already has 290 as made; nothing else moved worse.
                             againstAuthor: true, acceptedSkin: 1);

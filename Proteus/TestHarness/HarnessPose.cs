@@ -112,8 +112,8 @@ internal static class HarnessPose
 
     /// <summary>Put-back for the emote: "send" when the character still plays the harness's emote in its loop (playing it
     /// again stands it up); else "changed" (the player, or the game, moved on: left alone).</summary>
-    /// Once the settle read the emote back, only that row counts (a ground sit the player started after the harness's own
-    /// <c>sit</c> is theirs, left alone); before it, the asked row or its fallback.
+    /// <remarks>Once the settle read the emote back, only that row counts (a ground sit the player started after the
+    /// harness's own <c>sit</c> is theirs, left alone); before it, the asked row or its fallback.</remarks>
     public static string EmoteDecision(EmoteRecord record, EmoteNow? now)
     {
         if (now is not { } n || !IsLoopMode(n.Mode)) return "changed";

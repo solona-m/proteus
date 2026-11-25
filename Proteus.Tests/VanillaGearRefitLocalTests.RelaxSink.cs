@@ -511,7 +511,7 @@ public partial class VanillaGearRefitLocalTests
         // As build 1373 made them: before 1382's seam weights too (measured at 1382: 1 and 3 vertices on 5 seams took one
         // weighting, the most any moved 0.067).
         // And before 1501's coarse-face sag cap and pressed-skin cut.
-        var pre1501 = new BodyRetarget.Tuning(NoCoarseSag: true, NoPressedSkinCut: true);
+        var pre1501 = new BodyRetarget.Tuning(NoCoarseSag: true, NoPressedSkinCut: true, NoKneeStandoff: true);
         var asBuilt = pre1501 with { NoSeamWeights = true };
         var off = asBuilt with { NoRelaxSinkGuard = true };
         BodyRetarget.Planned Mod() => RefitCore.PlanRefit(g.Garment, g.Bytes, g.Pairs, "_top", across: true, gameGear: false, out _);

@@ -27,7 +27,7 @@ public sealed class StarlightBottomsLocalTests(StarlightBottomsLocalTests.Runs r
     internal const string TreMedium = "files\\common\\15\\c0201e0000_dwn.mdl";
 
     /// <summary>The build before the fix.</summary>
-    internal const string Before = "NoCoarseSag,NoPressedSkinCut";
+    internal const string Before = "NoCoarseSag,NoPressedSkinCut,NoKneeStandoff";
 
     /// <summary>The inputs the references below were measured on (SHA-256): a change of any is a re-measure, not a pass.</summary>
     internal static readonly (string Mod, string Rel, string Sha)[] Inputs =
@@ -84,7 +84,8 @@ public sealed class StarlightBottomsLocalTests(StarlightBottomsLocalTests.Runs r
         public ModelParts Model(string tune = "")
         {
             if (models.TryGetValue(tune, out var m)) return m;
-            string outDir = Path.Combine(Dir, tune.Length == 0 ? "as-is" : "before");
+            // Each tune its own folder (its name, sanitised): two tunes never write over each other.
+            string outDir = Path.Combine(Dir, tune.Length == 0 ? "as-is" : new string(tune.Select(ch => char.IsLetterOrDigit(ch) ? ch : '-').ToArray()));
             Directory.CreateDirectory(outDir);
             var args = new List<string>
             {
@@ -199,7 +200,9 @@ public sealed class StarlightBottomsLocalTests(StarlightBottomsLocalTests.Runs r
         {
             bool stocking = stockings.Contains(part);
             var before = StarlightMeasure.OutOfLine(runs.Original, runs.Model(Before), [part], perLength: stocking);
-            var now = StarlightMeasure.OutOfLine(runs.Original, runs.Model(), [part], perLength: stocking);
+            // The 1501 fix as it was: the knee pass moves the stockings by design and is bounded against its knob
+            // instead (StarlightBottomsDiagnosticTests.Knee_pass_per_size, AC-knee-standoff-4).
+            var now = StarlightMeasure.OutOfLine(runs.Original, runs.Model("NoKneeStandoff"), [part], perLength: stocking);
             float slack = stocking ? CoarseSlopeSlack : OutOfLineSlack;
             string unit = stocking ? "" : " mm";
             float k = stocking ? 1f : 1000f;

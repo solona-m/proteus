@@ -106,7 +106,8 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
             var original = ModelPartReader.Read(File.ReadAllBytes(
                 Path.Combine(LocalData.Path(LocalData.StarlightMod), StarlightBottomsLocalTests.Garment)))!;
             var body = ModelPartReader.Read(File.ReadAllBytes(Path.Combine(LocalData.Path(mod), rel)))!;
-            var now = Refit(dir, mod, rel, "");
+            // The 1501 fix as it was: the knee pass is judged against its knob (Knee_pass_per_size).
+            var now = Refit(dir, mod, rel, "NoKneeStandoff");
             var before = Refit(dir, mod, rel, StarlightBottomsLocalTests.Before);
 
             int stockNow = StarlightMeasure.StockingSkinOut(now), stockBefore = StarlightMeasure.StockingSkinOut(before);
@@ -153,7 +154,10 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
         => ModelPartReader.Read(File.ReadAllBytes(RefitFile(dir, mod, rel, tune)))!;
 
     /// <summary>The refit written for a tune, in its own folder (the tune's name, sanitised).</summary>
-    private static string RefitFile(string dir, string mod, string rel, string tune)
+    private static string RefitFile(string dir, string mod, string rel, string tune) => RefitFile(dir, mod, rel, tune, out _);
+
+    /// <summary><see cref="RefitFile(string, string, string, string)"/>, with the report the CLI printed.</summary>
+    private static string RefitFile(string dir, string mod, string rel, string tune, out string report)
     {
         string outDir = Path.Combine(dir, tune.Length == 0 ? "as-is" : new string(tune.Select(ch => char.IsLetterOrDigit(ch) ? ch : '-').ToArray()));
         Directory.CreateDirectory(outDir);
@@ -168,11 +172,14 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
         var stdout = new StringWriter();
         var stderr = new StringWriter();
         var console = Console.Out;
+        var consoleError = Console.Error;
         int exit;
         Console.SetOut(stdout);
+        Console.SetError(stderr);   // the refit's log lines go to the error stream
         try { exit = RefitCli::Proteus.Refit.Program.Dispatch([.. args], stdout, stderr); }
-        finally { Console.SetOut(console); }
+        finally { Console.SetOut(console); Console.SetError(consoleError); }
         if (exit != 0) throw new InvalidOperationException($"refit failed: {stderr}");
+        report = stdout.ToString() + stderr.ToString();
         return Path.Combine(outDir, "Size.mdl");
     }
 
@@ -180,15 +187,18 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
 
     /// <summary>The poses each size is measured in: the owner's idle as dumped and mirrored, and knee bends added beyond
     /// bind (the hip held as dumped).</summary>
+    /// <remarks>Decision 7a, recorded 2026-11-25: the fresh idle (harness posedump, build 1503) differs from coldcase2 by
+    /// more than 5° (right knee 46.9° beyond bind against 24.6°, hip 14.1° against 27.6°), so it is the primary idle when
+    /// present and coldcase2 a secondary row. Bends are scaled from the primary's right leg (the more flexed).</remarks>
     internal static IReadOnlyList<(string Name, LivePose Pose)> MeasuredPoses()
     {
-        var idle = KneeBend.Load(LocalData.Path(LocalData.IdlePose));
-        return
-        [
-            ("idle", idle), ("idle-mirrored", KneeBend.Mirrored(idle)),
-            ("+15", KneeBend.Scaled(idle, 15)), ("+30", KneeBend.Scaled(idle, 30)),
-            ("+60", KneeBend.Scaled(idle, 60)), ("+90", KneeBend.Scaled(idle, 90)),
-        ];
+        var cold = KneeBend.Load(LocalData.Path(LocalData.IdlePose));
+        var idle = LocalData.Missing([LocalData.IdleFreshPose]) == null ? KneeBend.Load(LocalData.Path(LocalData.IdleFreshPose)) : cold;
+        var poses = new List<(string, LivePose)> { ("idle", idle), ("idle-mirrored", KneeBend.Mirrored(idle)) };
+        if (!ReferenceEquals(idle, cold)) poses.AddRange([("coldcase2", cold), ("coldcase2-mirrored", KneeBend.Mirrored(cold))]);
+        poses.AddRange([("+15", KneeBend.Scaled(idle, 15)), ("+30", KneeBend.Scaled(idle, 30)),
+                        ("+60", KneeBend.Scaled(idle, 60)), ("+90", KneeBend.Scaled(idle, 90))]);
+        return poses;
     }
 
     [LocalDataTheory(LocalData.StarlightMod, LocalData.TightFirmMod, LocalData.NeolitheMod, LocalData.BiboPlusMod,
@@ -220,6 +230,84 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
                             + $"y {yLo:F2}-{yHi:F2}; bones {string.Join(" ", bones)}"
                             + (unmapped.Count > 0 ? $"; unmapped {string.Join(",", unmapped)}" : ""));
             }
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
+    }
+
+    /// <summary>The knee pass against its knob, per size: the bent counts in every pose (pairs made on the knob model),
+    /// at rest still clean, the largest move against the knob, and the benefit gate's idle cut.</summary>
+    [LocalDataTheory(LocalData.StarlightMod, LocalData.TightFirmMod, LocalData.NeolitheMod, LocalData.BiboPlusMod,
+                     LocalData.RueMod, LocalData.YabMod, LocalData.TreMod, LocalData.RosalineMod, LocalData.UvMaps, LocalData.IdlePose)]
+    [MemberData(nameof(Names))]
+    [Trait("Suite", "Diagnostic")]
+    [Trait("Plan", "AC-knee-standoff-1")]
+    [Trait("Plan", "EDGE-knee-standoff-20")]
+    public void Knee_pass_per_size(string size)
+    {
+        var (mod, rel) = Sizes[size];
+        string dir = Path.Combine(Path.GetTempPath(), "proteus-starlight-knee-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var nowBytes = File.ReadAllBytes(RefitFile(dir, mod, rel, "", out string nowReport));
+            var knobBytes = File.ReadAllBytes(RefitFile(dir, mod, rel, "NoKneeStandoff", out string knobReport));
+            // [AC-knee-standoff-6] The report says what the pass did, and nothing with the knob.
+            Assert.Contains("knee standoff: ", nowReport);
+            Assert.DoesNotContain("knee standoff: ", knobReport);
+            var now = ModelPartReader.Read(nowBytes)!;
+            var knob = ModelPartReader.Read(knobBytes)!;
+            float most = 0;
+            foreach (var label in StarlightMeasure.StockingParts(knob))
+            {
+                var pk = knob.Parts.First(p => p.Label == label);
+                foreach (int v in pk.Triangles.Distinct())
+                    most = MathF.Max(most, Vector3.Distance(new(knob.Positions[v * 3], knob.Positions[v * 3 + 1], knob.Positions[v * 3 + 2]),
+                                                            new(now.Positions[v * 3], now.Positions[v * 3 + 1], now.Positions[v * 3 + 2])));
+            }
+            // Every vertex the knee pass (and what follows it) moved, against the knob: no move larger than its budget.
+            float anyMost = 0;
+            for (int v = 0; v < knob.Positions.Length / 3; v++)
+                anyMost = MathF.Max(anyMost, Vector3.Distance(new(knob.Positions[v * 3], knob.Positions[v * 3 + 1], knob.Positions[v * 3 + 2]),
+                                                              new(now.Positions[v * 3], now.Positions[v * 3 + 1], now.Positions[v * 3 + 2])));
+            o.WriteLine($"{size}: at rest {StarlightMeasure.StockingSkinOut(knob)} -> {StarlightMeasure.StockingSkinOut(now)} through; "
+                        + $"largest stocking move {most * 1000:F1} mm, any vertex {anyMost * 1000:F1} mm");
+            // [AC-knee-standoff-2] [AC-knee-standoff-3] [AC-knee-standoff-4]
+            Assert.Equal(0, StarlightMeasure.StockingSkinOut(now));
+            Assert.True(most <= BodyRetarget.KneeStandoffMost + 0.001f, $"a stocking point moved {most * 1000:F1} mm");
+            Assert.True(anyMost <= BodyRetarget.KneeBudget + 1e-4f, $"a vertex moved {anyMost * 1000:F1} mm");
+            var original = ModelPartReader.Read(File.ReadAllBytes(
+                Path.Combine(LocalData.Path(LocalData.StarlightMod), StarlightBottomsLocalTests.Garment)))!;
+            var coarse = StarlightMeasure.CoarseParts(original);
+            foreach (string part in StarlightMeasure.LegsParts(original).Where(coarse.Contains))
+            {
+                var lineNow = StarlightMeasure.OutOfLine(original, now, [part], perLength: true);
+                var lineKnob = StarlightMeasure.OutOfLine(original, knob, [part], perLength: true);
+                Assert.True(lineNow.Max <= lineKnob.Max + StarlightBottomsLocalTests.CoarseSlopeSlack
+                            && lineNow.P99 <= lineKnob.P99 + StarlightBottomsLocalTests.CoarseSlopeSlack,
+                            $"part {part} out of line {lineNow.Max:F3}/{lineNow.P99:F3}, knob {lineKnob.Max:F3}/{lineKnob.P99:F3}");
+            }
+            var turnedNow = StarlightMeasure.TurnedOver(original, now);
+            var turnedKnob = StarlightMeasure.TurnedOver(original, knob);
+            foreach (var (part, count) in turnedNow) Assert.True(count <= turnedKnob.GetValueOrDefault(part), $"part {part} folds more");
+
+            int idleKnob = 0, idleNow = 0;
+            foreach (var (name, pose) in MeasuredPoses())
+            {
+                var (k, n, onlyKnob, onlyKnee) = StarlightMeasure.BentAgainstKnob(knob, KneeBend.Posed(knobBytes, pose).Posed,
+                                                                                  now, KneeBend.Posed(nowBytes, pose).Posed);
+                if (name is "idle" or "idle-mirrored") { idleKnob += k.Count; idleNow += n.Count; }
+                o.WriteLine($"  {name,-18} {k.Count,4} -> {n.Count,4}; p90 {k.Percentile(0.9f) * 1000:F1} -> {n.Percentile(0.9f) * 1000:F1} mm; "
+                            + $"skin keys only knob {onlyKnob}, only knee {onlyKnee}");
+                // [AC-knee-standoff-1] decision 8's bars (the author floor never needed: every size is under the rest).
+                int bar = name is "+60" or "+90" ? k.Count : Math.Max((int)(0.3f * k.Count), 5);
+                Assert.True(n.Count <= bar, $"{name}: {n.Count} through, bar {bar} ({k.Count} at 1502)");
+                Assert.True(onlyKnob + onlyKnee <= 0.01f * Math.Max(1, k.Paired), $"{name}: the cut changed ({onlyKnob}/{onlyKnee} keys)");
+            }
+            bool passes = idleNow <= idleKnob * 0.3f || idleNow <= 5;
+            o.WriteLine($"  gate: idle {idleKnob} -> {idleNow} ({(idleKnob == 0 ? 0 : 100f * (idleKnob - idleNow) / idleKnob):F0}% cut): {(passes ? "passes" : "FAILS")}");
+            Assert.True(passes, "the benefit gate");
         }
         finally
         {
@@ -314,8 +402,10 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
     [Trait("Suite", "Diagnostic")]
     public void The_idle_dump_s_leg_angles()
     {
-        var idle = KneeBend.Load(LocalData.Path(LocalData.IdlePose));
-        foreach (var (name, pose) in MeasuredPoses())
+        var extra = new List<(string, LivePose)>();
+        foreach (var (name, need) in new[] { ("idle-fresh", LocalData.IdleFreshPose), ("sit", LocalData.SitPose), ("groundsit", LocalData.GroundsitPose) })
+            if (LocalData.Missing([need]) == null) extra.Add((name, KneeBend.Load(LocalData.Path(need))));
+        foreach (var (name, pose) in MeasuredPoses().Concat(extra))
             foreach (var side in new[] { "l", "r" })
             {
                 var a = KneeBend.Angles(pose, side);

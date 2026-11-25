@@ -90,6 +90,8 @@ internal static partial class BodyRetarget
     /// 1501 did (see <see cref="ClearFaceCap(float)"/>).</param>
     /// <param name="NoPressedSkinCut">Cut the new body's skin wherever the author's laid skin is further off it than the
     /// chord rule allows, pressed in under a band or not, as builds before 1501 did (see <see cref="PressedUnder"/>).</param>
+    /// <param name="NoKneeStandoff">Leave the coarse cloth behind the knees where the face settle left it, as builds
+    /// before 1504 did (see <see cref="KneeFaces"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -108,7 +110,7 @@ internal static partial class BodyRetarget
                                   bool CutOpenSkinAnyFacing = false, bool NoCutInside = false,
                                   bool NoReshapeEnds = false, bool NoSharedSeam = false, bool NoBulge = false,
                                   bool BulgeFault = false, bool BulgeForceGuard = false, bool NoLayerFloor = false,
-                                  bool NoCoarseSag = false, bool NoPressedSkinCut = false);
+                                  bool NoCoarseSag = false, bool NoPressedSkinCut = false, bool NoKneeStandoff = false);
 
     private static readonly Tuning DefaultTuning = new();
 
