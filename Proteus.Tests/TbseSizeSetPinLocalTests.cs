@@ -19,8 +19,10 @@ namespace Proteus.Tests;
 /// file the run itself wrote, by hash. Only the files this run wrote count — the copy carries the mod's own earlier
 /// "Body Retarget" output, which changes whenever the size set is run on the real mod in game.
 /// <para/>
-/// A table is never re-captured to make it pass. The one legitimate change is a row a later plan makes on purpose, named
-/// in its allow-list (or a leave-out) with the plan that made it.
+/// A table is never re-captured to make it pass. A row a later plan makes on purpose is named in its allow-list (or a
+/// leave-out) with the plan that made it. The one legitimate re-capture is on a newer test head's own unchanged code, as
+/// a commit of its own, after the later changes' knobs have shown every moved row back at its old bytes with them off;
+/// the change that moved each row is named beside its new value (as for BehaviourPinLocalTests).
 /// </summary>
 [Trait("Speed", "Slow")]
 public class TbseSizeSetPinLocalTests(ITestOutputHelper o)
@@ -49,7 +51,9 @@ public class TbseSizeSetPinLocalTests(ITestOutputHelper o)
     private static readonly string[] SheerFiles =
     [
         "Body Retarget/TBSE/chara/equipment/e6010/model/c0101e6010_top.mdl|7B421E9B8F5457DA8D92CE10D056739E31714D3115BB56094F771E848792C74B",
-        "Body Retarget/TBSE/chara/equipment/e6107/model/c0101e6107_dwn.mdl|EE92D92DF3AA2CB0A5D8871A9B99888D629F342CEE2091BA22F005CEFC1D862A",
+        // Re-captured on test f04d524a (build 1504): moved by redo-starlight's coarse sag (1501) alone; with NoCoarseSag
+        // it is the earlier EE92D92D... exactly.
+        "Body Retarget/TBSE/chara/equipment/e6107/model/c0101e6107_dwn.mdl|E564659097528BFF9CD6C49A6365777A4B435F50584D9F8C6B01E8F4F27E9BC8",
     ];
     private static readonly string[] StormblessedRows =
     [
@@ -58,12 +62,17 @@ public class TbseSizeSetPinLocalTests(ITestOutputHelper o)
         "chara/equipment/e0633/model/c0101e0633_sho.mdl|tbse|TBSE|Made||LavaBod+ 2.2 — Omit · Yiggle - Gen A|0.995",
         "chara/equipment/e0633/model/c0101e0633_top.mdl|tbse|TBSE|Made||LavaBod+ 2.2 — Omit · Yiggle - Teardrop|1.000",
     ];
+    // _dwn, _sho and _top re-captured on test f04d524a (build 1504), with NoBulge as the no-bulge test runs them: _dwn
+    // moved by redo-starlight's coarse sag (1501) with the layer floor (1495) and/or the pressed-skin cut (1501), not
+    // separated, _sho by the
+    // coarse sag with knee-standoff (1504), _top by the coarse sag alone. With NoCoarseSag, NoLayerFloor, NoPressedSkinCut
+    // and NoKneeStandoff all four are the earlier 3B2B3ADD..., 0BEF4A43..., A47AAC51..., 908AC32C... exactly.
     private static readonly string[] StormblessedFiles =
     [
-        "Body Retarget/TBSE/chara/equipment/e0633/model/c0101e0633_dwn.mdl|3B2B3ADD084CBB2295D78499DCE8769656B8FCF49260C2C4190BC359ED846DA0",
+        "Body Retarget/TBSE/chara/equipment/e0633/model/c0101e0633_dwn.mdl|A8A5D2BF5B4716753F12D155A5470D6638D6BC5E5913FAC737C36676505BDCEA",
         "Body Retarget/TBSE/chara/equipment/e0633/model/c0101e0633_glv.mdl|0BEF4A43AB48DB6F1BCA3E0E641CB9388392F58A95CC69D2164D480384A0A3B3",
-        "Body Retarget/TBSE/chara/equipment/e0633/model/c0101e0633_sho.mdl|A47AAC512409EF9106C7A0628D7CBDB30EFCDFA5310980AF0135DC938735229E",
-        "Body Retarget/TBSE/chara/equipment/e0633/model/c0101e0633_top.mdl|908AC32C6400B569FC27C53E797EDDDB1452C88EFF06543FF19A6444D82960EB",
+        "Body Retarget/TBSE/chara/equipment/e0633/model/c0101e0633_sho.mdl|912E3224464F4478C93D06EB7ED441378074269292C398B7D8F1E64E5DE6B49B",
+        "Body Retarget/TBSE/chara/equipment/e0633/model/c0101e0633_top.mdl|127CBEE9F9572E74FEA91109EA93B25CEAFE340B2530F988C3983AF1EE75B459",
     ];
 
     /// <summary>
