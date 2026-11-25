@@ -981,19 +981,9 @@ public partial class BodyRetargetTests
     /// <see cref="BodyRetarget.ClearFaces"/> clears (it asks 1.8 mm, under <see cref="BodyRetarget.ClearFaceDeepest"/>).</summary>
     private const float SagBump = 0.0018f;
 
-    [Fact]
-    public void Clearing_faces_leaves_a_face_the_skin_is_deep_through()
-    {
-        // 3 mm through is not sag. On a corset it was the breast bulging over the top edge, read as through the rim's
-        // faces, and chasing it pushed the rim out 20 mm: the jagged top edge of the cups.
-        var garment = Sheet(new(-0.15f, -0.15f, SheetZ), new(0.15f, -0.15f, SheetZ), new(0f, 0.15f, SheetZ));
-        var (check, delta, sets) = FaceSetup(garment, Cube(0.20f, SkinMaterial), Bumped(0.004f));
-        Assert.True(check.Need(check.Faces[0], delta).Push > BodyRetarget.ClearFaceDeepest);
-
-        float worst = 0f;
-        Assert.Equal(0, BodyRetarget.ClearFaces(check, delta, new float[sets.NodeCount], ref worst));
-        Assert.All(delta, d => Assert.Equal(default, d));
-    }
+    // A face the skin is deeper through than it can sag is left: see BodyRetargetTests.CoarseSag.cs
+    // (A_face_of_twenty_millimetres_keeps_the_two_millimetre_cap: 3 mm through a fine face, the corset rim's rule;
+    // Clearing_faces_leaves_a_coarse_face_deeper_than_its_sag: past the coarse cap).
 
     [Fact]
     public void Clearing_faces_never_turns_a_neighbour_over()

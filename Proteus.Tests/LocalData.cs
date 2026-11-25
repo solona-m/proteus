@@ -98,6 +98,18 @@ internal static class LocalData
     /// <summary>"Rue+" 2.2.7 (y0f), installed: the body of Sarelle's Rue waist. Only ever read.</summary>
     internal const string RueMod = Mods + ":hs-Rue+-2.2.7-y0f";
 
+    /// <summary>"Starlight - by Solona", installed: the Valentione Skirt (e0145 dwn), coarse stockings over the author's
+    /// equally coarse skin pressed in under the stocking band, made on Tight&amp;Firm Gen2 Large. Only ever read.</summary>
+    internal const string StarlightMod = Mods + ":Starlight - by Solona";
+
+    /// <summary>Tight&amp;Firm Gen2 (the NSFW installer), installed: the body the Valentione Skirt was made on (hip size
+    /// large). Only ever read.</summary>
+    internal const string TightFirmMod = Mods + ":tight&firmgen2body-nsfw-installer";
+
+    /// <summary>"Rosaline" 1.1.2 (hM5N), installed: the Valentione Skirt's Rosaline size (HIP DIPS · Vagina A). Only ever
+    /// read.</summary>
+    internal const string RosalineMod = Mods + ":hs-Rosaline-1.1.2-hM5N";
+
     /// <summary>"Neolithe [ALL IN ONE]", installed: the body Slay Ride's top was made on (SFW Almond XS). Only ever
     /// read.</summary>
     internal const string NeolitheMod = Mods + ":Neolithe [ALL IN ONE]";

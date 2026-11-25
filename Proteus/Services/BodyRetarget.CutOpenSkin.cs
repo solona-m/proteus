@@ -82,26 +82,19 @@ internal static partial class BodyRetarget
         var around = new List<int>[nodes];
         for (int n = 0; n < nodes; n++) { copies[n] = []; around[n] = []; }
         var onSkin = new bool[vc];
-        var faceSum = new Vector3[vc];
         for (int t = 0; t < tris.Count; t++)
         {
             var (a, b, c) = tris[t];
-            var face = Vector3.Cross(At(parts, b) - At(parts, a), At(parts, c) - At(parts, a));
             foreach (int v in new[] { a, b, c })
             {
-                faceSum[v] += face;
                 if (!onSkin[v]) { onSkin[v] = true; copies[nodeOf[v]].Add(v); }
                 if (around[nodeOf[v]].Count == 0 || around[nodeOf[v]][^1] != t) around[nodeOf[v]].Add(t);
             }
         }
 
         // A body vertex's normal: its own, or — where the file has none — the sum of its triangles' faces.
-        Vector3 NormalOf(int v)
-        {
-            var n = new Vector3(parts.Normals[v * 3], parts.Normals[v * 3 + 1], parts.Normals[v * 3 + 2]);
-            if (n.LengthSquared() > 1e-12f) return Vector3.Normalize(n);
-            return faceSum[v].LengthSquared() > 1e-20f ? Vector3.Normalize(faceSum[v]) : Vector3.Zero;
-        }
+        var normals = SkinVertexNormals(parts);
+        Vector3 NormalOf(int v) => normals[v];
 
         bool NewlyDrawn(int t) => !covered[tris[t].A] && !covered[tris[t].B] && !covered[tris[t].C];
 

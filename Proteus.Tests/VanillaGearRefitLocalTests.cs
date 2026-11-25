@@ -1478,14 +1478,17 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
             deepClear: rule.DeepClear, keepStandoff: rule.KeepStandoff, liftUnderbust: true, seeInside: seeInside);
         // Build 1357's bytes, read before 1359's reading of the old body's underwear (NoSourceWorn), before 1365's
         // quaternion turn of kept pieces (NoTurnFallback) and before 1382's seam weights (NoSeamWeights), as they were.
+        // Before 1501's coarse-face sag cap and pressed-skin cut too.
         var as1357 = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSourceWorn: true, NoTurnFallback: true,
-                                                                     NoSeamWeights: true),
+                                                                     NoSeamWeights: true, NoCoarseSag: true,
+                                                                     NoPressedSkinCut: true),
                                              () => Run(rule.SeeInside));
         Assert.Equal("DE0986CCDF1235DA5B5FB12C2054A2CA4E120DFEC544E790FDB38245E451F7ED", SkinTuckSheet.Sha(as1357.Model));
         Assert.Equal(1146, as1357.Report.Swap?.Tucked);
         // With 1359's reading: test's own bytes (taken at build 1360; the rule is off on this path, so they are 1359's by
         // construction), as builds before 1365 turned kept pieces.
-        var as1364 = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTurnFallback: true, NoSeamWeights: true),
+        var as1364 = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTurnFallback: true, NoSeamWeights: true,
+                                                                     NoCoarseSag: true, NoPressedSkinCut: true),
                                              () => Run(rule.SeeInside));
         Assert.Equal("C19F540BB2A9765EFA77799D36BC22C34E58367BD74088997D8C2523A71D3FC9", SkinTuckSheet.Sha(as1364.Model));
         Assert.Equal(1155, as1364.Report.Swap?.Tucked);
@@ -1493,8 +1496,9 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
         // [AC-keep-shape-flat-card-3] And as 1365 made it: the kept pieces the polar fit could not turn are turned truly,
         // and nothing else moves — still nothing drawn where the inside would show, and no more cloth in the body, no more
         // folds. Before 1382's seam weights, which write weights alone: as it is made now, every position and normal the same.
-        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: true), () => Run(rule.SeeInside));
-        SeamWeightsTests.SameGeometry(plan.Model, Run(rule.SeeInside).Model);   // [EDGE-seam-weights-15]
+        var pre1501 = new BodyRetarget.Tuning(NoCoarseSag: true, NoPressedSkinCut: true);
+        var plan = BodyRetarget.WithTuning(pre1501 with { NoSeamWeights = true }, () => Run(rule.SeeInside));
+        SeamWeightsTests.SameGeometry(plan.Model, BodyRetarget.WithTuning(pre1501, () => Run(rule.SeeInside)).Model);   // [EDGE-seam-weights-15]
         Assert.True(plan.Report.ShapeFallbacks > 0, "Dei Gratia's refit should take quaternion turns, or the pins above say it all");
         string target = mod.PathOf(option);
         int Inside(BodyRetarget.Planned p) => BodySizeMatch.ClothAgainst(ModelPartReader.Read(p.Model)!, target)!.Value.Inside;
@@ -1509,7 +1513,22 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
         Assert.True(SkinTuckSheet.Sha(plan.Model) == "58E003E49EFA745BFD07F7F7DCD837DD10EE49376D09A024DB0A833E2707A22E", numbers);
         Assert.Equal(1155, plan.Report.Swap?.Tucked);
         Assert.Equal(0, plan.Report.Swap?.SeenInto);
+        // [AC-starlight-bottoms-4] And as build 1501 makes it, its coarse-face sag cap and pressed-skin cut on: no more
+        // cloth in the body, no more folds or stretched edges, still nothing drawn where the inside would show.
+        var now = Run(rule.SeeInside);
+        string nowNumbers = $"inside {Inside(as1364)} -> {Inside(now)}, folded {as1364.Report.Folded} -> {now.Report.Folded}, "
+                            + $"stretched {Stretched(as1364)} -> {Stretched(now)}, tucked {now.Report.Swap?.Tucked}, "
+                            + $"now {SkinTuckSheet.Sha(now.Model)}";
+        output.WriteLine(nowNumbers);
+        Assert.True(Inside(now) <= Inside(as1364), nowNumbers);
+        Assert.True(now.Report.Folded <= as1364.Report.Folded, nowNumbers);
+        Assert.True(Stretched(now) <= Stretched(as1364), nowNumbers);
+        Assert.Equal(0, now.Report.Swap?.SeenInto);
+        Assert.True(SkinTuckSheet.Sha(now.Model) == DeiGratiaNow, nowNumbers);
     }
+
+    /// <summary>Dei Gratia on Neolithe's Almond XS as build 1501 makes it (recorded 2026-11-24).</summary>
+    private const string DeiGratiaNow = "FDFD3C849AE9AEA111C1549B5E574C7FFE757BED850C677045C6A93D6789C1E4";
 
     /// <summary>
     /// [AC-coatee-strap-slit-3] Every front torso triangle <paramref name="after"/> draws that <paramref name="before"/> did

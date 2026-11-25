@@ -28,8 +28,12 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
                                                               NoSourceWorn: true, NoRelaxSinkGuard: true);
 
     /// <summary>A game top as it was before the standoff pass: everything else on but the game chest's bra read and the
-    /// relax guard, which came after.</summary>
-    private static readonly BodyRetarget.Tuning NoPull = new(NoKeepStandoff: true, NoSourceWorn: true, NoRelaxSinkGuard: true);
+    /// relax guard, which came after (and build 1501's sag cap and pressed-skin cut: its coarse case changed).</summary>
+    private static readonly BodyRetarget.Tuning NoPull = new(NoKeepStandoff: true, NoSourceWorn: true, NoRelaxSinkGuard: true,
+                                                            NoCoarseSag: true, NoPressedSkinCut: true);
+
+    /// <summary>The coarse-face sag cap and the pressed-skin cut (build 1501) off: what a case pinned before them needs.</summary>
+    private static readonly BodyRetarget.Tuning Pre1501 = new(NoCoarseSag: true, NoPressedSkinCut: true);
 
     private string Pinned(byte[] model, string expected)
     {
@@ -455,7 +459,8 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
         // (build 1323), which takes 80 of its points in — see A_modders_cut_on_Neolithe_plans_as_fitted.
         // Before 1382's seam weights too (measured at 1382: 108 vertices on 32 seams took one weighting, the most any moved
         // 0.098, positions untouched).
-        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoOpenEdgeFit: true, NoSeamWeights: true),
+        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoOpenEdgeFit: true, NoSeamWeights: true,
+                                                                   NoCoarseSag: true, NoPressedSkinCut: true),
                                            () => MaimingCut(garment, bytes, pair));
         Pinned(plan.Model, MaimingStudioCut);
     }
@@ -476,11 +481,13 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
         if (!SameInputs(("garment", bytes, MaimingSha), ("source", File.ReadAllBytes(source), VanillaTopSha),
                         ("target", File.ReadAllBytes(target), NeobellyMSha))) return;
         // As pinned on 1323: before 1382's seam weights (measured at 1382: 109 vertices on 33 seams, at most 0.099).
-        var pinned = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: true),
+        // And before 1501's coarse-face sag cap and pressed-skin cut.
+        var pinned = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: true, NoCoarseSag: true, NoPressedSkinCut: true),
                                              () => MaimingCut(ModelPartReader.Read(bytes)!, bytes, pair)).Model;
         Pinned(pinned, MaimingStudioCutFitted);
         // [EDGE-seam-weights-15] With them: the same cut, weights apart.
-        SeamWeightsTests.SameGeometry(pinned, MaimingCut(ModelPartReader.Read(bytes)!, bytes, pair).Model);
+        SeamWeightsTests.SameGeometry(pinned, BodyRetarget.WithTuning(Pre1501,
+            () => MaimingCut(ModelPartReader.Read(bytes)!, bytes, pair)).Model);
     }
 
     private static BodyRetarget.Planned MaimingCut(ModelParts garment, byte[] bytes, BodyRetarget.SlotPair pair)
@@ -499,10 +506,58 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
         var garment = ModelPartReader.Read(bytes)!;
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
         // The new body's piercings carried, as every refit did when this was pinned.
-        var plan = BodyRetarget.WithTuning(Before,
+        var plan = BodyRetarget.WithTuning(Before with { NoCoarseSag = true, NoPressedSkinCut = true },
             () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _,
                                       carryPiercings: true));
         Pinned(RefitCore.MatchSkinToBody(plan.Model, source, target, uv, false, log), DirndlGameRefit);
+    }
+
+    // ── the cases build 1501 changed, as they are made now (the coarse-face sag cap and the pressed-skin cut on) ──────────
+    // Each case above whose bytes 1501 changed keeps its old bytes with both knobs; these pin what the same tuning makes
+    // with them off. Recorded 2026-11-24 once the cap's curve (50 mm) was final.
+
+    [Fact]
+    [Trait("Plan", "AC-starlight-bottoms-4")]
+    [Trait("Plan", "EDGE-starlight-bottoms-13")]
+    public void A_coarse_game_top_without_the_standoff_pass_plans_as_now()
+    {
+        var (bytes, pair) = SkinTuckSheet.FloatingNeckline(coarse: true);
+        var garment = ModelPartReader.Read(bytes)!;
+        var plan = BodyRetarget.WithTuning(NoPull with { NoCoarseSag = false, NoPressedSkinCut = false },
+            () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _));
+        Pinned(plan.Model, FloatGameTopCoarseNow);
+    }
+
+    [LocalDataFact(LocalData.GameData, Neolithe)]
+    [Trait("Plan", "AC-starlight-bottoms-4")]
+    [Trait("Plan", "EDGE-starlight-bottoms-13")]
+    [Trait("Speed", "Slow")]
+    public void A_modders_cut_on_Neolithe_plans_as_now()
+    {
+        var (bytes, source, target, pair, _) = Setup("Neo-Ishgardian Top of Maiming", "neobelly chest - smallclothes/sfw m.mdl");
+        if (!SameInputs(("garment", bytes, MaimingSha), ("source", File.ReadAllBytes(source), VanillaTopSha),
+                        ("target", File.ReadAllBytes(target), NeobellyMSha))) return;
+        var garment = ModelPartReader.Read(bytes)!;
+        Pinned(BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoOpenEdgeFit: true, NoSeamWeights: true),
+                                       () => MaimingCut(garment, bytes, pair)).Model, MaimingStudioCutNow);
+        Pinned(MaimingCut(garment, bytes, pair).Model, MaimingStudioCutFittedNow);
+    }
+
+    [LocalDataFact(LocalData.GameData, Neolithe)]
+    [Trait("Plan", "AC-starlight-bottoms-4")]
+    [Trait("Plan", "EDGE-starlight-bottoms-13")]
+    [Trait("Speed", "Slow")]
+    public void The_Dirndl_game_refit_without_the_tuck_plans_as_now()
+    {
+        var (bytes, source, target, pair, uv) = Setup("Dirndl's Bodice", "extra chest - smallclothes/nsfw almond xs.mdl");
+        if (!SameInputs(("garment", bytes, DirndlSha), ("source", File.ReadAllBytes(source), VanillaTopSha),
+                        ("target", File.ReadAllBytes(target), AlmondXsSha))) return;
+        var garment = ModelPartReader.Read(bytes)!;
+        var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+        var plan = BodyRetarget.WithTuning(Before,
+            () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _,
+                                      carryPiercings: true));
+        Pinned(RefitCore.MatchSkinToBody(plan.Model, source, target, uv, false, log), DirndlGameRefitNow);
     }
 
     private static HashSet<(int, int, int)> Positions(byte[] model)
@@ -523,6 +578,10 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     private const string MaimingStudioCut = "6B0216E852B601965EDB47C63572FCA53FFCDB7C80CC1E36CB821DCDB30DADE1";
     // Pinned on build 1323.
     private const string MaimingStudioCutFitted = "28EF6EB3F30337E37E268FC8D5DC9330841188A93D15514B32D8E89FD027C703";
+    private const string FloatGameTopCoarseNow = "8F2DF3F52C3E27A6DC080D7E6870C3A38BD44B7899B07D8E3101AB78F9B3D262";
+    private const string MaimingStudioCutNow = "D5FAA6B2E8002E8475D58C5009EC9C906F15BE2A25E0C57CC679439E437CDC49";
+    private const string MaimingStudioCutFittedNow = "DF2AD38C3162CE4D09A0A82EE6059CA6CC96F36946994BE216260C118DF1806B";
+    private const string DirndlGameRefitNow = "19984E46CCFC8F4EB8DE935D7256756965B1E35D9E29B8762143D2B7B072FD81";
     private const string DirndlGameRefit = "1B6456AF7163D39F5EDB5B2E38EE8F50B35D1B15BDCE0DDEF414BD4FDC5FD61B";
 
     // Pinned on 72dde80, change (a)'s final commit.

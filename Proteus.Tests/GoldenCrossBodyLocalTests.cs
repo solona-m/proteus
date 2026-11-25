@@ -34,6 +34,27 @@ public class GoldenCrossBodyLocalTests(ITestOutputHelper output)
         ["bibo+ / auto"] = ("66FC03EBC889E2DAA8AB8672C9830A00ABA9380748EDD471F127F3BBC832E0B3", 3266),
     };
 
+    /// <summary>The same refits as build 1501 makes them, its coarse-face sag cap and pressed-skin cut on (recorded
+    /// 2026-11-24): the cases above keep their old bytes with both knobs.</summary>
+    private static readonly Dictionary<string, string> RecordedNow = new()
+    {
+        ["muse gen a / studio"] = "7D589E1958C342EEECF2F3D86B6A3201632C1CD6766E593975DD1CDF387C0CF6",
+        ["muse gen a / auto"] = "517A1BD145CDB3E7854F3C095088C0E7EBAA4595CF9A47600F28701B8E6826E3",
+        ["bibo+ / studio"] = "1C11A71DC8386183E67960A6B563F624B8F031570F2FB1293B3D4446B1809E90",
+        ["bibo+ / auto"] = "ACC8DA31AA18FF79EC2C3C1862399005E7D19144641670379377BD71EE089DA8",
+    };
+
+    [LocalDataTheory(Laurel, Neolithe, Bibo, LocalData.MusePack)]
+    [MemberData(nameof(Cases))]
+    [Trait("Plan", "AC-starlight-bottoms-4")]
+    [Trait("Plan", "EDGE-starlight-bottoms-13")]
+    public void A_cross_body_refit_onto_a_body_with_skin_is_as_it_is_now(string target, string path)
+    {
+        var (sha, pushed, _) = Refit(target, path, current: true);
+        output.WriteLine($"[\"{target} / {path}\"] = \"{sha}\", pushed {pushed}");
+        Assert.Equal(RecordedNow[$"{target} / {path}"], sha);
+    }
+
     public static IEnumerable<object[]> Cases()
     {
         foreach (var target in new[] { "muse gen a", "bibo+" })
@@ -56,7 +77,8 @@ public class GoldenCrossBodyLocalTests(ITestOutputHelper output)
         SeamWeightsTests.SameGeometry(model, Refit(target, path, seams: true).Model);
     }
 
-    private static (string Sha, int Pushed, byte[] Model) Refit(string target, string path, bool seams = false)
+    private static (string Sha, int Pushed, byte[] Model) Refit(string target, string path, bool seams = false,
+                                                                bool current = false)
     {
         var bodies = new[] { Neolithe }
             .Select(b => (Dir: Path.GetFileName(LocalData.Path(b)), Catalog: BodySizeCatalog.Read(LocalData.Path(b)))).ToList();
@@ -83,7 +105,10 @@ public class GoldenCrossBodyLocalTests(ITestOutputHelper output)
             // As it was recorded: a seam's split vertices weighted each on its own, as builds before 1382 did. Measured on
             // these refits at 1382: 136-137 vertices on 55-59 seams took one weighting, the most any moved 0.150, positions
             // untouched (the seam rule writes weights alone); judged in SeamWeightsTests.
-            var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: !seams), () => path == "studio"
+            // And before 1501's coarse-face sag cap and pressed-skin cut, unless asked for the build as it is.
+            var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: !seams && !current,
+                                                                       NoCoarseSag: !current, NoPressedSkinCut: !current),
+                                               () => path == "studio"
                 ? BodyRetarget.Plan(garment, bytes, [pair], "_dwn", held: new HashSet<int>(), replaceSkin: true,
                                     acrossBodies: true, cutHidden: true)
                 : RefitCore.PlanRefit(garment, bytes, [pair], "_dwn", across: true, gameGear: false, out _));
