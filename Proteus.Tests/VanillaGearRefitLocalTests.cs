@@ -1513,7 +1513,22 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
         Assert.True(SkinTuckSheet.Sha(plan.Model) == "58E003E49EFA745BFD07F7F7DCD837DD10EE49376D09A024DB0A833E2707A22E", numbers);
         Assert.Equal(1155, plan.Report.Swap?.Tucked);
         Assert.Equal(0, plan.Report.Swap?.SeenInto);
+        // [AC-starlight-bottoms-4] And as build 1501 makes it, its coarse-face sag cap and pressed-skin cut on: no more
+        // cloth in the body, no more folds or stretched edges, still nothing drawn where the inside would show.
+        var now = Run(rule.SeeInside);
+        string nowNumbers = $"inside {Inside(as1364)} -> {Inside(now)}, folded {as1364.Report.Folded} -> {now.Report.Folded}, "
+                            + $"stretched {Stretched(as1364)} -> {Stretched(now)}, tucked {now.Report.Swap?.Tucked}, "
+                            + $"now {SkinTuckSheet.Sha(now.Model)}";
+        output.WriteLine(nowNumbers);
+        Assert.True(Inside(now) <= Inside(as1364), nowNumbers);
+        Assert.True(now.Report.Folded <= as1364.Report.Folded, nowNumbers);
+        Assert.True(Stretched(now) <= Stretched(as1364), nowNumbers);
+        Assert.Equal(0, now.Report.Swap?.SeenInto);
+        Assert.True(SkinTuckSheet.Sha(now.Model) == DeiGratiaNow, nowNumbers);
     }
+
+    /// <summary>Dei Gratia on Neolithe's Almond XS as build 1501 makes it (recorded 2026-11-24).</summary>
+    private const string DeiGratiaNow = "FDFD3C849AE9AEA111C1549B5E574C7FFE757BED850C677045C6A93D6789C1E4";
 
     /// <summary>
     /// [AC-coatee-strap-slit-3] Every front torso triangle <paramref name="after"/> draws that <paramref name="before"/> did

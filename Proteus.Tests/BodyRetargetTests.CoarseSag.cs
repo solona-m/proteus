@@ -8,14 +8,14 @@ namespace Proteus.Tests;
 
 /// <summary>
 /// The face clearing's cap for coarse cloth (see <see cref="BodyRetarget.ClearFaceCap(float)"/>): a face may ask for the
-/// sagitta of its longest edge over a 50 mm curve, never less than the old 2 mm and never more than 12 mm, and its corners
+/// sagitta of its longest edge over a 50 mm curve, never less than the old 2 mm and never more than 7 mm, and its corners
 /// move no further in all than that plus 1 mm. "Starlight"'s stockings, faces 40-80 mm across, had the rounder bodies 2-6
 /// mm up through their middles with every corner clear. Scenes: the 300 mm <see cref="Sheet"/> over the bumped cube (a
-/// coarse face, cap 12 mm), or a small face of 20 mm (cap the old 2 mm).
+/// coarse face, cap 7 mm), or a small face of 20 mm (cap the old 2 mm).
 /// </summary>
 public partial class BodyRetargetTests
 {
-    /// <summary>The 300 mm sheet the other face-clearing tests use: longest edge 335 mm, cap 12 mm.</summary>
+    /// <summary>The 300 mm sheet the other face-clearing tests use: longest edge 335 mm, cap 7 mm.</summary>
     private static ModelParts CoarseSheet(float z = SheetZ)
         => Sheet(new(-0.15f, -0.15f, z), new(0.15f, -0.15f, z), new(0f, 0.15f, z));
 
@@ -121,6 +121,14 @@ public partial class BodyRetargetTests
         float worst = 0f;
         Assert.Equal(0, BodyRetarget.ClearFaces(check, delta, new float[sets.NodeCount], ref worst));
         Assert.All(delta, d => Assert.Equal(default, d));
+
+        // The coarsest faces ask no more than ClearFaceSagMax (7 mm), under what the face test reads (8 mm): the 300 mm
+        // sheet the skin is 7.5 mm through is left too.
+        var (check2, delta2, sets2) = FaceSetup(CoarseSheet(), Cube(0.20f, SkinMaterial), Bumped(0.0085f));
+        float need2 = check2.Need(check2.Faces[0], delta2).Push;
+        Assert.True(need2 > BodyRetarget.ClearFaceSagMax, $"the sheet asks {need2 * 1000:F2} mm");
+        Assert.Equal(0, BodyRetarget.ClearFaces(check2, delta2, new float[sets2.NodeCount], ref worst));
+        Assert.All(delta2, d => Assert.Equal(default, d));
     }
 
     [Fact]
@@ -139,27 +147,74 @@ public partial class BodyRetargetTests
         Assert.Equal(BodyRetarget.ClearFaceCap(0.060f) + 0.001f, BodyRetarget.ClearFaceBudget(BodyRetarget.ClearFaceCap(0.060f)), 6);
     }
 
+    /// <summary>A flat body 200 mm square in 2.5 mm steps at z = 0, grown by smooth bumps (centre, height; 10 mm
+    /// across).</summary>
+    private static ModelParts BumpGrid(params (Vector2 At, float Height)[] bumps)
+    {
+        const int n = 81;
+        const float step = 0.0025f;
+        var pos = new System.Collections.Generic.List<float>();
+        var nrm = new System.Collections.Generic.List<float>();
+        for (int j = 0; j < n; j++)
+            for (int i = 0; i < n; i++)
+            {
+                float x = (i - n / 2) * step, y = (j - n / 2) * step, z = 0f;
+                foreach (var (at, h) in bumps)
+                {
+                    float r = Vector2.Distance(new Vector2(x, y), at) / 0.01f;
+                    if (r < 1f) z += h * (1f - r * r) * (1f - r * r);
+                }
+                pos.AddRange([x, y, z]);
+                nrm.AddRange([0f, 0f, 1f]);
+            }
+        var tris = new System.Collections.Generic.List<int>();
+        for (int j = 0; j + 1 < n; j++)
+            for (int i = 0; i + 1 < n; i++)
+            {
+                int a = j * n + i, b = a + 1, d = a + n, e = d + 1;
+                tris.AddRange([a, b, e, a, e, d]);
+            }
+        return Build(pos.ToArray(), nrm.ToArray(), tris.ToArray(), SkinMaterial);
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-starlight-bottoms-3")]
     public void A_fine_neighbour_never_carries_a_node_past_three_millimetres()
     {
-        // A fine face over the bump's top sharing a corner with a coarse face far clear of the skin: the fine face asks
-        // for its sag, and its corners — the shared one too — move no further than the old 3 mm in all.
-        const float z = 0.2040f;
+        // A coarse face (80 mm) over a 5 mm bump lifts its corner P past 3 mm in the first round. A fine face (16 mm)
+        // sharing P, its other two corners held, sits over a second bump by its held edge, 0.95 mm through, and stays
+        // through as P rises: it asks again every round. Its own budget (3 mm) is spent, so it is refused ("capped") —
+        // P moves only as the coarse face moved it. A budget per node instead (13 mm for all) would have let the fine
+        // face walk P out a round at a time.
+        const float z = 0.0015f;
         float[] pos =
         [
-            -0.010f, -0.00577f, z, 0.010f, -0.00577f, z, 0f, 0.01155f, z,
-            0.15f, -0.15f, z + 0.02f, 0.15f, 0.15f, z + 0.02f,
+            -0.04f, -0.03f, z, 0.04f, -0.03f, z, 0f, 0.05f, z,      // coarse: A, B, P
+            -0.008f, 0.062f, z, 0.008f, 0.062f, z,                  // fine: Q, R (with P)
         ];
         float[] nrm = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1];
-        var garment = Build(pos, nrm, [0, 1, 2, 1, 3, 4], ClothMaterial);
-        var (check, delta, sets) = FaceSetup(garment, Cube(0.20f, SkinMaterial), Bumped(0.0045f));
+        var garment = Build(pos, nrm, [0, 1, 2, 2, 4, 3], ClothMaterial);
+        var source = BumpGrid();
+        var target = BumpGrid((new Vector2(0f, 0f), 0.005f), (new Vector2(0f, 0.0605f), 0.00245f));
+        var (check, delta, sets) = FaceSetup(garment, source, target);
+        var stay = new bool[sets.NodeCount];
+        stay[sets.NodeOf[3]] = stay[sets.NodeOf[4]] = true;
+        Assert.True(check.Need(check.Faces[0], delta).Push > BodyRetarget.ClearFaceMost, "the coarse face should ask past 3 mm");
+        float fineNeed = check.Need(check.Faces[1], delta).Push;
+        Assert.True(fineNeed > 0f && fineNeed <= BodyRetarget.ClearFaceDeepest, $"the fine face asks {fineNeed * 1000:F2} mm");
 
+        var traced = new System.Collections.Generic.List<string>();
+        BodyRetarget.FaceTrace.Value = (k, why) => traced.Add($"{k}:{why}");
         float worst = 0f;
-        BodyRetarget.ClearFaces(check, delta, new float[sets.NodeCount], ref worst);
+        try { BodyRetarget.ClearFaces(check, delta, new float[sets.NodeCount], ref worst, stay); }
+        finally { BodyRetarget.FaceTrace.Value = null; }
 
-        Assert.Contains(delta, d => d.Z > 0f);
-        Assert.True(Moved(delta) <= BodyRetarget.ClearFaceMost + 1e-6f, $"a corner moved {Moved(delta) * 1000:F2} mm");
+        float coarseBudget = BodyRetarget.ClearFaceBudget(BodyRetarget.ClearFaceCap(0.0806f));
+        float p = new Vector3(delta[sets.NodeOf[2]].X, delta[sets.NodeOf[2]].Y, delta[sets.NodeOf[2]].Z).Length();
+        Assert.True(p > BodyRetarget.ClearFaceMost, $"P moved {p * 1000:F2} mm: the coarse face never lifted it");
+        Assert.True(p <= coarseBudget + 1e-6f, $"P moved {p * 1000:F2} mm, past the coarse face's budget");
+        Assert.True(traced.Any(t => t.EndsWith(":capped", StringComparison.Ordinal)), string.Join(" ", traced));
+        Assert.True(check.Need(check.Faces[1], delta).Push > 0f, "the fine face should still be through: the test checks nothing");
     }
 
     [Fact]

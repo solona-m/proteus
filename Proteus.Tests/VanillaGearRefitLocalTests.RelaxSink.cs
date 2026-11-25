@@ -527,5 +527,14 @@ public partial class VanillaGearRefitLocalTests
                                       BodyRetarget.WithTuning(pre1501, Accessory).Model);
         Assert.Equal(mod, SkinTuckSheet.Sha(BodyRetarget.WithTuning(off, Mod).Model));
         Assert.Equal(accessory, SkinTuckSheet.Sha(BodyRetarget.WithTuning(off, Accessory).Model));
+        // [AC-starlight-bottoms-4] As build 1501 makes them (recorded 2026-11-24), the guard still never taken.
+        string modNow = SkinTuckSheet.Sha(Mod().Model), accessoryNow = SkinTuckSheet.Sha(Accessory().Model);
+        output.WriteLine($"now: mod garment {modNow}, accessory {accessoryNow}");
+        Assert.Equal(GiletModNow, modNow);
+        Assert.Equal(GiletAccessoryNow, accessoryNow);
+        Assert.Equal(modNow, SkinTuckSheet.Sha(BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoRelaxSinkGuard: true), Mod).Model));
     }
+
+    private const string GiletModNow = "172399F91A9BE97C35CF591D2B176575DF997685FCE8940265D029173380F665";
+    private const string GiletAccessoryNow = "3CD55BE2CA3642B112D8526D81C8F1E03B8F089EF7FEBAD203628DD9D24BC903";
 }

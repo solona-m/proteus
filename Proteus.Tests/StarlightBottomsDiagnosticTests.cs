@@ -37,6 +37,30 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
         ["Rosaline"] = (LocalData.RosalineMod, "files\\common\\13\\c0201e0000_dwn.mdl"),
     };
 
+    /// <summary>Each size's body file as measured (SHA-256): a change is a re-measure, not a pass.</summary>
+    internal static readonly Dictionary<string, string> BodySha = new()
+    {
+        ["Neolithe S"] = "d8778ef1aa8bbe9659a4bc6803ffdb17ed140113d31398d7e82d26132045ca94",
+        ["Neolithe M"] = "fa92845c6a4906795ff22d89d6290dd1ba12d2097be6acf664dba1cfc8205de1",
+        ["Neolithe L"] = "ebbb48e118d7f711279366a55821abc18c3059122fae42338e7b96ea090fda48",
+        ["Bibo S"] = "d532b8fb4a0553bc0e78fd634a0c93b6b8471424af0f2a7eaa54f2abd1bbfbb2",
+        ["Bibo M"] = "e1f70edcad0511baf82b7f2ef836065eb25987ab8541dee63c67091974fff981",
+        ["Bibo L"] = "7421b07571f7f8c95a9665c16bb3098c1569aefa8f6787ce84ba922b0a774ec1",
+        ["Rue WC"] = "73ed108c61f11d586cb45cdb6fc30c0dff5701cdc24d6cd282814dcbfaa5f14b",
+        ["YAB WC"] = "03ccf5ec28e39d9aaf546894c8bbe3f5484a772bbc7460d0db27a2c2ae1d96c5",
+        ["YAB SC"] = "3c4cbded618bd5ca9cc684b9196a0a8c9cb43edb902526a00f480c5c48c72c50",
+        ["Tre Medium"] = "da27c673e378439417cc0ace588b93c2df145191cfa33107ec49bc5b78848827",
+        ["Tre Large"] = "b3be3f61a697068d9dedb3b23ca0a03bbfabf51d2cdcc90f11de6dea4461554b",
+        ["Rosaline"] = "05f736321a0b17d75d9bae121d6a9cae6d8df8dd27d2bdfbae1fa1072f152717",
+    };
+
+    /// <summary>
+    /// Triangles of the author's crotch hole the fix draws on these sizes, accepted at their measured count (2026-11-24):
+    /// on Rue's and YAB's Yiggle legs 3% of the hole, at its rim, kept through a corner on inner-thigh skin the author
+    /// pressed in. Every other size cuts the hole exactly as before.
+    /// </summary>
+    internal static readonly Dictionary<string, int> HoleDrawn = new() { ["Rue WC"] = 42, ["YAB WC"] = 48, ["YAB SC"] = 46 };
+
     /// <summary>
     /// Measured 2026-11-24 before the fix (both knobs on): skin points through the stockings. After it: 0 on every size.
     /// </summary>
@@ -64,6 +88,17 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
     public void Every_bottoms_size_is_clean(string size)
     {
         var (mod, rel) = Sizes[size];
+        foreach (var (inMod, inRel, sha) in new[]
+                 {
+                     (LocalData.StarlightMod, StarlightBottomsLocalTests.Garment, StarlightBottomsLocalTests.Inputs[0].Sha),
+                     (LocalData.TightFirmMod, StarlightBottomsLocalTests.MadeOn, StarlightBottomsLocalTests.Inputs[1].Sha),
+                     (mod, rel, BodySha[size]),
+                 })
+        {
+            string got = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+                File.ReadAllBytes(Path.Combine(LocalData.Path(inMod), inRel))));
+            Assert.True(got == sha, $"inputs changed ({inRel}): re-measure the references");
+        }
         string dir = Path.Combine(Path.GetTempPath(), "proteus-starlight-sweep-" + Guid.NewGuid().ToString("N"));
         try
         {
@@ -88,7 +123,19 @@ public sealed class StarlightBottomsDiagnosticTests(ITestOutputHelper o)
             Assert.True(stockNow <= stockBefore / 10, $"{stockNow} skin points through the stockings ({stockBefore} before)");
             Assert.DoesNotContain(outNow, InBand);
             Assert.True(outNow.Count <= outBefore.Count, $"{outNow.Count} triangles left out on the legs ({outBefore.Count} before)");
-            Assert.True(holeNow >= holeBefore * 0.9f, $"the crotch hole lost {holeBefore - holeNow} of {holeBefore}");
+            Assert.True(holeNow >= holeBefore - HoleDrawn.GetValueOrDefault(size), $"the crotch hole lost {holeBefore - holeNow} of {holeBefore}");
+            int waistNow = StarlightMeasure.LeftOutAboveLegs(body, now), waistBefore = StarlightMeasure.LeftOutAboveLegs(body, before);
+            Assert.True(waistNow >= waistBefore, $"the waist edge lost {waistBefore - waistNow} triangles");
+            var coarse = StarlightMeasure.CoarseParts(original);
+            foreach (string part in StarlightMeasure.LegsParts(original))
+            {
+                bool slope = coarse.Contains(part);
+                var lineNow = StarlightMeasure.OutOfLine(original, now, [part], perLength: slope);
+                var lineBefore = StarlightMeasure.OutOfLine(original, before, [part], perLength: slope);
+                float slack = slope ? StarlightBottomsLocalTests.CoarseSlopeSlack : StarlightBottomsLocalTests.OutOfLineSlack;
+                Assert.True(lineNow.Max <= lineBefore.Max + slack && lineNow.P99 <= lineBefore.P99 + slack,
+                            $"part {part} out of line {lineNow.Max:F4}/{lineNow.P99:F4}, before {lineBefore.Max:F4}/{lineBefore.P99:F4}");
+            }
             Assert.Equal(smallBefore, smallNow);
             foreach (var (part, n) in turnedNow) Assert.True(n <= turnedBefore.GetValueOrDefault(part), $"part {part} folds more");
         }

@@ -1060,8 +1060,13 @@ internal static partial class BodyRetarget
     /// <see cref="ClearFaceDeepest"/> floor (3 mm); a coarser face's own budget is <see cref="ClearFaceBudget"/>.</summary>
     internal const float ClearFaceMost = 0.003f;
 
-    /// <summary>The most any face may ask of <see cref="ClearFaces"/>, however coarse (12 mm, as <see cref="CutSagMax"/>).</summary>
-    internal const float ClearFaceSagMax = 0.012f;
+    /// <summary>
+    /// The most any face may ask of <see cref="ClearFaces"/>, however coarse (7 mm): under what the face test can read
+    /// (it sees skin no deeper than <see cref="ClearDepth"/>, 8 mm, through a face, and a push adds the clearance), so a
+    /// face the skin is deeper through than it can be measured is refused as too deep rather than chased round by round
+    /// as each lift brings deeper skin into view. Starlight's stockings asked at most 5.7 mm.
+    /// </summary>
+    internal const float ClearFaceSagMax = 0.007f;
 
     /// <summary>
     /// The curve a coarse face's sag is read against (50 mm): <see cref="ClearFaceCap"/> lets a face ask for L²/8r, the

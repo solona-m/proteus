@@ -505,8 +505,9 @@ internal static partial class BodyRetarget
         var baseOf = new Dictionary<int, int>();
         foreach (var span in parts.MeshSpans) baseOf[span.Mesh] = span.BaseVertex;
 
-        // What the author's skin covers, by the chord rule (Covers): the tuck and the open skin judge by this alone.
-        // What the cut keeps and draws also takes in the skin the author pressed in under a band (PressedUnder).
+        // What the author's skin covers, by the chord rule (Covers); what the cut keeps and draws (drawnBy) also takes in
+        // the skin the author pressed in under a band (PressedUnder). The tuck and the open skin are told what the cut
+        // drew — drawnBy — so a triangle kept for a pressed corner is never counted as newly drawn again.
         var covered = new bool[parts.Positions.Length / 3];
         var drawnBy = new bool[covered.Length];
         var normals = Tuned.NoPressedSkinCut ? null : SkinVertexNormals(parts);
@@ -516,7 +517,9 @@ internal static partial class BodyRetarget
         {
             if (standsOff.TryGetValue(laid, out float known)) return known;
             var q = drawn.PositionOf(laid);
-            return standsOff[laid] = onBody!.Nearest(q, CutSagMax, out var h) ? h.Distance : CutSagMax;
+            // Into the new body only (behind its surface); a corner with no body near reads as not pressed.
+            return standsOff[laid] = onBody!.Nearest(q, CutSagMax, out var h) && Vector3.Dot(q - h.Point, h.Normal) < 0f
+                ? h.Distance : 0f;
         }
         foreach (int v in parts.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
                                      .SelectMany(p => p.Triangles).Distinct())
@@ -567,7 +570,7 @@ internal static partial class BodyRetarget
         {
             // Never on a slot the tuck runs on: the tuck draws open skin by its own rule, and its snapshot of the author's
             // cut below would take this skin for the author's.
-            var (spannedSets, spannedTris) = GrowSpannedOpenSkin(drawn, edges, cloth, parts, covered, keptTris, movedAt,
+            var (spannedSets, spannedTris) = GrowSpannedOpenSkin(drawn, edges, cloth, parts, drawnBy, keptTris, movedAt,
                                                                  baseOf);
             if (spannedTris > 0)
             {
@@ -584,7 +587,7 @@ internal static partial class BodyRetarget
         }
         if (!tuck) return sets;
 
-        var (grown, added, open, seen, unread) = TuckUnderCloth(drawn, cloth, body, parts, covered, keptTris, movedAt,
+        var (grown, added, open, seen, unread) = TuckUnderCloth(drawn, cloth, body, parts, drawnBy, keptTris, movedAt,
                                                                 baseOf, edges, seeInside);
         tuckUnread = unread;
         if (added == 0) return sets;
@@ -628,8 +631,8 @@ internal static partial class BodyRetarget
     internal const float PressedSkinFacing = 0.5f;
 
     /// <summary>
-    /// How far off the new body a corner of the author's laid skin must stand for <see cref="PressedUnder"/> to read the
-    /// triangle as pressed in (2 mm): laid skin sits on the new body, save where the author pressed it in further than
+    /// How far into the new body (behind its surface) a corner of the author's laid skin must stand for
+    /// <see cref="PressedUnder"/> to read the triangle as pressed in (2 mm): laid skin sits on the new body, save where the author pressed it in further than
     /// the lay reaches — Starlight's stocking crease, 7-8 mm inside the rounder thighs. A triangle whose corners all sit
     /// on the body spans the body's own detail, which the author never drew over.
     /// </summary>
@@ -652,21 +655,24 @@ internal static partial class BodyRetarget
     /// <param name="p">The body vertex.</param>
     /// <param name="normal">Its normal (see <see cref="SkinVertexNormals"/>); zero for none.</param>
     /// <param name="edges">Which of <paramref name="drawn"/>'s edges two of its triangles share.</param>
-    /// <param name="standsOff">How far a vertex of <paramref name="drawn"/> stands off the new body (metres; 0 on it).</param>
+    /// <param name="standsOff">How far a vertex of <paramref name="drawn"/> stands into the new body, behind its surface
+    /// (metres; 0 on it, outside it, or with no body near).</param>
     internal static bool PressedUnder(BodySurface drawn, Vector3 p, Vector3 normal, SkinEdges? edges, Func<int, float> standsOff)
     {
         if (normal.LengthSquared() <= 1e-12f) return false;
         if (!drawn.Nearest(p, CutSagMax, out var hit) || ChordUnder(drawn, hit, edges) is not float chord) return false;
+        // A reshape inside the author's skin, never at its edge: a triangle with a corner on the author's own edge is the
+        // rim of a cut — Tre's crotch, inside the skirt's crotch hole, landed on the inner thighs' rim triangles.
+        if (edges == null || edges.OnBoundary(hit.A) || edges.OnBoundary(hit.B) || edges.OnBoundary(hit.C)) return false;
+        // No direction the author gave: a triangle whose corners carry no normal of their own is not judged by its faces.
+        if (drawn.NormalOf(hit.A).LengthSquared() <= 1e-12f && drawn.NormalOf(hit.B).LengthSquared() <= 1e-12f
+            && drawn.NormalOf(hit.C).LengthSquared() <= 1e-12f) return false;
         // The author's skin itself pressed in, and pressed far enough to explain the gap: what is left once the press is
         // taken off is within the chord rule. Not a chord laid over the new body's own detail (every corner on the body),
         // nor skin a little off it reaching across to detail further away — the skirt's crotch on Rue, YAB and Neolithe,
         // the new body's genitals 10-12 mm from inner-thigh skin pressed 2-4 mm, inside the author's crotch cut.
         float press = MathF.Max(standsOff(hit.A), MathF.Max(standsOff(hit.B), standsOff(hit.C)));
         if (press < PressedCornerOff || hit.Distance - press > MathF.Min(CutSagMax, CutSagShare * chord)) return false;
-        // A reshape inside the author's skin, never at its edge: a triangle with a corner on the author's own edge is the
-        // rim of a cut — Tre's crotch, inside the skirt's crotch hole, landed on the inner thighs' rim triangles.
-        if (edges == null || edges.OnBoundary(hit.A) || edges.OnBoundary(hit.B) || edges.OnBoundary(hit.C)) return false;
-        if (hit.Normal.LengthSquared() <= 1e-12f) return false;
         var laidNormal = Vector3.Normalize(hit.Normal);
         // The new body standing out through the author's skin, not tucked behind it: under the skirt's crotch the skin
         // faces down and the new body's genitals sat 10 mm above it, inside — the author's cut.

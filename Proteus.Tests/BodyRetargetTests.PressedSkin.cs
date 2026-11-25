@@ -119,15 +119,25 @@ public partial class BodyRetargetTests
 
     [Fact]
     [Trait("Plan", "EDGE-starlight-bottoms-24")]
-    public void A_zero_laid_normal_gets_the_old_rule()
+    public void A_laid_triangle_with_no_normals_gets_the_old_rule()
     {
-        // A degenerate laid triangle has no direction of its own: the surface reads it as the up axis, and a
-        // point under it facing another way is not taken for pressed skin.
-        float[] pos = [0f, 0f, 0f, 0.035f, 0f, 0f, 0.07f, 0f, 0f];
-        var flat = Build(pos, new float[9], [0, 1, 2], SkinMaterial);
-        var drawn = new BodySurface(flat, BodySurface.CellFor(0.035f));
-        var edges = BodyRetarget.SkinEdges.Of(flat);
-        Assert.False(BodyRetarget.PressedUnder(drawn, new Vector3(0.02f, 0f, 0.0075f), Vector3.UnitZ, edges, Off));
+        // The author's skin with no normal at the triangle's corners: no direction to judge the facing by, so the old rule.
+        var (bare, bareEdges) = LaidPatch(Vector3.Zero);
+        Assert.False(BodyRetarget.PressedUnder(bare, OverMiddle(0.0075f), Vector3.UnitZ, bareEdges, Off));
+        var (shaded, shadedEdges) = LaidPatch(Vector3.UnitZ);
+        Assert.True(BodyRetarget.PressedUnder(shaded, OverMiddle(0.0075f), Vector3.UnitZ, shadedEdges, Off));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-starlight-bottoms-3")]
+    [Trait("Plan", "EDGE-starlight-bottoms-9")]
+    public void A_body_point_behind_the_laid_skin_is_not_pressed()
+    {
+        // The new body behind the author's skin, facing its way: tucked in under it, not standing out through it — under
+        // the skirt's crotch the new body's genitals sat 10 mm above skin facing down.
+        var (drawn, edges) = LaidPatch(Vector3.UnitZ);
+        Assert.False(BodyRetarget.PressedUnder(drawn, OverMiddle(-0.0075f), Vector3.UnitZ, edges, Off));
+        Assert.True(BodyRetarget.PressedUnder(drawn, OverMiddle(0.0075f), Vector3.UnitZ, edges, Off));
     }
 
     [Fact]
@@ -308,6 +318,17 @@ public partial class BodyRetargetTests
         Assert.True(r1.Spanned > 0, "the open-skin pass drew nothing: the test checks nothing");
         Assert.Equal(b, a);
         Assert.Equal(r2.Spanned, r1.Spanned);
+
+        // With a pressed strip: the tuck is told what the cut drew (pressed corners included), so every triangle it
+        // reports as added is one more drawn — none the cut kept is counted again.
+        BodyRetarget.SwapReport pr = default;
+        var pressedTuck = BodyRetarget.Rebuild(PressedGarment(), [SkinTuckSheet.Resized(PressedBody())], swapSkin: true,
+                                               weights: null, out pr, cutHidden: true, tuckSlot: "_top");
+        Assert.NotNull(pressedTuck);
+        Assert.True(DrawsDip(pressedTuck!), "the pressed strip is not drawn: the test checks nothing");
+        int drawnTris = ModelPartReader.Read(pressedTuck!)!.Parts
+            .Where(q => q.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(q.Material)).Sum(q => q.Triangles.Length / 3);
+        Assert.Equal(drawnTris, pr.Added);
 
         var top = LooseTop();
         BodyRetarget.SwapReport t1 = default, t2 = default;

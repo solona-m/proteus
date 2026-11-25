@@ -62,6 +62,11 @@ internal static class StarlightMeasure
     internal static List<Vector3> LeftOutBodySkin(ModelParts body, ModelParts refit)
         => LeftOut(body, refit).Where(c => !InCrotch(c) && c.Y < LegsTop).ToList();
 
+    /// <summary>Left-out body skin at and above <see cref="LegsTop"/>, outside the crotch: the author's waist edge, its V
+    /// at the front and back.</summary>
+    internal static int LeftOutAboveLegs(ModelParts body, ModelParts refit)
+        => LeftOut(body, refit).Count(c => !InCrotch(c) && c.Y >= LegsTop);
+
     /// <summary>Left-out body skin inside the author's own crotch hole (see <see cref="InAuthorsHole"/>).</summary>
     internal static int LeftOutInAuthorsHole(ModelParts body, ModelParts refit) => LeftOut(body, refit).Count(InAuthorsHole);
 
@@ -129,6 +134,23 @@ internal static class StarlightMeasure
                             .OrderBy(x => x).ToList();
         return off.Count == 0 ? (0f, 0f) : (off[^1], off[(int)MathF.Floor(0.99f * (off.Count - 1))]);
     }
+
+    /// <summary>
+    /// The authored model's coarse cloth parts: those with a face the sag cap lifts past the old 2 mm (its longest edge
+    /// past sqrt(8 r · 2 mm), 28 mm; see <see cref="BodyRetarget.ClearFaceCap(float)"/>) — the stockings, their band, the
+    /// panties. Their movement out of line is read as a slope (see <see cref="OutOfLine"/>).
+    /// </summary>
+    internal static HashSet<string> CoarseParts(ModelParts m)
+        => Cloth(m).Where(p =>
+        {
+            for (int t = 0; t + 2 < p.Triangles.Length; t += 3)
+            {
+                Vector3 a = P(m, p.Triangles[t]), b = P(m, p.Triangles[t + 1]), c = P(m, p.Triangles[t + 2]);
+                float longest = MathF.Max(Vector3.Distance(a, b), MathF.Max(Vector3.Distance(b, c), Vector3.Distance(c, a)));
+                if (BodyRetarget.ClearFaceCap(longest) > BodyRetarget.ClearFaceDeepest) return true;
+            }
+            return false;
+        }).Select(p => p.Label).ToHashSet();
 
     /// <summary>The labels of the authored model's stocking, skirt and panty parts (mesh 1, <see cref="StockingMaterial"/>).</summary>
     internal static HashSet<string> LegsParts(ModelParts authored)

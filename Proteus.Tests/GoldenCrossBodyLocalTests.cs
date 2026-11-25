@@ -38,10 +38,10 @@ public class GoldenCrossBodyLocalTests(ITestOutputHelper output)
     /// 2026-11-24): the cases above keep their old bytes with both knobs.</summary>
     private static readonly Dictionary<string, string> RecordedNow = new()
     {
-        ["muse gen a / studio"] = "B310AD469989C88D2CF045842B61396C61D242CAF1BB274CCA774732D245B8A2",
-        ["muse gen a / auto"] = "4E5CFDA5BFCB4558F3A0D7055C3C9516D2527CC5FF36387F5B293ADE3DD54CE5",
-        ["bibo+ / studio"] = "2F93B5ADCF5976B513D63B5DA5C2E1816D436C610BA067F26F21DB3FA6389EC7",
-        ["bibo+ / auto"] = "FD86AB6AF1EB1FB5719181B05AD7C4228884C86CEA08D535FE653D8182AD001C",
+        ["muse gen a / studio"] = "7D589E1958C342EEECF2F3D86B6A3201632C1CD6766E593975DD1CDF387C0CF6",
+        ["muse gen a / auto"] = "517A1BD145CDB3E7854F3C095088C0E7EBAA4595CF9A47600F28701B8E6826E3",
+        ["bibo+ / studio"] = "1C11A71DC8386183E67960A6B563F624B8F031570F2FB1293B3D4446B1809E90",
+        ["bibo+ / auto"] = "ACC8DA31AA18FF79EC2C3C1862399005E7D19144641670379377BD71EE089DA8",
     };
 
     [LocalDataTheory(Laurel, Neolithe, Bibo, LocalData.MusePack)]

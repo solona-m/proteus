@@ -21,16 +21,14 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     /// <summary>A game top as it was before the neckline tuck and the deep clear (and the game chest's bra read, and the
     /// relax guard, and the cut that keeps a triangle the author's skin covers only inside).</summary>
     private static readonly BodyRetarget.Tuning Before = new(NoTuck: true, NoDeepClear: true, NoKeepStandoff: true,
-                                                            NoSourceWorn: true, NoRelaxSinkGuard: true, NoCutInside: true,
-                                                            NoCoarseSag: true, NoPressedSkinCut: true);
+                                                            NoSourceWorn: true, NoRelaxSinkGuard: true, NoCutInside: true);
 
     /// <summary>A game top with the tuck as change (a) made it: no deep clear, no open skin.</summary>
     private static readonly BodyRetarget.Tuning TuckOnly = new(NoDeepClear: true, NoOpenSkin: true, NoKeepStandoff: true,
-                                                              NoSourceWorn: true, NoRelaxSinkGuard: true,
-                                                              NoCoarseSag: true, NoPressedSkinCut: true);
+                                                              NoSourceWorn: true, NoRelaxSinkGuard: true);
 
     /// <summary>A game top as it was before the standoff pass: everything else on but the game chest's bra read and the
-    /// relax guard, which came after.</summary>
+    /// relax guard, which came after (and build 1501's sag cap and pressed-skin cut: its coarse case changed).</summary>
     private static readonly BodyRetarget.Tuning NoPull = new(NoKeepStandoff: true, NoSourceWorn: true, NoRelaxSinkGuard: true,
                                                             NoCoarseSag: true, NoPressedSkinCut: true);
 
@@ -508,7 +506,7 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
         var garment = ModelPartReader.Read(bytes)!;
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
         // The new body's piercings carried, as every refit did when this was pinned.
-        var plan = BodyRetarget.WithTuning(Before,
+        var plan = BodyRetarget.WithTuning(Before with { NoCoarseSag = true, NoPressedSkinCut = true },
             () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _,
                                       carryPiercings: true));
         Pinned(RefitCore.MatchSkinToBody(plan.Model, source, target, uv, false, log), DirndlGameRefit);
@@ -556,7 +554,7 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
                         ("target", File.ReadAllBytes(target), AlmondXsSha))) return;
         var garment = ModelPartReader.Read(bytes)!;
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
-        var plan = BodyRetarget.WithTuning(Before with { NoCoarseSag = false, NoPressedSkinCut = false },
+        var plan = BodyRetarget.WithTuning(Before,
             () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _,
                                       carryPiercings: true));
         Pinned(RefitCore.MatchSkinToBody(plan.Model, source, target, uv, false, log), DirndlGameRefitNow);
@@ -581,8 +579,8 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     // Pinned on build 1323.
     private const string MaimingStudioCutFitted = "28EF6EB3F30337E37E268FC8D5DC9330841188A93D15514B32D8E89FD027C703";
     private const string FloatGameTopCoarseNow = "8F2DF3F52C3E27A6DC080D7E6870C3A38BD44B7899B07D8E3101AB78F9B3D262";
-    private const string MaimingStudioCutNow = "2C05964B7CC1A0F81A5A74824601FE6ACF2BDF7B116FD1D4970A16D869D8DA09";
-    private const string MaimingStudioCutFittedNow = "94A6D0E64BB907844F8A1711D4E28D36D62A3AEBC893F310187695B2DA5537D7";
+    private const string MaimingStudioCutNow = "D5FAA6B2E8002E8475D58C5009EC9C906F15BE2A25E0C57CC679439E437CDC49";
+    private const string MaimingStudioCutFittedNow = "DF2AD38C3162CE4D09A0A82EE6059CA6CC96F36946994BE216260C118DF1806B";
     private const string DirndlGameRefitNow = "19984E46CCFC8F4EB8DE935D7256756965B1E35D9E29B8762143D2B7B072FD81";
     private const string DirndlGameRefit = "1B6456AF7163D39F5EDB5B2E38EE8F50B35D1B15BDCE0DDEF414BD4FDC5FD61B";
 
