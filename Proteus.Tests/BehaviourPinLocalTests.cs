@@ -26,8 +26,11 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
     private const string LumberjackPin = "1FE367DFEFEB9D1277223A57D2AD7AB637FF1EB515EAC99B7B0BD8271578C214";
     private const string SheerTopPin = "066EE8258755CEF2E21223A47AF1B9D90160978CF2464DC2C6DA14659DBE8351";
     private const string StormblessedLegsPin = "C6127850AE23D53BD9B4EA8B839B13293028630D578BBD19CA0E8B655E065A17";
-    /// <summary>featureless-bulge: the pin before the bulge, which Stormblessed's legs still make with it switched off.</summary>
-    private const string StormblessedLegsNoBulgePin = "3B2B3ADD084CBB2295D78499DCE8769656B8FCF49260C2C4190BC359ED846DA0";
+    /// <summary>featureless-bulge: the pin before the bulge, which Stormblessed's legs still make with it switched off.
+    /// Re-captured on test f04d524a (build 1504): moved by redo-starlight's coarse sag (1501) with the layer floor (1495)
+    /// or the pressed-skin cut (1501); with NoCoarseSag, NoLayerFloor, NoPressedSkinCut and NoKneeStandoff it is the
+    /// earlier 3B2B3ADD... exactly.</summary>
+    private const string StormblessedLegsNoBulgePin = "A8A5D2BF5B4716753F12D155A5470D6638D6BC5E5913FAC737C36676505BDCEA";
     private const string HeelsSizeSetPin = "E53697A7A3235D1FB3EF57DF52FCA160BF6C3BAF193C8E49507F252B6A42F955";
 
     // cross-sex-wrist-band (EDGE-16, AC-10): Halone's Chosen's glove made a men's through EndInputs, as Studio and the CLI build it
@@ -35,7 +38,9 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
     private const string HalonesGloveTbsePin = "2AEA65FC2BA9FF10408D14C763C8259F126F1DB603E3E419F977928ACA22DE19";
     private const string HalonesGloveTbseXPin = "599C7882A605C629ABB2ECB9FB3C86996403BEB0159FBB4EAC7F1C4CDE3B3545";
     // Halone's boot made a men's onto TBSE-X through EndInputs (its Flaccid M A legs, build 1412, at bf560a8b).
-    private const string HalonesTbseXBootPin = "186142759B60F66F645AF7A629702060795B49BC6130F3D432C38B15F6D1ECA3";
+    // Re-captured on test f04d524a (build 1504): moved by knee-standoff (1504) alone; with NoKneeStandoff it is the
+    // earlier 186142759B60... exactly.
+    private const string HalonesTbseXBootPin = "09A3B34ACC48489FABE6BA1FB3FD3712CC91749745E217325B6AAFD6D0033B32";
 
     private static UVRemapService Maps() => new(Substitute.For<IPluginLog>(), LocalData.Path(LocalData.TbseUvMaps));
 
