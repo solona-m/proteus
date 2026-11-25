@@ -66,6 +66,18 @@ public class HarnessDocsTests
         Assert.Contains("Proteus/TestHarness/", agents);
         Assert.True(File.Exists(Path.Combine(RepoRoot, "docs", "adr", "0002-qa-harness-compile-out-and-threat-model.md")));
 
+        // [AC-harness-option-hold-8] [EDGE-harness-option-hold-24] [EDGE-harness-option-hold-26] [EDGE-harness-option-hold-27]
+        // the hold's options and the recipe for checking sizes (drawn file read after the redraw, auto redraw on first).
+        foreach (var required in new[]
+                 {
+                     "\"options\":{\"<group>\":[\"<option>\"]}", "Checking other sizes", "option-not-found", "mod-unreadable",
+                     "auto-refit {\"enabled\":false}", "auto-redraw {\"enabled\":true}", "\\u2014", "STOP and report", "undoWorn",
+                     "`loaded`", "redraws.count", "timed-out", "holds[].options",
+                 })
+            Assert.True(doc.Contains(required, StringComparison.Ordinal), $"adversarial-qa.md must mention '{required}'");
+        string adr = File.ReadAllText(Path.Combine(RepoRoot, "docs", "adr", "0002-qa-harness-compile-out-and-threat-model.md"));
+        Assert.Contains("`mod-settings` takes `options`", adr);
+
 #if PROTEUS_TEST_HARNESS
         // Every route the router serves has its row in the guide's table: "`GET /log?…`", "`POST /actions/refit`".
         foreach (var (method, path) in Proteus.TestHarness.HarnessRouter.Routes)

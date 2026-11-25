@@ -306,9 +306,15 @@ internal sealed partial class FakeGame : IHarnessGame
         return ([CollectionName], CharacterName);
     }
 
+    /// <summary>Run before each <see cref="Mods"/> answer with its call number (1, 2, …): a test that removes a mod between
+    /// a route's two framework hops.</summary>
+    public Action<int>? OnMods { get; set; }
+    private int modsCalls;
+
     public ModList? Mods()
     {
         Fw(nameof(Mods));
+        OnMods?.Invoke(++modsCalls);
         return PenumbraUp ? new ModList(new Dictionary<string, string>(ModFolders), ModsRoot) : null;
     }
 
