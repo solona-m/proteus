@@ -64,6 +64,7 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     private readonly GlamourerApplyDesign applyDesign;
     private readonly GlamourerApplyState applyState;
     private readonly ICondition? condition;
+    private readonly CharacterFreeze? freeze;
     private readonly IDataManager? data;
     private long designApplied;
 
@@ -81,9 +82,11 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
                               UVRemapService uvRemap, Func<string, byte[]?> readGameFile, Action<string> onModChanged,
                               IPluginLog log, IDalamudPluginInterface pluginInterface, DesignBindingService designBindings,
                               OverlayEditRouter editRouter, PresetService presets, SidecarDiscoveryService discovery,
-                              IStudioHarness? studio = null, ICondition? condition = null, IDataManager? data = null)
+                              IStudioHarness? studio = null, ICondition? condition = null, IDataManager? data = null,
+                              CharacterFreeze? freeze = null)
     {
         Studio = studio;
+        this.freeze = freeze;
         this.condition = condition;
         this.data = data;
         this.discovery = discovery;
@@ -530,6 +533,13 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
         => (config.AutoRedraw, compositor.HarnessAutoRedrawOverride, compositor.AutoRedrawOn);
 
     public void SetAutoRedrawOverride(bool? enabled) => compositor.HarnessAutoRedrawOverride = enabled;
+
+    public (bool Setting, bool? Override) FreezeSetting() => (config.StudioFreezeCharacter, freeze?.SessionOverride);
+
+    public void SetFreezeOverride(bool? enabled)
+    {
+        if (freeze != null) freeze.SessionOverride = enabled;
+    }
 
     public object RecoveryState() => compositor.HarnessRecoveryState();
 

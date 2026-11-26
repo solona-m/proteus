@@ -375,6 +375,12 @@ internal interface IHarnessGame
     /// <summary>Set (or with null, clear) the harness's session-only auto-redraw override: memory only. Any thread.</summary>
     void SetAutoRedrawOverride(bool? enabled);
 
+    /// <summary>The Studio freeze: the user's setting and the harness's session override (null: none). Any thread.</summary>
+    (bool Setting, bool? Override) FreezeSetting();
+
+    /// <summary>Set (or with null, clear) the harness's session-only Studio freeze override: memory only. Any thread.</summary>
+    void SetFreezeOverride(bool? enabled);
+
     /// <summary>The write-retry latch, the drawn check's steps, the shell fault and the move fault, for /state. Any thread.</summary>
     object RecoveryState();
 

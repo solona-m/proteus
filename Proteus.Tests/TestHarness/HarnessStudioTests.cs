@@ -30,9 +30,52 @@ public class HarnessStudioTests
         Assert.Equal(["1.2"], r.Unlock);
         Assert.Equal("1.3", r.Part);
         // The order they are applied in is the panel's, fixed: the fields list names it.
-        Assert.Equal(["tool", "mode", "view", "mirror", "adjacent", "falloffMm", "moveSkin", "unlockAll", "lock", "unlock", "part"], HarnessStudio.SetFields);
+        Assert.Equal(["tool", "mode", "view", "mirror", "adjacent", "falloffMm", "moveSkin", "unlockAll", "lock", "unlock", "part", "freeze"], HarnessStudio.SetFields);
         Assert.DoesNotContain("drawer", HarnessStudio.SetFields);
         Assert.Null(r.FalloffMm);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-studio-freeze-9")]
+    public void ParseSet_accepts_new_tools_and_freeze_bool()
+    {
+        foreach (var tool in new[] { "inflate", "deflate", "navigate" })
+            Assert.Equal(tool, HarnessStudio.ParseSet(Body($$"""{"tool":"{{tool}}"}""")).Request!.Tool);
+        Assert.True(HarnessStudio.ParseSet(Body("""{"freeze":true}""")).Request!.Freeze);
+        Assert.False(HarnessStudio.ParseSet(Body("""{"freeze":false}""")).Request!.Freeze);
+        Assert.Null(HarnessStudio.ParseSet(Body("""{"tool":"move"}""")).Request!.Freeze);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-studio-freeze-24")]
+    public void ParseSet_refuses_unknown_tools_and_non_bool_freeze()
+    {
+        foreach (var tool in new[] { "matcap", "retarget", "relax" })
+        {
+            var (r, error) = HarnessStudio.ParseSet(Body($$"""{"tool":"{{tool}}"}"""));
+            Assert.Null(r);
+            Assert.Equal("tool must be move, rotate, scale, inflate, deflate or navigate", error);
+        }
+        var (f, ferr) = HarnessStudio.ParseSet(Body("""{"freeze":"yes"}"""));
+        Assert.Null(f);
+        Assert.Equal("freeze must be true or false", ferr);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-studio-freeze-23")]
+    public void HarnessTool_maps_each_name_exactly()
+    {
+        Assert.Equal(PartsPanel.Tool.Move, HarnessStudio.HarnessTool("move"));
+        Assert.Equal(PartsPanel.Tool.Rotate, HarnessStudio.HarnessTool("rotate"));
+        Assert.Equal(PartsPanel.Tool.Scale, HarnessStudio.HarnessTool("scale"));
+        Assert.Equal(PartsPanel.Tool.Inflate, HarnessStudio.HarnessTool("inflate"));
+        Assert.Equal(PartsPanel.Tool.Deflate, HarnessStudio.HarnessTool("deflate"));
+        Assert.Equal(PartsPanel.Tool.Navigate, HarnessStudio.HarnessTool("navigate"));
+        Assert.Null(HarnessStudio.HarnessTool("matcap"));
+        Assert.Null(HarnessStudio.HarnessTool(""));
+        // A brush or Toggle parts is not a part tool, so a lock under it is refused wrong-tool, never mapped to Move.
+        foreach (var name in new[] { "inflate", "deflate", "navigate" })
+            Assert.NotEqual(PartsPanel.Tool.Move, HarnessStudio.HarnessTool(name));
     }
 
     [Fact]
@@ -61,7 +104,7 @@ public class HarnessStudioTests
     [Theory]
     [Trait("Plan", "EDGE-move-all-parts-23")]
     [InlineData("""{}""")]
-    [InlineData("""{"tool":"inflate"}""")]
+    [InlineData("""{"tool":"relax"}""")]
     [InlineData("""{"mode":"some"}""")]
     [InlineData("""{"mirror":"yes"}""")]
     [InlineData("""{"unlockAll":false}""")]

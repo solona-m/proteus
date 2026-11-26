@@ -220,6 +220,26 @@ for any equip. `/state` gains read-only `materials` (gear material game paths an
 files Penumbra resolves them to, scrubbed like `models`). A glass part's row cut is
 written by the same `matcap` job and backup as before.
 
+**Amendment (2026-11-25, studio freeze).** The Studio holds the player character still
+while a brush or Move/Rotate/Scale works on it (`CharacterFreeze`, which sets the
+player's own action-timeline slot speeds to 0 and writes back each held slot still at
+0 on release). For QA:
+- `GET /studio` gains a read-only `freeze` block: the effective setting and the
+  harness override, the state (`off`, `idle`, `unavailable`, `no-character`, `gpose`,
+  `busy`, `settling`, `frozen`), `busyReason`, the slot speeds and the held slots, the
+  timelines learned as idle, the write/restore counters, the four timeline arrays and
+  a pose sample of `j_kosi`, `j_sebo_b` and `j_kao`.
+- `studio-set` takes `tool: inflate | deflate | navigate` besides move/rotate/scale (a
+  lock under any of them is refused `wrong-tool`, never mapped to Move), and
+  `freeze: true | false`: a **memory-only** override of the user's setting for the
+  session, never saved. It is recorded with its Before, listed among what is left,
+  and cleared inside the memory-only output put-back — so by put-back with or without
+  a Studio session, on `off`, on unload and in the off-thread stop; the put-back
+  answer's `output.freeze` says `cleared` or `none`. `EndSession` clears it too.
+- The freeze itself is client-side, writes nothing persistent, and lapses by itself
+  250 ms (and 3 framework updates) after the Studio stops asking.
+- Compiled out of every CI build like the rest of the harness.
+
 ## Consequences
 
 Easier: QA can test the plugin in a running game unattended once the user turns

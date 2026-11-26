@@ -2807,6 +2807,30 @@
     "message": "캐릭터 대신 이 창의 모델 위에 칠합니다.",
     "description": ""
   },
+  "Parts.Freeze.Label": {
+    "message": "캐릭터 고정",
+    "description": ""
+  },
+  "Parts.Freeze.Tip": {
+    "message": "이 도구로 작업하는 동안 캐릭터의 몸을 정지시켜, 대기 동작 때문에 브러시 아래의 장비가 움직이지 않게 합니다. 머리카락, 치마 등 흔들리는 부분은 여전히 움직일 수 있습니다. 이동, 감정 표현, 앉기, 전투, GPose 시 해제됩니다.",
+    "description": ""
+  },
+  "Parts.Freeze.Moving": {
+    "message": "곧 다시 정지합니다.",
+    "description": ""
+  },
+  "Parts.Freeze.Busy": {
+    "message": "앉아 있거나, 감정 표현 중, 연주 중, 전투 중, 시전 중, 탈것 탑승 중, 대화 중, 제작·채집 중, 컷신 중에는 고정하지 않습니다.",
+    "description": ""
+  },
+  "Parts.Freeze.Gpose": {
+    "message": "GPose에서는 고정하지 않습니다: GPose의 동작 정지를 사용하세요.",
+    "description": ""
+  },
+  "Parts.Freeze.Unavailable": {
+    "message": "이 게임 버전에서는 고정을 사용할 수 없습니다.",
+    "description": ""
+  },
   "Parts.Live.Hint": {
     "message": "캐릭터 위에 칠하세요. Alt를 누른 채로 카메라를 움직일 수 있습니다. 각 획은 손을 뗄 때 저장됩니다.",
     "description": ""

@@ -2807,6 +2807,30 @@
     "message": "Paint on the model in this window instead of on your character.",
     "description": "Tooltip for the checkbox. Keep the line break; the tooltip is not wrapped."
   },
+  "Parts.Freeze.Label": {
+    "message": "Freeze character",
+    "description": "Toggle button in the Studio's tool column. When on, the brush and move tools hold the player's character still (its animation paused)."
+  },
+  "Parts.Freeze.Tip": {
+    "message": "Hold your character's body still while this tool works on it, so its idle animation doesn't move the garment under the brush. Hair, skirts and other swaying parts may still move. Moving, an emote, sitting, combat or GPose lets go.",
+    "description": "Tooltip for the Freeze character toggle. GPose is the game's photo mode; keep the name."
+  },
+  "Parts.Freeze.Moving": {
+    "message": "Holding still again in a moment.",
+    "description": "Shown under the toggle while the character is briefly not frozen, after it moved, emoted or was redrawn."
+  },
+  "Parts.Freeze.Busy": {
+    "message": "Not frozen while sitting, emoting, performing, in combat, casting, mounted, talking to someone, crafting or gathering, or in a cutscene.",
+    "description": "Shown under the toggle when the character can't be frozen right now."
+  },
+  "Parts.Freeze.Gpose": {
+    "message": "Not frozen in GPose: use GPose's own motion pause.",
+    "description": "Shown under the toggle in GPose (the game's photo mode; keep the name)."
+  },
+  "Parts.Freeze.Unavailable": {
+    "message": "Freezing isn't available on this game version.",
+    "description": "Shown under the toggle when the game's animation functions could not be found, e.g. after a game patch."
+  },
   "Parts.Live.Hint": {
     "message": "Paint on your character. Hold Alt to move the camera. Each stroke is saved when you let go.",
     "description": "Shown above the brush controls when painting on the character."
