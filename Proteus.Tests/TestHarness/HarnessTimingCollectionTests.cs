@@ -16,7 +16,7 @@ public class HarnessTimingCollectionTests
 {
     private static readonly Type[] Expected =
     [
-        typeof(DispatchTicketTests), typeof(HarnessAutoRefitNowTests), typeof(HarnessBindingsHttpTests), typeof(HarnessBindingsTests), typeof(HarnessChangesHttpTests), typeof(HarnessChangesTests),
+        typeof(DispatchTicketTests), typeof(HarnessAutoRefitNowTests), typeof(HarnessBindingsHttpTests), typeof(HarnessBindingsTests), typeof(HarnessChangesHttpTests), typeof(HarnessChangesTests), typeof(HarnessFreezeOverrideTests),
         typeof(HarnessHairPortTests), typeof(HarnessHostTests), typeof(HarnessInstallModTests), typeof(HarnessJobsTests), typeof(HarnessMatcapTests), typeof(HarnessMoveFaultTests), typeof(HarnessOptionHoldTests), typeof(HarnessOutputRoutesTests), typeof(HarnessPoseRoutesTests), typeof(HarnessQaRoutesTests), typeof(HarnessRouterTests),
         typeof(HarnessServerTests), typeof(HarnessStudioRouteTests), typeof(OffThreadTests),
     ];

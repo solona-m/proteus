@@ -3284,6 +3284,27 @@ public sealed class PartsStrings
     public readonly string ShowModelViewTip = ProteusLoc.Localize("Parts.ShowModelView.Tip",
         "Paint on the model in this window instead of on your character.");
 
+    /// <summary>The snowflake toggle under Show model view: freezing tools hold the character still.</summary>
+    public readonly string FreezeCharacter = ProteusLoc.Localize("Parts.Freeze.Label", "Freeze character") + "###studioFreeze";
+
+    public readonly string FreezeTip = ProteusLoc.Localize("Parts.Freeze.Tip",
+        "Hold your character's body still while this tool works on it, so its idle animation doesn't move the garment "
+      + "under the brush. Hair, skirts and other swaying parts may still move. Moving, an emote, sitting, combat or "
+      + "GPose lets go.");
+
+    /// <summary>Under the toggle while the freeze waits for the character to settle (after moving, an emote, a redraw).</summary>
+    public readonly string FreezeMoving = ProteusLoc.Localize("Parts.Freeze.Moving", "Holding still again in a moment.");
+
+    public readonly string FreezeBusy = ProteusLoc.Localize("Parts.Freeze.Busy",
+        "Not frozen while sitting, emoting, performing, in combat, casting, mounted, talking to someone, crafting or "
+      + "gathering, or in a cutscene.");
+
+    public readonly string FreezeGpose = ProteusLoc.Localize("Parts.Freeze.Gpose",
+        "Not frozen in GPose: use GPose's own motion pause.");
+
+    public readonly string FreezeUnavailable = ProteusLoc.Localize("Parts.Freeze.Unavailable",
+        "Freezing isn't available on this game version.");
+
     public readonly string LiveHint = ProteusLoc.Localize("Parts.Live.Hint",
         "Paint on your character. Hold Alt to move the camera. Each stroke is saved when you let go.");
 

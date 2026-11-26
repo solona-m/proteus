@@ -443,4 +443,19 @@ public class ConfigurationMigrationTests
         Assert.True(back.OverlaysMenFor("Another Mod"));
         Assert.Single(back.MenOverlayOffMods);
     }
+
+    [Fact]
+    [Trait("Plan", "AC-studio-freeze-6")]
+    [Trait("Plan", "EDGE-studio-freeze-26")]
+    public void StudioFreezeCharacter_defaults_on_when_missing()
+    {
+        var c = Load($$"""{"Version":{{Configuration.CurrentVersion}}}""");
+        Assert.True(c.StudioFreezeCharacter);
+        c.Migrate();
+        Assert.True(c.StudioFreezeCharacter);
+        Assert.Equal(Configuration.CurrentVersion, c.Version);
+        var off = Load($$"""{"Version":{{Configuration.CurrentVersion}},"StudioFreezeCharacter":false}""");
+        off.Migrate();
+        Assert.False(off.StudioFreezeCharacter);
+    }
 }

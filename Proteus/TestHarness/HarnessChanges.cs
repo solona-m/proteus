@@ -58,10 +58,14 @@ internal sealed record PutBackReport(IReadOnlyList<UndoEntry> Gear, IReadOnlyLis
 
 /// <summary>What put-back did about the shell output routes: each held file, the move fault, the shell fault (cleared and
 /// recomposited) and the auto-redraw override.</summary>
-internal sealed record OutputPutBack(IReadOnlyList<UndoEntry> Locks, string MoveFault, string Fault, string AutoRedraw)
+internal sealed record OutputPutBack(IReadOnlyList<UndoEntry> Locks, string MoveFault, string Fault, string AutoRedraw,
+                                     string Freeze = "none")
 {
     public static readonly OutputPutBack Nothing = new([], "none", "none", "none");
 }
+
+/// <summary>The harness's session-only Studio freeze switch: what it set, and the effective setting before the first set.</summary>
+internal sealed record FreezeOverrideRecord(bool Enabled, bool BeforeEffective, DateTime AtUtc);
 
 /// <summary>The harness's session-only auto-redraw switch: what it set, and the effective state before the first set.</summary>
 internal sealed record AutoRedrawOverrideRecord(bool Enabled, bool BeforeEffective, DateTime AtUtc);
@@ -203,6 +207,11 @@ internal sealed partial class HarnessChanges(IHarnessGame game, SessionNames nam
 
     private bool shellFaultArmed;
     private AutoRedrawOverrideRecord? autoRedrawOverride;
+    private FreezeOverrideRecord? freezeOverride;
+
+    /// <summary>Record the session override <c>studio-set</c>'s freeze set; the first set keeps its Before.</summary>
+    public FreezeOverrideRecord NoteFreezeOverride(bool enabled, bool beforeEffective)
+        => freezeOverride = new FreezeOverrideRecord(enabled, freezeOverride?.BeforeEffective ?? beforeEffective, DateTime.UtcNow);
 
     /// <summary>Record that the shell-fault route armed the fault (cleared at put-back, with a recomposite).</summary>
     public void NoteShellFault(bool armed) => shellFaultArmed = armed;
@@ -218,6 +227,22 @@ internal sealed partial class HarnessChanges(IHarnessGame game, SessionNames nam
     /// </summary>
     internal OutputPutBack PutBackOutput()
     {
+        // The memory-only overrides first: nothing below that can throw ever leaves one set.
+        string redraw = "none";
+        if (autoRedrawOverride != null)
+        {
+            game.SetAutoRedrawOverride(null);
+            autoRedrawOverride = null;
+            redraw = "cleared";
+        }
+        // The Studio freeze override: memory only, cleared here whether or not a Studio session is left.
+        string freeze = "none";
+        if (freezeOverride != null)
+        {
+            game.SetFreezeOverride(null);
+            freezeOverride = null;
+            freeze = "cleared";
+        }
         try
         {
             var (released, _, moveFault) = OutputLocks.ReleaseAll("put back");
@@ -228,19 +253,12 @@ internal sealed partial class HarnessChanges(IHarnessGame game, SessionNames nam
                 fault = "cleared";
             }
             shellFaultArmed = false;
-            string redraw = "none";
-            if (autoRedrawOverride != null)
-            {
-                game.SetAutoRedrawOverride(null);
-                autoRedrawOverride = null;
-                redraw = "cleared";
-            }
-            return new OutputPutBack(released.Select(r => new UndoEntry(r.File, r.Result)).ToList(), moveFault, fault, redraw);
+            return new OutputPutBack(released.Select(r => new UndoEntry(r.File, r.Result)).ToList(), moveFault, fault, redraw, freeze);
         }
         catch (Exception ex)
         {
             log?.Warning(ex, "[Proteus] test harness: putting back the output routes failed");
-            return OutputPutBack.Nothing;
+            return OutputPutBack.Nothing with { AutoRedraw = redraw, Freeze = freeze };
         }
     }
 
@@ -594,17 +612,26 @@ internal sealed partial class HarnessChanges(IHarnessGame game, SessionNames nam
         var o = game.Studio!.Set(request, studio!);
         if (o.Refused is { } r) return ChangeResult.Fail(r.Status, r.Code, r.Message);
         studio!.EditVersion = o.EditVersion;
+        var state = o.State;
+        if (request.Freeze is { } fz)
+        {
+            // Applied last; memory only, never the user's saved setting.
+            var before = game.FreezeSetting();
+            game.SetFreezeOverride(fz);
+            NoteFreezeOverride(fz, before.Override ?? before.Setting);
+            state = game.Studio.View();
+        }
         return ChangeResult.Ok(new Dictionary<string, object?>
         {
             ["applied"] = new
             {
                 tool = request.Tool, mode = request.Mode, view = request.View, mirror = request.Mirror, adjacent = request.Adjacent, falloffMm = request.FalloffMm,
                 moveSkin = request.MoveSkin, unlockAll = request.UnlockAll ? true : (bool?)null,
-                part = request.Part,
+                part = request.Part, freeze = request.Freeze,
             },
             ["locks"] = o.Locks.Select(l => new { label = l.Label, result = l.Result }).ToList(),
             ["chosen"] = o.Chosen,
-            ["state"] = WithSession(o.State),
+            ["state"] = WithSession(state),
         });
     }
 
@@ -725,6 +752,7 @@ internal sealed partial class HarnessChanges(IHarnessGame game, SessionNames nam
             shellFault = shellFaultArmed,
             autoRedrawOverride = autoRedrawOverride is { } r ? new { enabled = r.Enabled, before = r.BeforeEffective, atUtc = r.AtUtc } : null,
         },
+        freezeOverride = freezeOverride is { } fo ? new { enabled = fo.Enabled, before = fo.BeforeEffective, atUtc = fo.AtUtc } : null,
     };
 
     /// <summary>The slots and mods still recorded, for the warning when put-back cannot run.</summary>
@@ -739,12 +767,13 @@ internal sealed partial class HarnessChanges(IHarnessGame game, SessionNames nam
                                  .Concat(OutputLocks.Active ? ["output locks"] : [])
                                  .Concat(shellFaultArmed ? ["the shell fault"] : [])
                                  .Concat(autoRedrawOverride != null ? ["the auto-redraw override"] : [])
+                                 .Concat(freezeOverride != null ? ["the freeze override"] : [])
                                  .Concat(autoRefitPreference?.Recorded == true ? ["the auto refit preference (the worn-refit trigger's)"] : [])
                                  .Concat(jobBackedMods.Select(kv => $"{kv.Key}: restore by job {kv.Value}"))
                                  .Concat(PoseLeftovers()));
 
     internal bool Empty => gear.Count == 0 && holds.Count == 0 && bindings?.HasSession != true && studio == null
                         && sidecar.Empty && autoRefitOverride == null && autoRefitPubesOverride == null
-                        && !OutputLocks.Active && !shellFaultArmed && autoRedrawOverride == null
+                        && !OutputLocks.Active && !shellFaultArmed && autoRedrawOverride == null && freezeOverride == null
                         && autoRefitPreference?.Recorded != true && jobBackedMods.Count == 0 && PoseEmpty;
 }

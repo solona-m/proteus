@@ -25,16 +25,17 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IChatGui ChatGui { get; private set; } = null!;
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
     [PluginService] public static IReliableFileStorage ReliableStorage { get; private set; } = null!;
+
+    /// <summary>Which conditions the character is in: the character freeze lets go while busy, and the QA test
+    /// harness's emote route refuses an emote under some.</summary>
+    [PluginService] public static ICondition Condition { get; private set; } = null!;
 #if PROTEUS_TEST_HARNESS
     /// <summary>The QA test harness's screenshot readback (dev builds only).</summary>
     [PluginService] public static ITextureReadbackProvider TextureReadback { get; private set; } = null!;
-
-    /// <summary>The QA test harness's emote route: which conditions forbid an emote (dev builds only).</summary>
-    [PluginService] public static ICondition Condition { get; private set; } = null!;
 #endif
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1506;
+    public const int BuildNumber = 1507;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -79,6 +80,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly TilePreview tilePreview;
     private readonly Gui.PartViewport partViewport;
     private readonly Gui.PartsPanel partsPanel;
+    private readonly CharacterFreeze characterFreeze;
     private readonly HatCompatWatcher hatCompat;
     private readonly HairPortWatcher hairPort;
     private readonly ShaderUpgradeWatcher shaderUpgrade;
@@ -254,8 +256,11 @@ public sealed class Plugin : IDalamudPlugin
         // The clickable model view, and the panel that turns a mod's geometry into on/off switches.
         partViewport = new Gui.PartViewport(TextureProvider, log);
         liveBrush = new Gui.LiveBrush(ObjectTable, DataManager, penumbra, log);
+        // Holds the character still while a Studio tool works on it; lets go by itself when the Studio stops asking.
+        characterFreeze = new CharacterFreeze(framework, ObjectTable, ClientState, Condition,
+                                              () => config.StudioFreezeCharacter, log);
         partsPanel = new Gui.PartsPanel(penumbra, compositor, partViewport, liveBrush, textureLoader, uvRemap,
-                                        config, log);
+                                        config, characterFreeze, log);
 
         // A service, not part of the panel: it subscribes to the hairstyle change so it works with the window shut.
         hatCompat = new HatCompatWatcher(compositor, penumbra, glamourer, config, log);
@@ -318,7 +323,7 @@ public sealed class Plugin : IDalamudPlugin
                                                partsPanel.AsHarnessStudio(statusWindow.OpenToStudio,
                                                                         () => statusWindow.IsOpen,
                                                                         () => statusWindow.IsOpen = false),
-                                               Condition, DataManager),
+                                               Condition, DataManager, characterFreeze),
             new TestHarness.DalamudFrameworkDispatcher(framework), observer => capture.LineObserver = observer, log,
             BuildNumber, BuildStamp);
 #endif
@@ -632,6 +637,9 @@ public sealed class Plugin : IDalamudPlugin
         // First, before the compositor and the bridges it calls: a queued after-change then skips.
         try { harness.Dispose(); } catch { /* tearing down — never block the unload */ }
 #endif
+
+        // After the harness (which may still read it), before anything else: the character's own speed is handed back.
+        try { characterFreeze.Dispose(); } catch { /* tearing down — never block the unload */ }
 
         // Last chance for an import whose disk work landed after the final frame, registration only: no window, no recomposite.
         try { statusWindow.TickImport(unloading: true); } catch { /* tearing down — never block the unload */ }

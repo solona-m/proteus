@@ -2807,6 +2807,30 @@
     "message": "Auf dem Modell in diesem Fenster malen statt auf deinem Charakter.",
     "description": ""
   },
+  "Parts.Freeze.Label": {
+    "message": "Charakter einfrieren",
+    "description": ""
+  },
+  "Parts.Freeze.Tip": {
+    "message": "Halte den Körper deines Charakters still, während dieses Werkzeug an ihm arbeitet, damit seine Leerlauf-Animation das Kleidungsstück unter dem Pinsel nicht bewegt. Haare, Röcke und andere schwingende Teile können sich weiter bewegen. Bewegen, ein Emote, Sitzen, Kampf oder GPose heben es auf.",
+    "description": ""
+  },
+  "Parts.Freeze.Moving": {
+    "message": "Gleich wieder still.",
+    "description": ""
+  },
+  "Parts.Freeze.Busy": {
+    "message": "Nicht eingefroren beim Sitzen, bei Emotes, beim Musizieren, im Kampf, beim Wirken, beritten, im Gespräch, beim Herstellen oder Sammeln oder in einer Zwischensequenz.",
+    "description": ""
+  },
+  "Parts.Freeze.Gpose": {
+    "message": "In GPose nicht eingefroren: nutze die eigene Bewegungspause von GPose.",
+    "description": ""
+  },
+  "Parts.Freeze.Unavailable": {
+    "message": "Einfrieren ist in dieser Spielversion nicht verfügbar.",
+    "description": ""
+  },
   "Parts.Live.Hint": {
     "message": "Male auf deinem Charakter. Halte Alt, um die Kamera zu bewegen. Jeder Strich wird beim Loslassen gespeichert.",
     "description": ""

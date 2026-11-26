@@ -115,7 +115,7 @@ public sealed partial class PartsPanel
     private string? writeError;
 
     /// <summary>What a drag on the model does, and therefore which half of this tab is showing.</summary>
-    private enum Tool
+    internal enum Tool
     {
         /// <summary>Pick parts and stage switches — everything this tab did before there was a brush.</summary>
         Navigate,
@@ -164,6 +164,27 @@ public sealed partial class PartsPanel
     private static bool IsPartTool(Tool t) => t is Tool.Move or Tool.Rotate or Tool.Scale;
 
     private bool PartTool => IsPartTool(tool);
+
+    /// <summary>
+    /// The tools that hold the character still while they work on it: everything that drags or paints on the surface.
+    /// Toggle parts, Body size and Matcaps pick whole parts with a click, which a little sway does not spoil.
+    /// </summary>
+    internal static bool FreezesCharacter(Tool t)
+        => t is Tool.Inflate or Tool.Deflate or Tool.Relax or Tool.Smooth or Tool.Bridge or Tool.Wind or Tool.Grab
+             or Tool.Move or Tool.Rotate or Tool.Scale;
+
+    /// <summary>Why a freezing tool's character is not frozen, under the snowflake toggle; null when there is nothing to say.</summary>
+    internal static string? FreezeStatusLine(FreezeState s) => s switch
+    {
+        FreezeState.Settling    => Strings.Parts.FreezeMoving,
+        FreezeState.Busy        => Strings.Parts.FreezeBusy,
+        FreezeState.GPose       => Strings.Parts.FreezeGpose,
+        FreezeState.Unavailable => Strings.Parts.FreezeUnavailable,
+        _                       => null,
+    };
+
+    /// <summary>Holds the character still while a freezing tool works on it — see <see cref="CharacterFreeze"/>.</summary>
+    private readonly CharacterFreeze freeze;
 
     /// <summary>
     /// The tools a drag on the model paints with. Written as its own predicate rather than "not Navigate", because
@@ -369,11 +390,12 @@ public sealed partial class PartsPanel
     /// </summary>
     private const long PreviewIntervalMs = 150;
 
-    public PartsPanel(
+    internal PartsPanel(
         PenumbraBridge penumbra, CompositorService compositor, PartViewport viewport, LiveBrush liveBrush,
-        TextureLoader textureLoader, UVRemapService uvRemap, Configuration config, IPluginLog log)
+        TextureLoader textureLoader, UVRemapService uvRemap, Configuration config, CharacterFreeze freeze, IPluginLog log)
     {
         this.penumbra = penumbra;
+        this.freeze = freeze;
         this.compositor = compositor;
         this.viewport = viewport;
         this.liveBrush = liveBrush;
@@ -574,6 +596,7 @@ public sealed partial class PartsPanel
                 bool modelView = showModelView;
                 if (ImGui.Checkbox(Strings.Parts.ShowModelView, ref modelView)) SwitchView(modelView);
                 if (ImGui.IsItemHovered()) ImGui.SetTooltip(Strings.Parts.ShowModelViewTip);
+                if (!showModelView) DrawFreezeToggle();
                 ImGui.Separator();
 
                 DrawToolPicker();
@@ -649,6 +672,7 @@ public sealed partial class PartsPanel
             bool moving = PartTool;
             if (volume != null && brushBase != null
                 && ArmedModelFile(vanilla?.GamePath ?? CopyNotDrawnOpen(), ModRoot(), models[modelIndex].File) is { } armed)
+            {
                 liveBrush.ArmBrush(armed, brushBase, volume, ActiveRadiusMm / 1000f, showWind: tool == Tool.Wind,
                                    mirror: MirrorNow, partOf: partOfVertexFn,
                                    lockClicked: moving ? moveClickedFn : pickParts ? tickClickedFn : lockClickedFn,
@@ -669,6 +693,10 @@ public sealed partial class PartsPanel
                                    polygonPickable: moving && movePolygons ? polyPickableFn : null,
                                    moveFalloff: MoveFalloffNow(), grabBrush: tool == Tool.Grab,
                                    skinMoves: SkinMovesNow);
+                // Only while the brush is armed on a drawn model. On the first armed frame Problem has not been worked
+                // out yet (the next LiveBrush.Update does that); a single wanted frame is absorbed by the 250 ms lapse.
+                if (FreezesCharacter(tool) && liveBrush.Problem == null) freeze.Want();
+            }
         }
 
         frame.Mark("arm live brush");
@@ -3052,7 +3080,33 @@ public sealed partial class PartsPanel
         float button = ImGui.GetFrameHeight() + style.ItemInnerSpacing.X + text + style.FramePadding.X * 4f;
         float check = ImGui.GetFrameHeight() + style.ItemInnerSpacing.X
                     + ImGui.CalcTextSize(ButtonText(Strings.Parts.ShowModelView)).X;
-        return MathF.Max(button, check) + style.WindowPadding.X * 2f + style.ScrollbarSize;
+        float freezeButton = ImGui.GetFrameHeight() + style.ItemInnerSpacing.X
+                           + ImGui.CalcTextSize(ButtonText(Strings.Parts.FreezeCharacter)).X + style.FramePadding.X * 4f;
+        return MathF.Max(MathF.Max(button, check), freezeButton) + style.WindowPadding.X * 2f + style.ScrollbarSize;
+    }
+
+    /// <summary>
+    /// The snowflake toggle (character view only): whether a freezing tool holds the character still. Drawn as the
+    /// tool buttons are, so the ###id its label carries is cut off and pushed as an id instead. Under it, while a
+    /// freezing tool is in use and the character is not frozen, a line saying why.
+    /// </summary>
+    private void DrawFreezeToggle()
+    {
+        bool on = freeze.Enabled;
+        bool clicked;
+        using (ImRaii.PushId("studioFreeze"))
+        using (ProteusStyle.Selected(on))
+            clicked = ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Snowflake, ButtonText(Strings.Parts.FreezeCharacter),
+                                                         FullWidth());
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(Strings.Parts.FreezeTip);
+        if (clicked)
+        {
+            // The user's own choice; the harness override (memory only) is never written here.
+            matcapConfig.StudioFreezeCharacter = !matcapConfig.StudioFreezeCharacter;
+            matcapConfig.Save();
+        }
+        if (on && FreezesCharacter(tool) && FreezeStatusLine(freeze.State) is { } line)
+            ProteusStyle.DisabledWrapped(line);
     }
 
     /// <summary>Tick or untick one part, from wherever the click came from.</summary>

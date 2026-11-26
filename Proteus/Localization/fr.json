@@ -2807,6 +2807,30 @@
     "message": "Peindre sur le modèle dans cette fenêtre plutôt que sur votre personnage.",
     "description": ""
   },
+  "Parts.Freeze.Label": {
+    "message": "Figer le personnage",
+    "description": ""
+  },
+  "Parts.Freeze.Tip": {
+    "message": "Garde le corps de ton personnage immobile pendant que cet outil travaille dessus, pour que son animation d'attente ne déplace pas le vêtement sous le pinceau. Les cheveux, les jupes et les autres parties qui ondulent peuvent encore bouger. Se déplacer, une emote, s'asseoir, le combat ou GPose le libèrent.",
+    "description": ""
+  },
+  "Parts.Freeze.Moving": {
+    "message": "De nouveau immobile dans un instant.",
+    "description": ""
+  },
+  "Parts.Freeze.Busy": {
+    "message": "Pas figé assis, pendant une emote, en jouant de la musique, en combat, en incantation, sur une monture, en parlant à quelqu'un, en fabrication ou en récolte, ni pendant une cinématique.",
+    "description": ""
+  },
+  "Parts.Freeze.Gpose": {
+    "message": "Pas figé en GPose : utilise la pause de mouvement de GPose.",
+    "description": ""
+  },
+  "Parts.Freeze.Unavailable": {
+    "message": "Figer n'est pas disponible sur cette version du jeu.",
+    "description": ""
+  },
   "Parts.Live.Hint": {
     "message": "Peignez sur votre personnage. Maintenez Alt pour déplacer la caméra. Chaque trait est enregistré au relâchement.",
     "description": ""

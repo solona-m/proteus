@@ -2807,6 +2807,30 @@
     "message": "Pintar sobre el modelo en esta ventana en lugar de sobre tu personaje.",
     "description": ""
   },
+  "Parts.Freeze.Label": {
+    "message": "Congelar personaje",
+    "description": ""
+  },
+  "Parts.Freeze.Tip": {
+    "message": "Mantén quieto el cuerpo de tu personaje mientras esta herramienta trabaja en él, para que su animación de reposo no mueva la prenda bajo el pincel. El pelo, las faldas y otras partes que se balancean aún pueden moverse. Moverte, un gesto, sentarte, el combate o GPose lo sueltan.",
+    "description": ""
+  },
+  "Parts.Freeze.Moving": {
+    "message": "Se quedará quieto de nuevo en un momento.",
+    "description": ""
+  },
+  "Parts.Freeze.Busy": {
+    "message": "No se congela al sentarte, hacer gestos, tocar música, en combate, lanzando, montado, hablando con alguien, fabricando o recolectando, ni en una cinemática.",
+    "description": ""
+  },
+  "Parts.Freeze.Gpose": {
+    "message": "No se congela en GPose: usa la pausa de movimiento propia de GPose.",
+    "description": ""
+  },
+  "Parts.Freeze.Unavailable": {
+    "message": "Congelar no está disponible en esta versión del juego.",
+    "description": ""
+  },
   "Parts.Live.Hint": {
     "message": "Pinta sobre tu personaje. Mantén Alt para mover la cámara. Cada trazo se guarda al soltar.",
     "description": ""

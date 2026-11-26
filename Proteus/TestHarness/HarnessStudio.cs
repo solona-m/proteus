@@ -13,7 +13,7 @@ namespace Proteus.TestHarness;
 /// </summary>
 internal static class HarnessStudio
 {
-    internal static readonly string[] SetFields = ["tool", "mode", "view", "mirror", "adjacent", "falloffMm", "moveSkin", "unlockAll", "lock", "unlock", "part"];
+    internal static readonly string[] SetFields = ["tool", "mode", "view", "mirror", "adjacent", "falloffMm", "moveSkin", "unlockAll", "lock", "unlock", "part", "freeze"];
     internal static readonly string[] DragFields = ["offsetMm", "axis", "degrees", "factor", "factors", "undo"];
 
     // ── bodies ──────────────────────────────────────────────────────────────
@@ -23,7 +23,7 @@ internal static class HarnessStudio
     internal static (StudioSetRequest? Request, string? Error) ParseSet(JsonElement body)
     {
         string? tool = null, mode = null, view = null, part = null;
-        bool? mirror = null, adjacent = null, moveSkin = null;
+        bool? mirror = null, adjacent = null, moveSkin = null, freeze = null;
         float? falloffMm = null;
         bool unlockAll = false;
         var lockList = new List<string>();
@@ -36,7 +36,8 @@ internal static class HarnessStudio
             switch (p.Name)
             {
                 case "tool":
-                    if (!OneOf(p.Value, out tool, "move", "rotate", "scale")) return (null, "tool must be move, rotate or scale");
+                    if (!OneOf(p.Value, out tool, "move", "rotate", "scale", "inflate", "deflate", "navigate"))
+                        return (null, "tool must be move, rotate, scale, inflate, deflate or navigate");
                     break;
                 case "mode":
                     if (!OneOf(p.Value, out mode, "parts", "polygons", "all")) return (null, "mode must be parts, polygons or all");
@@ -72,6 +73,10 @@ internal static class HarnessStudio
                 case "unlock":
                     if (!Labels(p.Value, unlockList)) return (null, "unlock must be a non-empty array of part labels");
                     break;
+                case "freeze":
+                    if (!Bool(p.Value, out var fz)) return (null, "freeze must be true or false");
+                    freeze = fz;
+                    break;
                 case "part":
                     if (p.Value.ValueKind != JsonValueKind.String || p.Value.GetString() is not { Length: > 0 } label)
                         return (null, "part must be a part label");
@@ -84,8 +89,23 @@ internal static class HarnessStudio
         if (given == 0) return (null, "give at least one of " + string.Join(", ", SetFields));
         if (lockList.Intersect(unlockList, StringComparer.Ordinal).FirstOrDefault() is { } both)
             return (null, $"{both} is in both lock and unlock");
-        return (new StudioSetRequest(tool, mode, view, mirror, adjacent, moveSkin, unlockAll, lockList, unlockList, part, falloffMm), null);
+        return (new StudioSetRequest(tool, mode, view, mirror, adjacent, moveSkin, unlockAll, lockList, unlockList, part, falloffMm, freeze), null);
     }
+
+    /// <summary>
+    /// The one name → tool map for <c>studio-set</c>: exactly the names <see cref="ParseSet"/> accepts, null for any other.
+    /// A brush or Toggle parts never falls through to Move (a lock request under them is refused <c>wrong-tool</c>).
+    /// </summary>
+    internal static PartsPanel.Tool? HarnessTool(string name) => name switch
+    {
+        "move"     => PartsPanel.Tool.Move,
+        "rotate"   => PartsPanel.Tool.Rotate,
+        "scale"    => PartsPanel.Tool.Scale,
+        "inflate"  => PartsPanel.Tool.Inflate,
+        "deflate"  => PartsPanel.Tool.Deflate,
+        "navigate" => PartsPanel.Tool.Navigate,
+        _          => null,
+    };
 
     /// <summary>A <c>studio-drag</c> body: exactly one kind of drag, or <c>undo</c> alone.</summary>
     internal static (StudioDragRequest? Request, string? Error) ParseDrag(JsonElement body)

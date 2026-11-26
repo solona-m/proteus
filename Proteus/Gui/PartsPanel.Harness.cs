@@ -87,7 +87,11 @@ public sealed partial class PartsPanel : IStudioHarness
         {
             ["open"] = open,
             ["window"] = new { shown = harnessWindowOpen?.Invoke() ?? false },
-            ["tool"] = tool switch { Tool.Move => "move", Tool.Rotate => "rotate", Tool.Scale => "scale", Tool.Matcap => "matcap", _ => "other" },
+            ["tool"] = tool switch
+            {
+                Tool.Move => "move", Tool.Rotate => "rotate", Tool.Scale => "scale", Tool.Matcap => "matcap",
+                Tool.Inflate => "inflate", Tool.Deflate => "deflate", Tool.Navigate => "navigate", _ => "other",
+            },
             ["mode"] = moveSelect switch { MoveSelectMode.Polygons => "polygons", MoveSelectMode.All => "all", _ => "parts" },
             ["view"] = showModelView ? "model" : "character",
             ["settings"] = new { mirror = mirrorBrush, adjacent = moveAdjacent, falloffMm = moveFalloffMm, moveSkin },
@@ -111,6 +115,34 @@ public sealed partial class PartsPanel : IStudioHarness
                 : null,
             ["status"] = status is { } text ? new StudioStatusLine(text, statusIsError) : null,
             ["matcapPreview"] = MatcapPreviewView(),
+            ["freeze"] = FreezeView(),
+        };
+    }
+
+    /// <summary>The character freeze as <c>/studio</c> reports it (ADR 0002 amendment, studio freeze).</summary>
+    private object FreezeView()
+    {
+        var s = freeze.Snapshot();
+        var pose = freeze.PoseSample();
+        return new
+        {
+            setting = freeze.Enabled, @override = freeze.SessionOverride,
+            state = s.State switch
+            {
+                FreezeState.Off => "off", FreezeState.Idle => "idle", FreezeState.Unavailable => "unavailable",
+                FreezeState.NoCharacter => "no-character", FreezeState.GPose => "gpose", FreezeState.Busy => "busy",
+                FreezeState.Settling => "settling", _ => "frozen",
+            },
+            busyReason = s.BusyReason, available = s.Available, faulted = s.Faulted,
+            slotSpeeds = s.SlotSpeeds, slotTimelines = s.SlotTimelines,
+            held = s.Held.Select(h => new { slot = h.Slot, speed = h.Speed, timeline = (int)h.Timeline }).ToList(),
+            learned = s.Learned.OrderBy(kv => kv.Key)
+                               .Select(kv => new { slot = kv.Key, timelines = kv.Value.Order().Select(t => (int)t).ToList() }).ToList(),
+            unknownReleases = s.UnknownReleases, writes = s.Writes, restores = s.Restores, restoreSkipped = s.RestoreSkipped,
+            lastRelease = s.LastRelease is { } lr ? new { restored = lr.Restored, skipped = lr.Skipped } : null,
+            awaitingIdleTimeline = s.AwaitingIdleTimeline,
+            timelineIds = s.TimelineIds, drawObjectChanged = s.DrawObjectChanged, releases = s.Releases,
+            pose = pose is { } p ? new { kosi = p.Kosi, seboB = p.SeboB, kao = p.Kao } : null,
         };
     }
 
@@ -172,11 +204,13 @@ public sealed partial class PartsPanel : IStudioHarness
         foreach (var label in request.Lock.Concat(request.Unlock).Select(l => (string?)l).Append(request.Part).OfType<string>())
             if (model.Parts.All(p => p.Label != label)) return Refuse(400, "invalid-field", $"no part {label} in the open model");
         // Locks are the Move tools' (Body size's holds are another set, which put-back does not keep).
-        var toolAfter = request.Tool is { } named ? named switch { "rotate" => Tool.Rotate, "scale" => Tool.Scale, _ => Tool.Move } : tool;
+        Tool? named = request.Tool is { } n ? TestHarness.HarnessStudio.HarnessTool(n) : null;
+        if (request.Tool != null && named == null) return Refuse(400, "invalid-field", "tool must be move, rotate, scale, inflate, deflate or navigate");
+        var toolAfter = named ?? tool;
         if ((request.UnlockAll || request.Lock.Count > 0 || request.Unlock.Count > 0) && !IsPartTool(toolAfter))
             return Refuse(409, "wrong-tool", "locks are set under Move, Rotate or Scale; set the tool first");
 
-        if (request.Tool is { } t) SwitchTool(t switch { "rotate" => Tool.Rotate, "scale" => Tool.Scale, _ => Tool.Move });
+        if (named is { } t) SwitchTool(t);
         if (request.Mode is { } m) SwitchMoveSelect(m switch { "polygons" => MoveSelectMode.Polygons, "all" => MoveSelectMode.All, _ => MoveSelectMode.Parts });
         if (request.View is { } v) SwitchView(v == "model");
         if (request.Mirror is { } mirror && mirror != mirrorBrush) { mirrorBrush = mirror; viewport.Recolour(); }
@@ -339,6 +373,7 @@ public sealed partial class PartsPanel : IStudioHarness
     StudioPutBack IStudioHarness.EndSession(StudioSession session, bool refreshGame)
     {
         HarnessSync();
+        freeze.SessionOverride = null;   // backup to PutBackOutput's clear, before any early return
         // The click preview is the harness's for the session: taken off the character first.
         if (matcapPreview.Active) EndLivePreview(refreshGame);
         if (HarnessRoot(session.ModDir) is not { } root)

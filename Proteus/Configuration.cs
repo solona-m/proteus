@@ -362,6 +362,10 @@ public class Configuration : IPluginConfiguration
     /// kept. On by default; a config saved before it existed has no such key and keeps this default (no migration).</summary>
     public bool SizeSetEnds { get; set; } = true;
 
+    /// <summary>The Studio's brush and move tools hold the character still while they work on it (the snowflake toggle).
+    /// On by default; a config saved before it existed has no such key and keeps this default (no migration).</summary>
+    public bool StudioFreezeCharacter { get; set; } = true;
+
     /// <summary>With <see cref="SizeSetBodies"/>, bring each new body's piercings in with its skin. Off by default; a
     /// config saved before it existed has no such key and reads false (no migration). Nails come in either way.</summary>
     public bool SizeSetPiercings { get; set; }

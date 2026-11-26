@@ -31,6 +31,30 @@ public class HarnessStudioRouteTests : IDisposable
     private static string Code(System.Text.Json.JsonElement body) => body.GetProperty("error").GetProperty("code").GetString()!;
 
     [Fact]
+    [Trait("Plan", "AC-studio-freeze-9")]
+    [Trait("Plan", "EDGE-studio-freeze-7")]
+    [Trait("Plan", "EDGE-studio-freeze-37")]
+    public async Task Set_freeze_records_the_override_and_put_back_clears_it()
+    {
+        await Open();
+        f.Game.FreezeConfig = true;
+        var (status, body) = await f.Post("/actions/studio-set", """{"freeze":false}""");
+        Assert.Equal(200, status);
+        Assert.False(body.GetProperty("applied").GetProperty("freeze").GetBoolean());
+        Assert.False(f.Game.FreezeOverrideValue);
+        Assert.Contains("the freeze override", f.Changes.Leftovers());
+        var (_, state) = await f.Get("/state");
+        var rec = state.GetProperty("harnessChanges").GetProperty("freezeOverride");
+        Assert.False(rec.GetProperty("enabled").GetBoolean());
+        Assert.True(rec.GetProperty("before").GetBoolean());   // the user's setting before the first set
+
+        var (_, report) = await f.Post("/actions/put-back", "{}");
+        Assert.Equal("cleared", report.GetProperty("output").GetProperty("freeze").GetProperty("result").GetString());
+        Assert.Null(f.Game.FreezeOverrideValue);
+        Assert.True(f.Game.FreezeConfig);   // never written
+    }
+
+    [Fact]
     [Trait("Plan", "AC-move-all-parts-11")]
     public async Task Studio_Get_ShapesTheState()
     {

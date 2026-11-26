@@ -2807,6 +2807,30 @@
     "message": "在此窗口的模型上绘制，而不是在你的角色上。",
     "description": ""
   },
+  "Parts.Freeze.Label": {
+    "message": "冻结角色",
+    "description": ""
+  },
+  "Parts.Freeze.Tip": {
+    "message": "在此工具作用于角色时让角色身体保持静止，避免待机动作使画笔下的装备移动。头发、裙子等摆动部位仍可能移动。移动、情感动作、坐下、战斗或GPose会解除冻结。",
+    "description": ""
+  },
+  "Parts.Freeze.Moving": {
+    "message": "稍后将再次静止。",
+    "description": ""
+  },
+  "Parts.Freeze.Busy": {
+    "message": "坐下、做情感动作、演奏、战斗、咏唱、骑乘、与人交谈、制作或采集、或在过场动画中时不会冻结。",
+    "description": ""
+  },
+  "Parts.Freeze.Gpose": {
+    "message": "在GPose中不冻结：请使用GPose自带的动作暂停。",
+    "description": ""
+  },
+  "Parts.Freeze.Unavailable": {
+    "message": "此游戏版本无法使用冻结。",
+    "description": ""
+  },
   "Parts.Live.Hint": {
     "message": "直接在角色上绘制。按住 Alt 可移动镜头。每一笔在松开时保存。",
     "description": ""

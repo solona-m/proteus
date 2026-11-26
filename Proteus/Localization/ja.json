@@ -2807,6 +2807,30 @@
     "message": "キャラクターではなく、このウィンドウのモデル上で塗ります。",
     "description": ""
   },
+  "Parts.Freeze.Label": {
+    "message": "キャラクターを固定",
+    "description": ""
+  },
+  "Parts.Freeze.Tip": {
+    "message": "このツールで編集している間、キャラクターの体を静止させ、待機モーションでブラシの下の装備が動かないようにします。髪やスカートなど揺れる部分は動くことがあります。移動、エモート、座る、戦闘、GPoseで解除されます。",
+    "description": ""
+  },
+  "Parts.Freeze.Moving": {
+    "message": "まもなく再び静止します。",
+    "description": ""
+  },
+  "Parts.Freeze.Busy": {
+    "message": "座っている、エモート中、演奏中、戦闘中、詠唱中、騎乗中、会話中、製作・採集中、カットシーン中は固定しません。",
+    "description": ""
+  },
+  "Parts.Freeze.Gpose": {
+    "message": "GPoseでは固定しません：GPoseのモーション停止を使ってください。",
+    "description": ""
+  },
+  "Parts.Freeze.Unavailable": {
+    "message": "このゲームバージョンでは固定を使用できません。",
+    "description": ""
+  },
   "Parts.Live.Hint": {
     "message": "キャラクターの上で塗ります。Altを押しながらでカメラを動かせます。ストロークは離したときに保存されます。",
     "description": ""

@@ -234,6 +234,7 @@ internal sealed partial class HarnessRouter
                     locks = o.Locks.Select(l => new { file = l.Name, result = l.Result }),
                     moveFault = new { result = o.MoveFault }, fault = new { result = o.Fault },
                     autoRedraw = new { result = o.AutoRedraw },
+                    freeze = new { result = o.Freeze },
                 }
                 : null,
             pose = new { emote = pose.Emote, camera = pose.Camera, confirm },

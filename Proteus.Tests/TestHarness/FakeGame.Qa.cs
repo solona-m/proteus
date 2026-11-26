@@ -74,6 +74,10 @@ internal sealed partial class FakeGame
     public (bool Config, bool? Override, bool Effective) AutoRedrawEnabled()
         => (AutoRedrawConfig, AutoRedrawOverrideValue, AutoRedrawOverrideValue ?? AutoRedrawConfig);
     public void SetAutoRedrawOverride(bool? enabled) => AutoRedrawOverrideValue = enabled;
+    public bool FreezeConfig { get; set; } = true;
+    public bool? FreezeOverrideValue { get; set; }
+    public (bool Setting, bool? Override) FreezeSetting() => (FreezeConfig, FreezeOverrideValue);
+    public void SetFreezeOverride(bool? enabled) => FreezeOverrideValue = enabled;
     public object RecoveryState() => new { writeRetry = (object?)null, shellDrawn = (object?)null,
                                            shellFault = ShellFaultValue is { } f ? new { shell = f.Shell } : null };
 
