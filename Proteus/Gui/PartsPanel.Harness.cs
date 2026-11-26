@@ -372,8 +372,8 @@ public sealed partial class PartsPanel : IStudioHarness
 
     StudioPutBack IStudioHarness.EndSession(StudioSession session, bool refreshGame)
     {
-        freeze.SessionOverride = null;   // backup to PutBackOutput's clear, before any early return
         HarnessSync();
+        freeze.SessionOverride = null;   // backup to PutBackOutput's clear, before any early return
         // The click preview is the harness's for the session: taken off the character first.
         if (matcapPreview.Active) EndLivePreview(refreshGame);
         if (HarnessRoot(session.ModDir) is not { } root)

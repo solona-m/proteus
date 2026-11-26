@@ -267,8 +267,11 @@ public class CharacterFreezeWiringTests
     {
         var harness = Source("Gui/PartsPanel.Harness.cs");
         var end = Body(harness, "StudioPutBack IStudioHarness.EndSession(");
-        var first = end.TrimStart('{').TrimStart().Split('\n')[0];
-        Assert.StartsWith("freeze.SessionOverride = null;", first);
+        // Right after the sync every harness member starts with, and before any return.
+        var lines = end.TrimStart('{').TrimStart().Split('\n').Select(l => l.Trim()).ToArray();
+        Assert.Equal("HarnessSync();", lines[0]);
+        Assert.StartsWith("freeze.SessionOverride = null;", lines[1]);
+        Assert.True(At(end, "freeze.SessionOverride = null;") < At(end, "return"));
     }
 
     [Fact]
