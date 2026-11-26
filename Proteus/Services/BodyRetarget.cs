@@ -914,7 +914,56 @@ internal static partial class BodyRetarget
         if (replaceSkin || weights != null)
         {
             bool see = seeInside && tuckSlot != null && !Tuned.NoSeeInside;
-            var rebuilt = Rebuild(model, rebuildPairs, replaceSkin, weights, out var swapped, cutHidden, acrossBodies,
+            byte[]? rebuilt = null;
+            SwapReport swapped = default;
+            bool switchedDone = false;
+            // The garment's own penis switches, given to the new body's genitals (see Bulge.GenitalSwitches). One try round
+            // the whole of it — the reading, the switched rebuild and its read-back — so nothing in it can fail the refit:
+            // any fault rebuilds as today, below, and says so.
+            var switchPairs = replaceSkin && !Tuned.NoGenitalSwitches
+                ? rebuildPairs.Where(p => p.Slot == "_dwn" && p.Swaps && !p.ShapeOnly).Take(1).ToList()
+                : [];
+            foreach (var switchPair in switchPairs)
+            {
+                try
+                {
+                    var sets = SwitchSetsOf(garment, garmentBytes, switchPair, log);
+                    if (sets != null)
+                    {
+                        var added = addedBySlot != null ? new Dictionary<string, int>(StringComparer.Ordinal) : null;
+                        var byGarment = new Dictionary<string, IReadOnlyList<IReadOnlySet<string>>> { [switchPair.Slot] = sets };
+                        var tried = Rebuild(model, rebuildPairs, replaceSkin, weights, out var report2, cutHidden, acrossBodies,
+                                            swapMeshes, tuckSlot, carryPiercings, parted, see, openSkin, swappedSkinTags,
+                                            added, carryPubes: carryPubes, genitalSwitches: byGarment, switchLog: log);
+                        if (report2.SwitchCopies > 0)
+                        {
+                            // Read back: the rebuilt model holds the copies and the garment's own set-tagged parts it kept,
+                            // and nothing else carrying a whole set.
+                            var back = tried != null ? ModelPartReader.Read(tried) : null;
+                            int expected = report2.HostSetSubmeshes + report2.SwitchCopies
+                                         + (Tuned.GenitalSwitchFault == SwitchFault.ReadBack ? 1 : 0);
+                            if (back == null) throw new InvalidOperationException("the switched model cannot be read back");
+                            int found = Bulge.GenitalSwitches.CountSetParts(back, null, sets);
+                            if (found != expected)
+                                throw new InvalidOperationException($"read back {found} switched submeshes, expected {expected}");
+                            log?.Invoke($"genital switches: {switchPair.Slot} the new body's genitals ({report2.Switched / sets.Count} triangles) "
+                                        + $"given the garment's {sets.Count} switch sets ({string.Join("; ", sets.Select(s => string.Join("+", s.OrderBy(n => n, StringComparer.Ordinal))))})"
+                                        + (report2.SwitchFringe > 0 ? $", {report2.SwitchFringe} fringe triangles left untagged" : ""));
+                        }
+                        rebuilt = tried;
+                        swapped = report2;
+                        if (added != null)
+                            foreach (var (k, v) in added) addedBySlot![k] = addedBySlot.GetValueOrDefault(k) + v;
+                        switchedDone = true;
+                    }
+                }
+                catch (Exception e)
+                {
+                    (warn ?? log)?.Invoke($"genital switches: {switchPair.Slot} left as today — failed: {e.Message}");
+                }
+            }
+            if (!switchedDone)
+                rebuilt = Rebuild(model, rebuildPairs, replaceSkin, weights, out swapped, cutHidden, acrossBodies,
                                   swapMeshes, tuckSlot, carryPiercings, parted, see, openSkin, swappedSkinTags,
                                   addedBySlot, carryPubes: carryPubes);
             if (rebuilt != null)
@@ -961,6 +1010,22 @@ internal static partial class BodyRetarget
                                                  StringComparer.OrdinalIgnoreCase);
         var publish = smallclothes.Where(m => drawnMaterials.Contains(m.Name)).ToList();
         return new Planned(solved.Edit, model, report, publish.Count > 0 ? publish : null, addedBySlot);
+    }
+
+    /// <summary>
+    /// The garment's own penis switch sets for <paramref name="pair"/> (see <see cref="Bulge.GenitalSwitches.Of"/>), or null:
+    /// past the cheap gate, read against the body the garment was made on. A reason not to switch is logged.
+    /// </summary>
+    private static IReadOnlyList<IReadOnlySet<string>>? SwitchSetsOf(ModelParts garment, byte[] garmentBytes, SlotPair pair,
+                                                                     Action<string>? log)
+    {
+        var source = pair.Correspondence.Source;
+        if (!Bulge.GenitalSwitches.MayHaveSwitches(garment, source)) return null;
+        var sourceSkin = pair.SourceModel != null ? ModelSkinReader.Read(pair.SourceModel, null, null) : null;
+        var reading = sourceSkin != null ? Bulge.GenitalParts.Read(source, sourceSkin) : null;
+        var sets = Bulge.GenitalSwitches.Of(garment, ModelSkinReader.Read(garmentBytes, null, null), source, reading, out var why);
+        if (sets == null && why != null) log?.Invoke($"genital switches: {pair.Slot} left as today — {why}");
+        return sets;
     }
 
     /// <summary>

@@ -155,6 +155,25 @@ internal static partial class BodyRetarget
                     log?.Invoke($"bulge: {slot} left as it is — crotch not covered");
                     continue;
                 }
+                // A garment that switches its own penis, on a refit that swaps its skin, keeps the new body's penis under
+                // those switches (see GenitalSwitches): a bulge would take away the penis its options show. Read before
+                // the featureless body is made only when the cheap gate passes; otherwise after it, as before.
+                XivLiveMesh.SkinnedMesh? sourceSkin = null;
+                GenitalParts.Reading? sourceReading = null;
+                bool sourceRead = false;
+                if (replaceSkin && pair.Swaps && GenitalSwitches.MayHaveSwitches(garment, pair.Correspondence.Source))
+                {
+                    sourceSkin = pair.SourceModel != null ? ModelSkinReader.Read(pair.SourceModel, null, null) : null;
+                    sourceReading = sourceSkin != null ? GenitalParts.Read(pair.Correspondence.Source, sourceSkin) : null;
+                    sourceRead = true;
+                    var sets = GenitalSwitches.Of(garment, ModelSkinReader.Read(garmentBytes, null, null), pair.Correspondence.Source,
+                                                  sourceReading, out _);
+                    if (sets != null)
+                    {
+                        log?.Invoke($"bulge: {slot} left as it is — the garment switches its own penis ({sets.Count} switch sets)");
+                        continue;
+                    }
+                }
                 var (fp, why) = pair.Featureless();
                 if (fp is not { } made)
                 {
@@ -167,8 +186,11 @@ internal static partial class BodyRetarget
                                               Featureless = null };
 
                 // The garment's own genitals, against the body it was made on.
-                var sourceSkin = pair.SourceModel != null ? ModelSkinReader.Read(pair.SourceModel, null, null) : null;
-                var sourceReading = sourceSkin != null ? GenitalParts.Read(pair.Correspondence.Source, sourceSkin) : null;
+                if (!sourceRead)
+                {
+                    sourceSkin = pair.SourceModel != null ? ModelSkinReader.Read(pair.SourceModel, null, null) : null;
+                    sourceReading = sourceSkin != null ? GenitalParts.Read(pair.Correspondence.Source, sourceSkin) : null;
+                }
                 var (materials, skinTris) = GarmentGenitals(garment, pair.Correspondence.Source, sourceReading);
                 garmentSkinCollapsed |= skinTris.Count > 0;
                 if (skinTris.Count > 0 && !(replaceSkin && pair.Swaps))

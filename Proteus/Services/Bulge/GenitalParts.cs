@@ -61,10 +61,10 @@ internal static class GenitalParts
         => MathF.Abs(p.X - a.MidX) <= 0.08f * a.Scale && p.Y >= a.Y - 0.08f * a.Scale && p.Y <= a.Y + 0.16f * a.Scale
            && p.Z >= a.At.Z - 0.04f * a.Scale;
 
-    private static Vector3 At(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
+    internal static Vector3 At(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
 
     /// <summary>A vertex's weight on penis bones.</summary>
-    private static float OnPenis(XivLiveMesh.SkinnedMesh skin, int v)
+    internal static float OnPenis(XivLiveMesh.SkinnedMesh skin, int v)
     {
         float w = 0f;
         if (v < 0 || v >= skin.VertexCount) return 0f;
@@ -101,26 +101,35 @@ internal static class GenitalParts
         }
 
         // Protrusion of each candidate off the skin that is no candidate: a penis stands well off it.
-        var plainSkin = body.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)
-                                              && !candidates.Any(c => c.Part == p && c.Rule != "b"))
-                                  .SelectMany(p => p.Triangles).Distinct().Select(v => At(body, v)).ToList();
-        var grid = new PointGrid(plainSkin, 0.01f);
+        var grid = PlainSkin(body, candidates);
         var genitals = new List<Genital>();
         foreach (var c in candidates)
-        {
-            float protrusion = 0f;
-            foreach (int t in c.Triangles)
-                for (int k = 0; k < 3; k++)
-                {
-                    var p = At(body, c.Part.Triangles[t * 3 + k]);
-                    if (InWindow(p, anchor)) protrusion = MathF.Max(protrusion, grid.Nearest(p, 0.2f));
-                }
-            genitals.Add(c with { Protrusion = protrusion });
-        }
+            genitals.Add(c with { Protrusion = Protrusion(body, c.Triangles.SelectMany(t => new[] { c.Part.Triangles[t * 3],
+                                                                    c.Part.Triangles[t * 3 + 1], c.Part.Triangles[t * 3 + 2] }), grid, anchor) });
 
         bool penis = genitals.Any(g => g.Rule == "b" || g.Protrusion > PenisProtrusion
                                        || g.Part.Triangles.Distinct().Average(v => OnPenis(skin, v)) >= PenisWeight);
         return new Reading(anchor, socket, genitals, penis);
+    }
+
+    /// <summary>The body's skin that is no genital piece (a piece merged into the skin, rule b, stays in it): what a
+    /// penis stands off.</summary>
+    internal static PointGrid PlainSkin(ModelParts body, IReadOnlyList<Genital> genitals)
+        => new(body.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)
+                                     && !genitals.Any(c => c.Part == p && c.Rule != "b"))
+                         .SelectMany(p => p.Triangles).Distinct().Select(v => At(body, v)).ToList(), 0.01f);
+
+    /// <summary>How far the farthest of <paramref name="verts"/> inside the crotch window stands off
+    /// <paramref name="plain"/> (searched out to 20 cm); 0 when none is in the window.</summary>
+    internal static float Protrusion(ModelParts m, IEnumerable<int> verts, PointGrid plain, BodyRetarget.CrotchAnchor a)
+    {
+        float protrusion = 0f;
+        foreach (int v in verts)
+        {
+            var p = At(m, v);
+            if (InWindow(p, a)) protrusion = MathF.Max(protrusion, plain.Nearest(p, 0.2f));
+        }
+        return protrusion;
     }
 
     /// <summary>The parts that are genital by rule (a), (b) or (c), about <paramref name="a"/>.</summary>
@@ -247,7 +256,7 @@ internal static class GenitalParts
     }
 
     /// <summary>Points bucketed in cubes, for the nearest distance to any of them.</summary>
-    private sealed class PointGrid(IReadOnlyList<Vector3> points, float cell)
+    internal sealed class PointGrid(IReadOnlyList<Vector3> points, float cell)
     {
         private readonly Dictionary<(int, int, int), List<Vector3>> cells = points
             .GroupBy(p => ((int)MathF.Floor(p.X / cell), (int)MathF.Floor(p.Y / cell), (int)MathF.Floor(p.Z / cell)))

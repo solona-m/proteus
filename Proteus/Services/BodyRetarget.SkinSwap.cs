@@ -73,11 +73,20 @@ internal static partial class BodyRetarget
     /// otherwise show (see <see cref="TuckSeeReach"/>); none of them is counted in <paramref name="Opened"/>.</param>
     /// <param name="Spanned">Of <paramref name="Added"/>, triangles a slot the garment only reaches onto drew in the open
     /// inside the author's own skin, which the cut had left out (see <see cref="GrowSpannedOpenSkin"/>).</param>
+    /// <param name="Switched">Triangles of the new body's genitals written as copies under the garment's switch sets,
+    /// every copy counted (see <see cref="Bulge.GenitalSwitches"/>).</param>
+    /// <param name="SwitchFringe">Triangles of a submesh the new body's genitals are merged into with some but not all
+    /// corners on them, left untagged.</param>
+    /// <param name="SwitchCopies">Submeshes the writer emitted as switched copies.</param>
+    /// <param name="HostSetSubmeshes">The garment's own submeshes in the meshes the rebuild keeps whose tags hold a whole
+    /// switch set — what the rebuilt model holds besides the copies.</param>
     internal readonly record struct SwapReport(int Removed, int Added, int Kept, int LostShapes,
                                                int Reweighted = 0, int Trimmed = 0, int ExtrasDropped = 0,
                                                int Unplaced = 0, int Posed = 0, int Cut = 0, int Slotted = 0,
                                                int Adorned = 0, int Tucked = 0, int TuckUnread = 0, int Opened = 0,
-                                               int Smallclothes = 0, int SeenInto = 0, int Spanned = 0);
+                                               int Smallclothes = 0, int SeenInto = 0, int Spanned = 0,
+                                               int Switched = 0, int SwitchFringe = 0, int SwitchCopies = 0,
+                                               int HostSetSubmeshes = 0);
 
     /// <summary>
     /// Swap the garment's skin for the new body's, one body slot at a time: every skin mesh of the garment that belongs
@@ -141,6 +150,9 @@ internal static partial class BodyRetarget
     /// <param name="carryPubes">Bring the new body's pubes in with its skin (see <see cref="IsBodyPubeMaterial"/>), on
     /// skin it draws and no cloth covers; the garment's own body-family pubes of a material that came in give way to them.
     /// Off, the default, carries none and leaves the garment's own as they were.</param>
+    /// <param name="genitalSwitches">By slot, the garment's own penis switch sets (see <see cref="Bulge.GenitalSwitches"/>):
+    /// that slot's new genitals, and the piercings on them, are written once per set, each copy tagged so. Null for none.</param>
+    /// <param name="switchLog">Where a slot whose switches could not be written says why.</param>
     /// <returns>The rebuilt model, or null when there was nothing to change.</returns>
     internal static byte[]? Rebuild(byte[] garment, IReadOnlyList<SlotPair> pairs, bool swapSkin, WeightPlan? weights,
                                     out SwapReport report, bool cutHidden = true, bool acrossBodies = false,
@@ -148,7 +160,9 @@ internal static partial class BodyRetarget
                                     bool carryPiercings = false, IReadOnlySet<int>? parted = null,
                                     bool seeInside = false, bool openSkin = false,
                                     IReadOnlySet<string>? swappedSkinTags = null,
-                                    Dictionary<string, int>? addedBySlot = null, bool carryPubes = false)
+                                    Dictionary<string, int>? addedBySlot = null, bool carryPubes = false,
+                                    IReadOnlyDictionary<string, IReadOnlyList<IReadOnlySet<string>>>? genitalSwitches = null,
+                                    Action<string>? switchLog = null)
     {
         report = default;
         var swappable = swapSkin ? pairs.Where(p => p.Swaps).ToList() : [];
@@ -359,6 +373,54 @@ internal static partial class BodyRetarget
                 if (carriedPubes.Contains(PubeFileName(material)) && dropped.Add(mesh)) extras += tris;
         }
 
+        // The garment's own penis switches, given to each slot's new genitals (see Bulge.GenitalSwitches). Read after the
+        // block above, the last that adds to `dropped`: the garment's submeshes still holding a whole set after the rebuild
+        // are those in the meshes it keeps, and Plan's read-back counts them beside the copies.
+        var switchesOf = new Dictionary<int, (IReadOnlyList<IReadOnlySet<string>> Sets, Bulge.GenitalParts.Reading Reading,
+                                              XivLiveMesh.SkinnedMesh? Skin)>();
+        int hostSetParts = 0;
+        if (genitalSwitches is { Count: > 0 })
+        {
+            foreach (int s in claimedBy.OrderBy(s => s))
+            {
+                if (!genitalSwitches.TryGetValue(swappable[s].Slot, out var sets) || sets.Count == 0) continue;
+                string slot = swappable[s].Slot;
+                // The garment's switched pieces must go with its skin: kept, both penises would draw.
+                bool keptPiece = model.Parts.Any(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)
+                                                      && !dropped.Contains(p.Mesh)
+                                                      && sets.Any(set => set.IsSubsetOf(Bulge.GenitalSwitches.Names(model, p.AttributeMask))));
+                if (keptPiece)
+                {
+                    switchLog?.Invoke($"genital switches: {slot} left as today — the garment's switched pieces stay in a skin mesh this refit keeps");
+                    continue;
+                }
+                if (sets.Any(set => set.Any(n => !model.AttributeNames.Contains(n))))
+                {
+                    switchLog?.Invoke($"genital switches: {slot} left as today — a tag has no attribute slot");
+                    continue;
+                }
+                var targetSkin = ModelSkinReader.Read(swappable[s].TargetModel!, null, null);
+                if (targetSkin == null || Bulge.GenitalParts.Read(swappable[s].Target, targetSkin) is not { Penis: true, Genitals.Count: > 0 } reading)
+                    continue;   // no penis comes in: nothing to switch (a flat crotch piece switched off would be a hole)
+                switchesOf[s] = (sets, reading, targetSkin);
+            }
+            if (switchesOf.Count > 0)
+            {
+                var keptMeshes = model.Parts.Select(p => p.Mesh).Where(m => !dropped.Contains(m)).ToHashSet();
+                hostSetParts = Bulge.GenitalSwitches.CountSetParts(model, keptMeshes,
+                                                                   switchesOf.Values.SelectMany(v => v.Sets).ToList());
+            }
+        }
+        int switchedTris = 0, switchFringe = 0;
+        IReadOnlyList<SubmeshSwitch>? SwitchesFor(int s, Func<string, bool> keep)
+        {
+            if (!switchesOf.TryGetValue(s, out var sw)) return null;
+            var specs = Bulge.GenitalSwitches.For(swappable[s].Target, sw.Skin, sw.Reading, sw.Sets, keep, out int fringe, out int tris);
+            switchFringe += fringe;
+            switchedTris += tris;
+            return specs.Count > 0 ? specs : null;
+        }
+
         // One layer per slot whose skin came out: its body's skin meshes, under the right skin material.
         var layers = claimedBy.OrderBy(s => s).Select(s => new SecondSkinLayer
         {
@@ -373,7 +435,8 @@ internal static partial class BodyRetarget
             Geometry = [new ContentGeometry(bodyOf[s], SecondSkinWriter.IsBodySkinMaterial,
                                             HiddenAttributes: swappable[s].TargetHidden,
                                             DropVariantAttributes: true, DrawOnly: cuts[s],
-                                            DropAttributes: SkinTagsDropped(swappable[s], swappedSkinTags))],
+                                            DropAttributes: SkinTagsDropped(swappable[s], swappedSkinTags),
+                                            Switches: SwitchesFor(s, SecondSkinWriter.IsBodySkinMaterial))],
         }).ToList();
         // The new body's smallclothes, where it draws them in place of skin: each a layer of its own, under the garment's
         // own name for the copy of its material the save publishes (see ReadySmallclothes), cut as its skin is.
@@ -387,7 +450,8 @@ internal static partial class BodyRetarget
                     Geometry = [new ContentGeometry(bodyOf[s], m => string.Equals(m, bodyMaterial, StringComparison.Ordinal),
                                                     HiddenAttributes: swappable[s].TargetHidden,
                                                     DropVariantAttributes: true, DrawOnly: cuts[s],
-                                                    DropAttributes: swappable[s].TargetSwitched)],
+                                                    DropAttributes: swappable[s].TargetSwitched,
+                                                    Switches: SwitchesFor(s, m => string.Equals(m, bodyMaterial, StringComparison.Ordinal)))],
                 });
                 smallclothesTris += swappable[s].Target.Parts
                     .Where(p => p.Island < 0 && string.Equals(p.Material, bodyMaterial, StringComparison.Ordinal))
@@ -403,7 +467,8 @@ internal static partial class BodyRetarget
                     MaterialName = material,
                     Geometry = [new ContentGeometry(bodyOf[s], m => string.Equals(m, material, StringComparison.Ordinal),
                                                     HiddenAttributes: swappable[s].TargetHidden,
-                                                    DropVariantAttributes: true, DrawOnly: cuts[s])],
+                                                    DropVariantAttributes: true, DrawOnly: cuts[s],
+                                                    Switches: SwitchesFor(s, m => string.Equals(m, material, StringComparison.Ordinal)))],
                 });
         var reskinned = new SecondSkinWriter.ReskinReport();
         var rebuilt = SecondSkinWriter.Build(Array.Empty<SecondSkinWriter.SourceSpec>(), layers, garment, out _,
@@ -417,7 +482,8 @@ internal static partial class BodyRetarget
         report = new SwapReport(removed, keptTris, kept, SecondSkinWriter.Parse(garment).Shapes.Count,
                                 weights?.Reweighted ?? 0, weights?.Trimmed ?? 0, extras, reskinned.Dropped, posed,
                                 cutTris, reskinned.Trimmed, adorned, tuckedTris, tuckUnreadSlots, openedTris,
-                                smallclothesTris, seenIntoTris, spannedTris);
+                                smallclothesTris, seenIntoTris, spannedTris, switchedTris, switchFringe,
+                                reskinned.SwitchCopies, reskinned.SwitchCopies > 0 ? hostSetParts : 0);
         if (addedBySlot != null)
             foreach (int s in claimedBy)
                 addedBySlot[swappable[s].Slot] = addedBySlot.GetValueOrDefault(swappable[s].Slot) + addedBy.GetValueOrDefault(s);
