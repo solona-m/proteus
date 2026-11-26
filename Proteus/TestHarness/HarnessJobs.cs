@@ -101,6 +101,11 @@ internal sealed record HarnessTimings(TimeSpan FrameworkStart, TimeSpan RedrawWa
     public TimeSpan EmoteInterval { get; init; } = TimeSpan.FromSeconds(3);
     public TimeSpan PoseDumpInterval { get; init; } = TimeSpan.FromSeconds(5);
 
+    /// <summary>The install route's wait for Penumbra to list the mod it imported (<see cref="InstallModJob"/>): looked for
+    /// once a second for up to a minute. Tests set them short.</summary>
+    public TimeSpan InstallPoll { get; init; } = TimeSpan.FromSeconds(1);
+    public TimeSpan InstallWait { get; init; } = TimeSpan.FromSeconds(60);
+
     public static readonly HarnessTimings Default = new(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10),
                                                         TimeSpan.FromSeconds(5), TimeSpan.FromMilliseconds(500),
                                                         TimeSpan.FromSeconds(10));

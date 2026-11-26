@@ -18,18 +18,22 @@ internal static class GenitalSwitches
 {
     /// <summary>
     /// The cheap gate: a tagged skin submesh of the garment whose bounds reach the crotch box of the body it was made on —
-    /// |x − mid| ≤ 12 cm·s, reaching above half the body's height (a legs body's crotch stands at about 80% of it). Every
+    /// |x − mid| ≤ 12 cm·s, reaching above three quarters of the body's height (a legs body's crotch stands at about 80% of it; Beach Briefs' knee skin tops out at 69% on TBSE Gen A). Every
     /// garment without one (pants whose tagged skin is the shins) passes by at the cost of a bounds test.
     /// </summary>
     internal static bool MayHaveSwitches(ModelParts garment, ModelParts sourceBody)
+        => garment.Parts.Any(p => p.Island < 0 && p.AttributeMask != 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)
+                                  && InCrotchBox(p, sourceBody));
+
+    /// <summary>Whether a part's bounds reach the crotch box of <paramref name="body"/> (see <see cref="MayHaveSwitches"/>).
+    /// Beach Briefs' knee and shin skin (atr_hiz, atr_sne) stays below it on TBSE Gen A.</summary>
+    internal static bool InCrotchBox(ModelPart p, ModelParts body)
     {
-        float height = sourceBody.Max.Y - sourceBody.Min.Y;
+        float height = body.Max.Y - body.Min.Y;
         if (height <= 0f) return false;
         float s = Math.Clamp(height / 1.05f, 0.4f, 1.5f);
-        float midX = (sourceBody.Min.X + sourceBody.Max.X) / 2f;
-        float lowY = sourceBody.Min.Y + 0.5f * height;
-        return garment.Parts.Any(p => p.Island < 0 && p.AttributeMask != 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)
-                                      && p.Max.Y >= lowY && p.Min.X <= midX + 0.12f * s && p.Max.X >= midX - 0.12f * s);
+        float midX = (body.Min.X + body.Max.X) / 2f;
+        return p.Max.Y >= body.Min.Y + 0.75f * height && p.Min.X <= midX + 0.12f * s && p.Max.X >= midX - 0.12f * s;
     }
 
     /// <summary>

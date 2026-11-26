@@ -68,6 +68,15 @@ public partial class GenitalSwitchesTests(ITestOutputHelper output)
         Assert.Equal(TodayFeatureless, d);
     }
 
+    /// <summary>The synthetic body standing as tall as real legs (see <see cref="SyntheticBulge.Body"/>'s feet): the switch
+    /// gate judges a garment's skin against the height of the body it was made on.</summary>
+    internal static byte[] SwBody(float height = 0.06f, bool mergedDome = false, string? domeBone = null, bool piercing = false,
+                                  bool basePubes = false)
+        => SyntheticBulge.Body(height: height, feet: true, mergedDome: mergedDome, domeBone: domeBone, piercing: piercing, basePubes: basePubes);
+
+    /// <summary>The made-on body, footed as <see cref="SwBody"/> is.</summary>
+    internal static byte[] SwSource() => SwBody(0.065f);
+
     /// <summary>Beach Briefs' IMC group: the default entry and each option's mask (Penumbra XORs a ticked option in).</summary>
     internal const int BriefsDefault = 514, OptBriefs = 576, OptGenA = 16, OptGenB = 32, OptGenC = 4, OptGenD = 8;
 
@@ -101,8 +110,8 @@ public partial class GenitalSwitchesTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-genital-switches-12")]
     public void Switched_garment_switches_the_new_bodys_penis()
     {
-        var body = SyntheticBulge.Body();
-        var source = BulgeRefitTests.Source();
+        var body = SwBody();
+        var source = SwSource();
         var garment = Switched(source);
         var (plan, log, warn) = Run(garment, BulgeRefitTests.Pair(source, body));
         foreach (var l in log.Concat(warn)) output.WriteLine(l);
@@ -140,8 +149,8 @@ public partial class GenitalSwitchesTests(ITestOutputHelper output)
     public void Set_tagged_cloth_still_gets_switches()
     {
         // The garment's cloth itself carries a whole switch set (a pouch drawn only with Gen A): counted beside the copies.
-        var body = SyntheticBulge.Body();
-        var source = BulgeRefitTests.Source();
+        var body = SwBody();
+        var source = SwSource();
         var garment = BulgeRefitTests.Garment(source, _ => true, switchedSkin: BriefsSets, cap: BriefsTag, clothTags: BriefsSets[0]);
         var (plan, log, warn) = Run(garment, BulgeRefitTests.Pair(source, body));
         Assert.Empty(warn);
@@ -154,8 +163,8 @@ public partial class GenitalSwitchesTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-genital-switches-4")]
     public void Kept_skin_refit_is_today()
     {
-        var body = SyntheticBulge.Body();
-        var source = BulgeRefitTests.Source();
+        var body = SwBody();
+        var source = SwSource();
         var garment = Switched(source);
         var (a, _, _) = Run(garment, BulgeRefitTests.Pair(source, body), replaceSkin: false);
         var (b, _, _) = Run(garment, BulgeRefitTests.Pair(source, body), replaceSkin: false, new BodyRetarget.Tuning(NoGenitalSwitches: true));
@@ -166,8 +175,8 @@ public partial class GenitalSwitchesTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-genital-switches-8")]
     public void One_copy_per_distinct_set()
     {
-        var body = SyntheticBulge.Body();
-        var source = BulgeRefitTests.Source();
+        var body = SwBody();
+        var source = SwSource();
         var garment = Switched(source, sets: [BriefsSets[0], BriefsSets[0]]);
         var (plan, _, warn) = Run(garment, BulgeRefitTests.Pair(source, body));
         Assert.Empty(warn);
@@ -178,7 +187,7 @@ public partial class GenitalSwitchesTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-genital-switches-11")]
     public void Cap_and_knee_skin_are_not_switch_sets()
     {
-        var source = BulgeRefitTests.Source();
+        var source = SwSource();
         var garment = Switched(source);
         var parts = ModelPartReader.Read(garment)!;
         var src = ModelPartReader.Read(source)!;
@@ -193,8 +202,8 @@ public partial class GenitalSwitchesTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-genital-switches-16")]
     public void Two_gen_options_draw_two_copies()
     {
-        var body = SyntheticBulge.Body();
-        var source = BulgeRefitTests.Source();
+        var body = SwBody();
+        var source = SwSource();
         var (plan, _, _) = Run(Switched(source), BulgeRefitTests.Pair(source, body));
         Assert.Equal(2, DrawnCopies(ModelPartReader.Read(plan.Model)!, MaskFor([OptGenA, OptGenB]), BriefsSets));
     }
@@ -204,8 +213,8 @@ public partial class GenitalSwitchesTests(ITestOutputHelper output)
     [Trait("Plan", "AC-genital-switches-8")]
     public void A_fault_in_the_switch_path_is_today()
     {
-        var body = SyntheticBulge.Body();
-        var source = BulgeRefitTests.Source();
+        var body = SwBody();
+        var source = SwSource();
         var garment = Switched(source);
         var (today, _, _) = Run(garment, BulgeRefitTests.Pair(source, body), tuning: new BodyRetarget.Tuning(NoGenitalSwitches: true));
         foreach (var fault in new[] { BodyRetarget.SwitchFault.InFor, BodyRetarget.SwitchFault.ReadBack })

@@ -49,9 +49,11 @@ internal static class SyntheticBulge
     /// bone with <paramref name="domeBone"/> so the reading finds it.</param>
     /// <param name="piercing">A genital piercing: a body piercing material's mesh 2 mm off the dome's top.</param>
     /// <param name="basePubes">Pubic hair on the main skin round the hole, on the hips (never the penis's).</param>
+    /// <param name="feet">A skin triangle 90 cm below the hole, so the body stands as tall as real legs (the crotch at about
+    /// 80% of its height) rather than being the crotch alone.</param>
     internal static byte[] Body(IReadOnlyList<Vector3>? hole = null, float height = 0.06f, int rings = 5, string? domeBone = null,
                                 int outerRings = 0, string? ringBone = null, bool mergedDome = false, bool piercing = false,
-                                bool basePubes = false)
+                                bool basePubes = false, bool feet = false)
     {
         hole ??= TbseBulge.Shared!.Hole;
         int h = hole.Count;
@@ -145,6 +147,13 @@ internal static class SyntheticBulge
             meshes.Add(Copy("/mt_c0101b0001_genitalpierce.mtrl", domeTris.Skip(domeTris.Count - 3 * h), 0.002f, domeW));
         if (basePubes)  // the main skin's first ring out from the hole
             meshes.Add(Copy("/mt_c0101b0001_bibopube.mtrl", skinTris.Take(6 * h), 0.001f, bodyW));
+        if (feet)
+        {
+            var at = centre - new Vector3(0, 0.9f, 0);
+            Vector3[] fp = [at, at + new Vector3(0.05f, 0, 0), at + new Vector3(0, 0, 0.05f)];
+            meshes.Add(new SyntheticModel.SurfaceMesh(Skin, fp, [Vector3.UnitY, Vector3.UnitY, Vector3.UnitY],
+                [.. fp.Select(p => new Vector2(p.X + 0.5f, p.Y))], [hipsW, hipsW, hipsW], [(0u, new[] { 0, 2, 1 })]));
+        }
         return SyntheticModel.BuildSurface([], [.. meshes]);
     }
 }

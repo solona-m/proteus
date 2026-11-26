@@ -26,8 +26,8 @@ public partial class GenitalSwitchesTests
     [Trait("Plan", "EDGE-genital-switches-2")]
     public void An_untagged_penis_piece_means_no_switches()
     {
-        var body = SyntheticBulge.Body();
-        var source = BulgeRefitTests.Source();
+        var body = SwBody();
+        var source = SwSource();
         var garment = BulgeRefitTests.Garment(source, _ => true, switchedSkin: BriefsSets, cap: BriefsTag, untaggedPenis: true);
         var pair = BulgeRefitTests.Pair(source, body) with { Featureless = null };
         var (plan, log, warn) = Run(garment, pair);
@@ -40,8 +40,8 @@ public partial class GenitalSwitchesTests
     [Trait("Plan", "EDGE-genital-switches-33")]
     public void A_merged_untagged_penis_means_no_switches()
     {
-        var body = SyntheticBulge.Body();
-        var source = BulgeRefitTests.Source();
+        var body = SwBody();
+        var source = SwSource();
         var garment = BulgeRefitTests.Garment(source, _ => true, switchedSkin: BriefsSets, cap: BriefsTag, mergedUntaggedPenis: true);
         var pair = BulgeRefitTests.Pair(source, body) with { Featureless = null };
         var (plan, log, _) = Run(garment, pair);
@@ -53,8 +53,8 @@ public partial class GenitalSwitchesTests
     [Trait("Plan", "EDGE-genital-switches-35")]
     public void A_switched_piece_past_the_window_means_no_switches()
     {
-        var body = SyntheticBulge.Body();
-        var source = BulgeRefitTests.Source();
+        var body = SwBody();
+        var source = SwSource();
         var garment = BulgeRefitTests.Garment(source, _ => true, switchedSkin: BriefsSets, cap: BriefsTag, switchedPastWindow: true);
         var pair = BulgeRefitTests.Pair(source, body) with { Featureless = null };
         var (plan, log, _) = Run(garment, pair);
@@ -66,8 +66,8 @@ public partial class GenitalSwitchesTests
     [Trait("Plan", "EDGE-genital-switches-5")]
     public void Switched_pieces_in_a_kept_mesh_is_today()
     {
-        var body = SyntheticBulge.Body();
-        var source = BulgeRefitTests.Source();
+        var body = SwBody();
+        var source = SwSource();
         var garment = BulgeRefitTests.Garment(source, _ => true, switchedSkin: BriefsSets, cap: BriefsTag, liftedSwitched: true);
         var pair = BulgeRefitTests.Pair(source, body) with { Featureless = null };
         var (plan, log, warn) = Run(garment, pair);
@@ -85,8 +85,8 @@ public partial class GenitalSwitchesTests
     [Trait("Plan", "EDGE-genital-switches-36")]
     public void No_crotch_or_no_source_skin_is_today()
     {
-        var body = SyntheticBulge.Body();
-        var source = BulgeRefitTests.Source();
+        var body = SwBody();
+        var source = SwSource();
         var garment = Switched(source);
         var pair = BulgeRefitTests.Pair(source, body) with { Featureless = null, SourceModel = null };
         var (plan, log, warn) = Run(garment, pair);
@@ -99,10 +99,10 @@ public partial class GenitalSwitchesTests
     [Trait("Plan", "EDGE-genital-switches-13")]
     public void Refit_of_a_refit_keeps_four_sets()
     {
-        var body = SyntheticBulge.Body();
-        var source = BulgeRefitTests.Source();
+        var body = SwBody();
+        var source = SwSource();
         var (first, _, _) = Run(Switched(source), BulgeRefitTests.Pair(source, body) with { Featureless = null });
-        var third = SyntheticBulge.Body(height: 0.07f);
+        var third = SwBody(0.07f);
         var (second, _, warn) = Run(first.Model, BulgeRefitTests.Pair(body, third) with { Featureless = null });
         Assert.Empty(warn);
         Assert.Equal(4, second.Report.Swap!.Value.SwitchCopies);
@@ -117,8 +117,8 @@ public partial class GenitalSwitchesTests
     public void Merged_genitals_are_split_into_copies()
     {
         // The new body's penis merged into its main skin (rule b, as TBSE-X's erect options): only its triangles are copied.
-        var body = SyntheticBulge.Body(mergedDome: true, domeBone: "iv_ochinko_a");
-        var source = BulgeRefitTests.Source();
+        var body = SwBody(mergedDome: true, domeBone: "iv_ochinko_a");
+        var source = SwSource();
         var (plan, log, warn) = Run(Switched(source), PairByUv(source, body));
         foreach (var l in log.Concat(warn)) output.WriteLine(l);
         Assert.Empty(warn);
@@ -140,7 +140,7 @@ public partial class GenitalSwitchesTests
         // The switches the new body's piercing and pube layers get, read off its genitals as Rebuild reads them: the
         // piercing on the dome is copied once per set, whole; the pubes round the base, on the hips, are not genital and
         // get none (they stay whole and untagged).
-        var body = SyntheticBulge.Body(piercing: true, basePubes: true);
+        var body = SwBody(piercing: true, basePubes: true);
         var parts = ModelPartReader.Read(body)!;
         var skin = ModelSkinReader.Read(body, null, null)!;
         var reading = GenitalParts.Read(parts, skin)!;
@@ -163,8 +163,8 @@ public partial class GenitalSwitchesTests
     {
         // The garment's own genital piercing, tagged with a set, refitted across body mods: it goes with the old body's
         // extras, so it is not counted beside the copies — and the read-back agrees.
-        var body = SyntheticBulge.Body();
-        var source = BulgeRefitTests.Source();
+        var body = SwBody();
+        var source = SwSource();
         var garment = BulgeRefitTests.Garment(source, _ => true, switchedSkin: BriefsSets, cap: BriefsTag, setTaggedPiercing: BriefsSets[0]);
         var (plan, log, warn) = Run(garment, BulgeRefitTests.Pair(source, body) with { Featureless = null }, acrossBodies: true);
         foreach (var l in log.Concat(warn)) output.WriteLine(l);
@@ -182,9 +182,9 @@ public partial class GenitalSwitchesTests
     {
         // A set naming a tag the garment's table does not hold: Rebuild writes no switches and says so. The garment is made
         // on the new body itself, so its skin lies on it and the swap claims it.
-        var body = SyntheticBulge.Body();
+        var body = SwBody();
         var garment = Switched(body);
-        var pair = BulgeRefitTests.Pair(SyntheticBulge.Body(height: 0.065f), body) with { Featureless = null };
+        var pair = BulgeRefitTests.Pair(SwSource(), body) with { Featureless = null };
         var lines = new List<string>();
         var plain = BodyRetarget.Rebuild(garment, [pair], true, null, out _);
         var odd = BodyRetarget.Rebuild(garment, [pair], true, null, out var report,
@@ -201,8 +201,8 @@ public partial class GenitalSwitchesTests
     public void Gate_costs_nothing()
     {
         // Tagged skin only at the knees: the gate passes it by, and the refit is today's.
-        var source = BulgeRefitTests.Source();
-        var body = SyntheticBulge.Body();
+        var source = SwSource();
+        var body = SwBody();
         var knees = BulgeRefitTests.Garment(source, _ => true, kneeSkin: true);
         var src = ModelPartReader.Read(source)!;
         var kneeParts = ModelPartReader.Read(knees)!;

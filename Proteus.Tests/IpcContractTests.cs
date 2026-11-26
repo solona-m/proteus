@@ -213,12 +213,12 @@ public class IpcContractTests
     {
         // §6: compiled only into local harness builds (ADR 0002); on a CI build there is nothing to check.
         var rows = ContractRows("## 6.");
-        Assert.Equal(2, rows.Count);
+        Assert.Equal(3, rows.Count);
         var errors = new List<string>();
         foreach (var r in rows)
         {
-            var name = r.Label.Split('.')[1];   // Glamourer.ApplyDesign -> ApplyDesign
-            var gate = typeof(Plugin).Assembly.GetType("Proteus.TestHarness.Glamourer" + name);
+            var name = r.Label.Split('.')[1];   // Glamourer.ApplyDesign -> ApplyDesign, Penumbra.InstallMod.V5 -> InstallMod
+            var gate = typeof(Plugin).Assembly.GetType("Proteus.TestHarness." + r.Owner + name);
             if (gate == null) return;
             var d = Proteus.Interop.Ipc.IpcContract.Describe(r.Owner, gate);
             var e = new Entry(d.Owner, d.Label, d.Kind.ToString(), d.Arguments, d.Returns);

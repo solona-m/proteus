@@ -53,9 +53,9 @@ internal static partial class BulgeSwap
     /// <summary>
     /// The hole <paramref name="piece"/> plugs, as the body's OTHER skin draws it: that skin's open edges, welded by
     /// position, both of whose ends are points of the piece's own open rim — walked as one loop (as body vertex indices);
-    /// null when it is not one loop of points each on two such edges. The skin's, not the piece's: TBSE-X Flaccid L's piece
-    /// has a 28-point rim round a 25-point hole (three of its points lie along the hole's edges), and the bulge must close
-    /// the hole the skin leaves, or a crack shows.
+    /// null when it is not one loop of points each on two such edges. The skin's, not the piece's: TBSE-X Flaccid L's skin
+    /// leaves a hole of 28 points, but only 25 of its piece's 28 rim points lie on it (three lie along the hole's edges), so
+    /// the piece's rim is no loop on the skin — and the bulge must close the hole the skin leaves, or a crack shows.
     /// </summary>
     internal static List<int>? HoleLoop(ModelParts parts, ModelPart piece)
     {

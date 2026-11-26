@@ -217,6 +217,29 @@ public class GenitalSwitchesLocalTests(ITestOutputHelper output)
         return dist > 1e-4f && dist <= reach;
     }
 
+    /// <summary>
+    /// The gate on real skin (AC-9, EDGE-34): Beach Briefs' knee and shin skin (atr_hiz, atr_sne) falls outside the crotch
+    /// box on the TBSE Gen A body it was made on — a garment whose only tagged skin is such pays no genital reading — and
+    /// its switched penises fall inside it.
+    /// </summary>
+    [LocalDataFact(LocalData.BeachBriefsPack, TbseOpt + "gen a" + E0)]
+    [Trait("Plan", "AC-genital-switches-9")]
+    [Trait("Plan", "EDGE-genital-switches-34")]
+    public void Knee_and_shin_skin_stay_out_of_the_gate()
+    {
+        var (garment, genA, _) = Inputs();
+        var g = ModelPartReader.Read(garment)!;
+        var body = ModelPartReader.Read(genA)!;
+        foreach (var p in g.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material) && p.AttributeMask != 0))
+        {
+            var names = GenitalSwitches.Names(g, p.AttributeMask);
+            bool inBox = GenitalSwitches.InCrotchBox(p, body);
+            output.WriteLine($"{p.Label} [{string.Join(",", names)}]: {(inBox ? "in" : "out of")} the crotch box (top {p.Max.Y:0.000} m)");
+            if (names.Contains("atr_hiz") || names.Contains("atr_sne")) Assert.False(inBox, $"{p.Label}: knee or shin skin reaches the gate");
+            if (names.Contains("atr_dv_j")) Assert.True(inBox, $"{p.Label}: a switched penis misses the gate");
+        }
+    }
+
     /// <summary>The switches' cost on the real refit (AC-9): the switched Gen B refit against today's, median of three.</summary>
     [LocalDataFact(LocalData.BeachBriefsPack, LocalData.TbseUvMaps, TbseOpt + "gen a" + E0, TbseOpt + "gen b" + E0)]
     [Trait("Plan", "AC-genital-switches-9")]
