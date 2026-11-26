@@ -49,6 +49,8 @@ internal sealed class HarnessJob(string id, string kind, string modDir)
     public void Running() => Set(j => j.state = "running");
     public void Progress(string p) => Set(j => j.progress = p);
     public void SetBackup(BackupRef b) => Set(j => j.backup = b);
+    /// <summary>The mod folder, once a job finds it (the install route: the folder Penumbra made).</summary>
+    public void SetModDir(string dir) => Set(j => j.ModDir = dir);
     public void SetResult(object r) => Set(j => j.result = r);
     public void SetRestored(RestoredInfo r) => Set(j => j.restored = r);
     public void SetFollow(bool observed, bool? followed) => Set(j => { j.redrawObserved = observed; j.autoRefitFollowed = followed; });

@@ -52,6 +52,7 @@ public class HarnessInstallModTests : IDisposable
         var job = await f.WaitJob(body.GetProperty("job").GetString()!);
         Assert.Equal("done", job.GetProperty("state").GetString());
         Assert.Equal("Test Pack", job.GetProperty("result").GetProperty("modDir").GetString());
+        Assert.Equal("Test Pack", job.GetProperty("modDir").GetString());   // the job names Penumbra's folder, not the file
         Assert.Equal([pmp], f.Game.Installs);
         Assert.Contains(f.Game.Calls, c => c.Member == "InstallMod");
         Assert.Equal(before, FolderState.Of(f.ModsRoot));   // nothing written under the mod root by Proteus
@@ -173,6 +174,9 @@ public class HarnessInstallModTests : IDisposable
         Assert.Equal((404, "not-found"), await Error(Body(Path.Combine(f.Temp.Path, "missing.pmp"))));
         Assert.Equal((400, "invalid-field"), await Error(JsonSerializer.Serialize(new { pmp = Pack(), extra = 1 })));
         Assert.Equal((400, "invalid-field"), await Error(Body(Pack(name: null))));   // no meta.json Name
+        Assert.Equal((400, "invalid-field"), await Error(Body(Pack(name: "   "))));    // a blank one
+        Assert.Equal((400, "invalid-field"), await Error(Body(@"\\host\share\x.pmp")));   // a network share, never reached for
+        Assert.Equal((400, "invalid-field"), await Error(Body("//host/share/x.pmp")));
         Assert.Empty(f.Game.Installs);
     }
 }

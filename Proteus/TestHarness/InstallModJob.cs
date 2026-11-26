@@ -54,6 +54,7 @@ internal static class InstallModJob
             var named = fresh.Where(d => string.Equals(mods!.Mods[d], args.Name, StringComparison.Ordinal)).ToList();
             if (named.Count == 1)
             {
+                job.SetModDir(named[0]);
                 job.SetResult(new { modDir = named[0], candidates = fresh });
                 job.Progress("");
                 return;
