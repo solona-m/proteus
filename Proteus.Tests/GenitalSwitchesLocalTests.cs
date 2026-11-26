@@ -76,7 +76,7 @@ public class GenitalSwitchesLocalTests(ITestOutputHelper output)
                               && GenitalSwitchesTests.Drawn(m, p, mask)
                               && sets.Any(s => s.IsSubsetOf(GenitalSwitches.Names(m, p.AttributeMask))));
 
-    private (byte[] Garment, byte[] GenA, UVRemapService Maps) Inputs()
+    private static (byte[] Garment, byte[] GenA, UVRemapService Maps) Inputs()
         => (LocalData.PackEntry(LocalData.BeachBriefsPack, Penis), File.ReadAllBytes(LocalData.Path(TbseOpt + "gen a" + E0)),
             new UVRemapService(Substitute.For<IPluginLog>(), LocalData.Path(LocalData.TbseUvMaps)));
 
@@ -245,26 +245,46 @@ public class GenitalSwitchesLocalTests(ITestOutputHelper output)
         }
     }
 
-    /// <summary>The switches' cost on the real refit (AC-9): the switched Gen B refit against today's, median of three.</summary>
-    [LocalDataFact(LocalData.BeachBriefsPack, LocalData.TbseUvMaps, TbseOpt + "gen a" + E0, TbseOpt + "gen b" + E0)]
-    [Trait("Plan", "AC-genital-switches-9")]
-    public void Switch_cost()
+    /// <summary>
+    /// The switches' cost on the real refit (AC-9), run alone: its 500 ms is wall time, and beside the parallel full suite
+    /// both refits stretch (testing-621's run: switched 4643 ms, today 4066 ms, 577 ms; alone 1669 / 1502 ms, 167 ms).
+    /// </summary>
+    [Collection(SwitchCostCollection.Name)]
+    [Trait("Speed", "Slow")]
+    public class Cost(ITestOutputHelper output)
     {
-        var (garment, genA, maps) = Inputs();
-        var target = File.ReadAllBytes(LocalData.Path(TbseOpt + "gen b" + E0));
-        long Time(BodyRetarget.Tuning tuning)
+        /// <summary>The switched Gen B refit against today's, median of three.</summary>
+        [LocalDataFact(LocalData.BeachBriefsPack, LocalData.TbseUvMaps, TbseOpt + "gen a" + E0, TbseOpt + "gen b" + E0)]
+        [Trait("Plan", "AC-genital-switches-9")]
+        public void Switch_cost()
         {
-            var ms = new List<long>();
-            for (int i = 0; i < 3; i++)
+            var (garment, genA, maps) = Inputs();
+            var target = File.ReadAllBytes(LocalData.Path(TbseOpt + "gen b" + E0));
+            long Time(BodyRetarget.Tuning tuning)
             {
-                var sw = System.Diagnostics.Stopwatch.StartNew();
-                Refit(garment, genA, target, false, maps, [], tuning);
-                ms.Add(sw.ElapsedMilliseconds);
+                var ms = new List<long>();
+                for (int i = 0; i < 3; i++)
+                {
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    Refit(garment, genA, target, false, maps, [], tuning);
+                    ms.Add(sw.ElapsedMilliseconds);
+                }
+                return ms.OrderBy(x => x).ElementAt(1);
             }
-            return ms.OrderBy(x => x).ElementAt(1);
+            long with = Time(new BodyRetarget.Tuning(NoBulge: true)), without = Time(new BodyRetarget.Tuning(NoBulge: true, NoGenitalSwitches: true));
+            output.WriteLine($"switched {with} ms, today {without} ms");
+            Assert.True(with - without <= 500, $"the switches cost {with - without} ms");
         }
-        long with = Time(new BodyRetarget.Tuning(NoBulge: true)), without = Time(new BodyRetarget.Tuning(NoBulge: true, NoGenitalSwitches: true));
-        output.WriteLine($"switched {with} ms, today {without} ms");
-        Assert.True(with - without <= 500, $"the switches cost {with - without} ms");
     }
+}
+
+/// <summary>
+/// The genital switches' cost test runs alone: xunit runs a collection that disables parallelisation after every parallel
+/// one has finished, so its wall-time bound is measured on an idle machine (as <see cref="HarnessTimingCollection"/> does
+/// for the harness timings, #49).
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class SwitchCostCollection
+{
+    public const string Name = "Genital switch cost, alone";
 }
