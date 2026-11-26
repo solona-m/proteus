@@ -134,7 +134,7 @@ public class BulgeTransplantTests
     }
 
     /// <summary>The swap's inputs to its self-check, read back from a swap of the synthetic body that passed it.</summary>
-    private static (byte[] Model, ModelParts Before, ModelPart Piece, Vector3[] Positions, int[] SlotOf, int[] BodyAt) Swapped()
+    private static (byte[] Model, ModelParts Before, ModelPart Piece, BulgeSwap.FittedBulge Fitted, int[] SlotOf, int[] BodyAt) Swapped()
     {
         var bulge = TbseBulge.Shared!;
         var body = SyntheticBulge.Body();
@@ -145,47 +145,48 @@ public class BulgeTransplantTests
         var bodyAt = BulgeSwap.MatchHole(before, piece, bulge.Hole)!;
         var after = ModelPartReader.Read(swapped!.Model)!;
         var positions = swapped.SlotOf.Select(v => At(after, v)).ToArray();
-        Assert.Null(BulgeSwap.SelfCheck(swapped.Model, before, piece, bulge, positions, swapped.SlotOf, bodyAt));
-        return (swapped.Model, before, piece, positions, swapped.SlotOf, bodyAt);
+        var fitted = BulgeSwap.Exact(bulge, before, bodyAt) with { Positions = positions };
+        Assert.Null(BulgeSwap.SelfCheck(swapped.Model, before, piece, bulge, fitted, swapped.SlotOf));
+        return (swapped.Model, before, piece, fitted, swapped.SlotOf, bodyAt);
     }
 
     [Fact]
     [Trait("Plan", "EDGE-featureless-bulge-13")]
     public void Self_check_refuses_a_face_turned_over()
     {
-        var (model, before, piece, positions, slotOf, bodyAt) = Swapped();
+        var (model, before, piece, fitted, slotOf, bodyAt) = Swapped();
         var t = TbseBulge.Shared!.Data.triangles;
-        var flipped = (Vector3[])positions.Clone();
+        var flipped = (Vector3[])fitted.Positions.Clone();
         // Push one corner through the face's plane, past the opposite edge: the face now points the other way.
         var a = flipped[t[0]]; var b = flipped[t[1]]; var c = flipped[t[2]];
         flipped[t[0]] = (b + c) - a;
-        Assert.Contains("turned over", BulgeSwap.SelfCheck(model, before, piece, TbseBulge.Shared, flipped, slotOf, bodyAt) ?? "");
+        Assert.Contains("turned over", BulgeSwap.SelfCheck(model, before, piece, TbseBulge.Shared, fitted with { Positions = flipped }, slotOf) ?? "");
     }
 
     [Fact]
     [Trait("Plan", "EDGE-featureless-bulge-13")]
     public void Self_check_refuses_a_face_collapsed()
     {
-        var (model, before, piece, positions, slotOf, bodyAt) = Swapped();
+        var (model, before, piece, fitted, slotOf, bodyAt) = Swapped();
         var t = TbseBulge.Shared!.Data.triangles;
-        var collapsed = (Vector3[])positions.Clone();
+        var collapsed = (Vector3[])fitted.Positions.Clone();
         collapsed[t[1]] = collapsed[t[0]];
         collapsed[t[2]] = collapsed[t[0]];
-        Assert.Contains("collapsed", BulgeSwap.SelfCheck(model, before, piece, TbseBulge.Shared, collapsed, slotOf, bodyAt) ?? "");
+        Assert.Contains("collapsed", BulgeSwap.SelfCheck(model, before, piece, TbseBulge.Shared, fitted with { Positions = collapsed }, slotOf) ?? "");
     }
 
     [Fact]
     [Trait("Plan", "EDGE-featureless-bulge-13")]
     public void Self_check_refuses_an_edge_off_the_hole()
     {
-        var (model, before, piece, positions, slotOf, bodyAt) = Swapped();
+        var (model, before, piece, fitted, slotOf, bodyAt) = Swapped();
         // The hole taken one point round: its points are no longer where the bulge's open edge is... the set is the same,
         // so take a body vertex off the hole instead — the main skin's next ring.
         var shifted = (int[])bodyAt.Clone();
         var main = before.Parts.Single(p => p.Island < 0 && p.Label == "1.1").Triangles.Distinct()
                          .Where(v => !bodyAt.Contains(v)).ToList();
         shifted[0] = main.MinBy(v => Vector3.Distance(At(before, v), At(before, bodyAt[0])));
-        Assert.Contains("open edge is not the body's hole", BulgeSwap.SelfCheck(model, before, piece, TbseBulge.Shared!, positions, slotOf, shifted) ?? "");
+        Assert.Contains("open edge is not the body's hole", BulgeSwap.SelfCheck(model, before, piece, TbseBulge.Shared!, fitted with { Hole = shifted }, slotOf) ?? "");
     }
 
     [Fact]
@@ -193,7 +194,7 @@ public class BulgeTransplantTests
     [Trait("Plan", "EDGE-featureless-bulge-29")]
     public void Self_check_refuses_a_rim_off_the_bodys_weights()
     {
-        var (model, before, piece, positions, slotOf, bodyAt) = Swapped();
+        var (model, before, piece, fitted, slotOf, bodyAt) = Swapped();
         var bulge = TbseBulge.Shared!;
         int i = Enumerable.Range(0, bulge.Positions.Length).First(k => bulge.Data.rim[k] >= 0);
         // Rewrite that rim vertex's first weight byte and its partner: no longer the body's at the seam.
@@ -207,7 +208,7 @@ public class BulgeTransplantTests
         byte first = bad[at];
         bad[at] = (byte)Math.Max(0, first - 60);
         bad[at + 1] = (byte)Math.Min(255, bad[at + 1] + 60);
-        Assert.Contains("weights are not the body's", BulgeSwap.SelfCheck(bad, before, piece, bulge, positions, slotOf, bodyAt) ?? "");
+        Assert.Contains("weights are not the body's", BulgeSwap.SelfCheck(bad, before, piece, bulge, fitted, slotOf) ?? "");
     }
 
     [Fact]

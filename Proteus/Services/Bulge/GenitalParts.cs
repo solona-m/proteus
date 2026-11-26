@@ -182,26 +182,74 @@ internal static class GenitalParts
         return found;
     }
 
-    /// <summary>Whether a skin part is the shipped TBSE bulge as <see cref="BulgeSwap"/> draws it: as many drawn vertices and
-    /// triangles as the bulge (the collapsed spares aside), every drawn vertex within <see cref="BulgeSwap.HoleFit"/> of one
-    /// of its points (it may be warped onto a body's hole by that much).</summary>
-    internal static bool IsShippedBulge(ModelParts body, ModelPart part)
+    /// <summary>Whether a skin part is the shipped TBSE bulge as <see cref="BulgeSwap"/> draws it (see
+    /// <see cref="ShippedBulgeBranch"/>).</summary>
+    internal static bool IsShippedBulge(ModelParts body, ModelPart part) => ShippedBulgeBranch(body, part) != null;
+
+    /// <summary>
+    /// How a skin part reads as the shipped TBSE bulge, or null when it does not:
+    /// <list type="bullet">
+    /// <item>'a', fitted exactly: as many drawn vertices and triangles as the bulge (the collapsed spares aside), every drawn
+    /// vertex within <see cref="BulgeSwap.HoleFit"/> of one of its points (it may be warped onto a body's hole by that much);</item>
+    /// <item>'b', re-stitched onto a hole of another point count (<see cref="BulgeSwap.FitHole"/>): not both counts the
+    /// bulge's, each within a hole's worth of it (a vertex for each point merged or added, two triangles); every drawn vertex
+    /// within <see cref="BulgeSwap.RestitchReach"/> of one of its points; and its open edge, welded by position, one loop of
+    /// a count the re-stitch takes and not the bulge's own (a re-stitch is only ever drawn on a hole of another count).</item>
+    /// </list>
+    /// </summary>
+    internal static char? ShippedBulgeBranch(ModelParts body, ModelPart part)
     {
-        if (TbseBulge.Shared is not { } bulge) return false;
+        if (TbseBulge.Shared is not { } bulge) return null;
         var drawn = new HashSet<int>();
+        var faces = new List<(int, int, int)>();
         for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
         {
             int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
             if (a == b || b == c || a == c) continue;
             drawn.Add(a); drawn.Add(b); drawn.Add(c);
+            faces.Add((a, b, c));
         }
-        int drawnTris = 0;
-        for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
-            if (part.Triangles[t] != part.Triangles[t + 1] && part.Triangles[t + 1] != part.Triangles[t + 2] && part.Triangles[t] != part.Triangles[t + 2])
-                drawnTris++;
-        if (drawn.Count != bulge.Positions.Length || drawnTris != bulge.Data.triangles.Length / 3) return false;
-        var grid = new PointGrid(bulge.Positions, 0.01f);
-        return drawn.All(v => grid.Nearest(At(body, v), BulgeSwap.HoleFit * 2) <= BulgeSwap.HoleFit);
+        int nv = bulge.Positions.Length, nt = bulge.Data.triangles.Length / 3, nh = bulge.Hole.Length;
+        if (drawn.Count == nv && faces.Count == nt)
+        {
+            var grid = new PointGrid(bulge.Positions, 0.01f);
+            return drawn.All(v => grid.Nearest(At(body, v), BulgeSwap.HoleFit * 2) <= BulgeSwap.HoleFit) ? 'a' : null;
+        }
+        if (Math.Abs(drawn.Count - nv) > nh || Math.Abs(faces.Count - nt) > 2 * nh) return null;
+        var near = new PointGrid(bulge.Positions, 0.01f);
+        if (!drawn.All(v => near.Nearest(At(body, v), BulgeSwap.RestitchReach * 2) <= BulgeSwap.RestitchReach)) return null;
+        // The open edge, welded by position as BulgeSwap.SelfCheck welds it: one loop, of a count the re-stitch takes.
+        (long, long, long) K(int v) { var p = At(body, v); return ((long)MathF.Round(p.X * 1e5f), (long)MathF.Round(p.Y * 1e5f), (long)MathF.Round(p.Z * 1e5f)); }
+        var use = new Dictionary<((long, long, long), (long, long, long)), int>();
+        foreach (var (a, b, c) in faces)
+            foreach (var (x, y) in new[] { (a, b), (b, c), (c, a) })
+            {
+                var kx = K(x); var ky = K(y);
+                var e = kx.CompareTo(ky) < 0 ? (kx, ky) : (ky, kx);
+                use[e] = use.GetValueOrDefault(e) + 1;
+            }
+        var adj = new Dictionary<(long, long, long), List<(long, long, long)>>();
+        foreach (var (e, _) in use.Where(kv => kv.Value == 1))
+        {
+            (adj.TryGetValue(e.Item1, out var l1) ? l1 : adj[e.Item1] = []).Add(e.Item2);
+            (adj.TryGetValue(e.Item2, out var l2) ? l2 : adj[e.Item2] = []).Add(e.Item1);
+        }
+        // A count the re-stitch takes, and never the bulge's own: a re-stitch only ever draws on a hole of another count, and a
+        // penis plugging the bulge's own hole (its rim the hole's 28 points) is no bulge however near it stands.
+        if (adj.Count == nh || adj.Count < BulgeSwap.RestitchBandMin || adj.Count > BulgeSwap.RestitchBandMax
+            || adj.Values.Any(l => l.Count != 2)) return null;
+        var start = adj.Keys.Min();
+        var prev = start;
+        var cur = adj[start][0];
+        int walked = 1;
+        while (cur != start && walked <= adj.Count)
+        {
+            var next = adj[cur][0] == prev ? adj[cur][1] : adj[cur][0];
+            prev = cur;
+            cur = next;
+            walked++;
+        }
+        return walked == adj.Count ? 'b' : null;
     }
 
     private static ModelParts WithoutParts(ModelParts model, IReadOnlySet<ModelPart> drop)

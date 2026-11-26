@@ -92,11 +92,17 @@ public partial class BulgeLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-featureless-bulge-6")]
     [Trait("Plan", "AC-featureless-bulge-10")]
     [Trait("Plan", "EDGE-featureless-bulge-39")]
+    [Trait("Plan", "AC-genital-switches-5")]
+    [Trait("Plan", "AC-genital-switches-6")]
+    [Trait("Plan", "AC-genital-switches-9")]
+    [Trait("Plan", "EDGE-genital-switches-23")]
+    [Trait("Plan", "EDGE-genital-switches-25")]
     public void Tbse_family_bodies()
     {
         var bulge = TbseBulge.Shared!;
         var options = new[] { TbseOpt + "gen a", TbseOpt + "gen b", TbseOpt + "gen c", TbseOpt + "gen d" }
-            .Concat(new[] { "flaccid m a", "flaccid m c", "flaccid m d", "flaccid l a", "flaccid xl d", "erect l cut", "erect m uncut" }.Select(o => TbseXOpt + o))
+            .Concat(new[] { "flaccid m a", "flaccid m c", "flaccid m d", "flaccid l a", "flaccid l c", "flaccid l d", "flaccid xl a",
+                            "flaccid xl d", "erect l cut", "erect m uncut" }.Select(o => TbseXOpt + o))
             .ToList();
         var fitted = new List<string>();
         foreach (var opt in options)
@@ -131,6 +137,10 @@ public partial class BulgeLocalTests(ITestOutputHelper output)
             int onPenis = drawnSkin.Count(v => Enumerable.Range(0, XivLiveMesh.SkinnedMesh.MaxInfluences)
                                                        .Any(k => skin.BoneWeights[v * 8 + k] > 0f && GenitalParts.IsPenisBone(skin.BoneNames[skin.BoneIndices[v * 8 + k]])));
             var reading = GenitalParts.Read(parts, skin);
+            // The written bulge reads back as the shipped bulge (plan genital-switches EDGE-25).
+            var drawnBulge = parts.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                                  .Select(p => GenitalParts.ShippedBulgeBranch(parts, p)).FirstOrDefault(b => b != null);
+            Assert.True(drawnBulge != null, $"{name}: the written bulge does not read as the bulge");
             output.WriteLine($"{name}: featureless in {sw.ElapsedMilliseconds} ms — {swapped.Collapsed} triangles collapsed; penis read after: "
                              + $"{reading?.Penis}; drawn skin vertices on penis bones {onPenis}");
             Assert.False(reading?.Penis ?? false, $"{name} still reads as having a penis");
@@ -160,6 +170,11 @@ public partial class BulgeLocalTests(ITestOutputHelper output)
         }
         Assert.Contains("gen a", fitted);
         Assert.Contains("flaccid m a", fitted);
+        // Plan genital-switches: Flaccid L's hole, read off its skin (28 points, 10.6 mm), takes the bulge; XL's (19.5 mm)
+        // and the erect options (no piece) do not.
+        Assert.Contains("flaccid l a", fitted);
+        Assert.DoesNotContain("flaccid xl a", fitted);
+        Assert.DoesNotContain("erect l cut", fitted);
     }
 
     /// <summary>
@@ -230,6 +245,29 @@ public partial class BulgeLocalTests(ITestOutputHelper output)
             Assert.True(CrossSexRefit.ClothFolded(garment, withBulge) <= CrossSexRefit.ClothFolded(garment, plain),
                         $"{name}: more folds with the bulge");
         }
+    }
+
+    /// <summary>
+    /// Covering pants onto TBSE-X Flaccid L A (plan genital-switches AC-5): Twill Trousers, made on TBSE SFW, take the bulge
+    /// or are refused by the guard — never "no sculpt for this body" — and with the bulge no penis skin is left.
+    /// </summary>
+    [LocalDataFact(CrossSexRefitLocalTests.TwillTbse, LocalData.TbseUvMaps, TbseOpt + "sfw" + E0, TbseXOpt + "flaccid l a" + E0)]
+    [Trait("Plan", "AC-genital-switches-5")]
+    public void Twill_onto_tbsex_flaccid_l()
+    {
+        var maps = new UVRemapService(Substitute.For<IPluginLog>(), LocalData.Path(LocalData.TbseUvMaps));
+        var garment = File.ReadAllBytes(LocalData.Path(CrossSexRefitLocalTests.TwillTbse));
+        var sfw = File.ReadAllBytes(LocalData.Path(TbseOpt + "sfw" + E0));
+        var target = File.ReadAllBytes(LocalData.Path(TbseXOpt + "flaccid l a" + E0));
+        Assert.Null(BodyRetarget.BuildPair("_dwn", sfw, target, "_dwn", true, null, null, maps, out var pair));
+        var log = new List<string>();
+        var plan = BodyRetarget.Plan(ModelPartReader.Read(garment)!, (byte[])garment.Clone(), [pair], "_dwn", replaceSkin: true,
+                                     acrossBodies: true, cutHidden: true, log: log.Add);
+        foreach (var l in log.Where(l => l.StartsWith("bulge:", StringComparison.Ordinal))) output.WriteLine(l);
+        Assert.DoesNotContain(log, l => l.Contains("no sculpt for this body", StringComparison.Ordinal));
+        bool featureless = log.Any(l => l.StartsWith("bulge: _dwn featureless", StringComparison.Ordinal));
+        Assert.True(featureless || log.Any(l => l.StartsWith("bulge: _dwn penis kept: guard", StringComparison.Ordinal)), string.Join(" | ", log));
+        if (featureless) Assert.Equal(0, PenisVerticesOf(plan.Model, target));
     }
 
     /// <summary>Output skin triangles where a body's own genital piece stood proud of the bulge (any TBSE-family body).</summary>

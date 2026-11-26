@@ -190,6 +190,38 @@ public partial class BulgeSpikeLocalTests
         }
     }
 
+    /// <summary>
+    /// Diagnostic (plan genital-switches, Phase 0.2b): every TBSE-X IVCS2 legs file's genital piece (rule c, and rule b for
+    /// XL) — the hole its skin leaves (<see cref="BulgeSwap.HoleLoop"/>), the alignment's worst pair and whether
+    /// <see cref="BulgeSwap.FitHole"/> takes it. Measured: every hole has the bulge's own 28 points; Flaccid L 10.6 mm (fits
+    /// HoleFit), Flaccid XL 19.5 mm (refused) — what RestitchReach and the XL decision were taken from.
+    /// </summary>
+    [LocalDataFact(LocalData.Mods)]
+    [Trait("Suite", "Diagnostic")]
+    public void Tbsex_restitch_probe()
+    {
+        var bulge = TbseBulge.Shared!;
+        string root = LocalData.Path(M + "The Body SE-X IVCS2 V1_1_0");
+        if (!Directory.Exists(root)) { output.WriteLine("TBSE-X not installed"); return; }
+        foreach (var f in Directory.GetFiles(root, "c0101e0000_dwn.mdl", SearchOption.AllDirectories).OrderBy(x => x, StringComparer.Ordinal))
+        {
+            var bytes = File.ReadAllBytes(f);
+            var parts = ModelPartReader.Read(bytes);
+            var skin = ModelSkinReader.Read(bytes, null, null);
+            if (parts == null || skin == null || GenitalParts.Read(parts, skin) is not { } reading) continue;
+            string rel = Path.GetRelativePath(root, f);
+            foreach (var g in reading.Genitals.Where(g => SecondSkinWriter.IsBodySkinMaterial(g.Part.Material) && g.Part.AttributeMask == 0
+                                                          && g.Part != parts.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)).MaxBy(p => p.Triangles.Length)))
+            {
+                var loop = BulgeSwap.HoleLoop(parts, g.Part);
+                var al = loop == null ? null : BulgeSwap.Align(bulge.Hole, loop.Select(v => At(parts, v)).ToList());
+                var fit = BulgeSwap.FitHole(parts, g.Part, bulge, out var why);
+                output.WriteLine($"{rel} {g.Part.Label} (rule {g.Rule}): hole {(loop?.Count.ToString() ?? "none")}, worst "
+                                 + $"{(al is { } a ? $"{a.Worst * 1000f:0.0} mm" : "-")}, {(fit != null ? $"fitted ({fit.Merged} merged, {fit.Inserted} added)" : why)}");
+            }
+        }
+    }
+
     /// <summary>A piece's rim on the body's other skin: its point count and the worst distance from one to the nearest hole point.</summary>
     private static (int Count, float Worst) RimAgainst(ModelParts parts, ModelPart piece, IReadOnlyList<Vector3> hole)
     {

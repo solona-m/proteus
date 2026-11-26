@@ -125,7 +125,7 @@ internal static partial class BodyRetarget
                 var drawn = Without(parts, targetHidden);
                 var uv = Uv(swapped.Model);
                 for (int i = 0; i < swapped.SlotOf.Length; i++)
-                    if (bulge.Data.land[i] is { } l && swapped.SlotOf[i] * 2 + 1 < uv.Length)
+                    if (swapped.Land[i] is { } l && swapped.SlotOf[i] * 2 + 1 < uv.Length)
                     {
                         uv[swapped.SlotOf[i] * 2] = l[0];
                         uv[swapped.SlotOf[i] * 2 + 1] = l[1];
@@ -137,7 +137,9 @@ internal static partial class BodyRetarget
                 // they were written. Only a landing by uv knows where the bulge is.
                 if (correspondence is IdentityCorrespondence)
                     return (null, "the garment's body is the same mesh as the new body: no landing onto the bulge");
-                return (plain with { Correspondence = correspondence!, Target = drawn, TargetModel = swapped.Model, Featureless = null }, "");
+                // A re-stitched bulge says so (FitBulges logs a non-empty reason beside its featureless line).
+                return (plain with { Correspondence = correspondence!, Target = drawn, TargetModel = swapped.Model, Featureless = null },
+                        swapped.Restitched ?? "");
             }
             catch (Exception e)
             {

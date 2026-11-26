@@ -202,9 +202,12 @@ internal static partial class BodyRetarget
                 foreach (var (part, tris) in skinTris)
                     (dropTris.TryGetValue(part, out var set) ? set : dropTris[part] = []).UnionWith(tris);
                 int genitalTris = targetReading.Genitals.Sum(g => g.Triangles.Count);
+                // A re-stitched bulge's note (see BulgeSwap.FitHole) and its own triangle count; the asset's otherwise.
+                if (why.Length > 0) log?.Invoke($"bulge: {slot} {why}");
+                int drawnTris = BulgeTriangles(made.TargetModel, made.Target) ?? TbseBulge.Shared?.Data.triangles.Length / 3 ?? 0;
                 log?.Invoke($"bulge: {slot} featureless — {genitalTris} genital triangles out (garment: "
                             + $"{materials.Sum(p => p.Triangles.Length / 3) + skinTris.Sum(kv => kv.Value.Count)}), "
-                            + $"bulge {TbseBulge.Shared?.Data.triangles.Length / 3 ?? 0} triangles drawn");
+                            + $"bulge {drawnTris} triangles drawn");
                 result[i] = featureless;
                 any = true;
             }
@@ -255,6 +258,21 @@ internal static partial class BodyRetarget
     }
 
     private static Vector3 PointOf(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
+
+    /// <summary>The bulge's triangles a featureless body draws (its shipped-bulge part's, collapsed spares aside); null when
+    /// none of its parts reads as the bulge.</summary>
+    private static int? BulgeTriangles(byte[]? model, ModelParts body)
+    {
+        if (model == null) return null;
+        var part = body.Parts.FirstOrDefault(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)
+                                                  && GenitalParts.IsShippedBulge(body, p));
+        if (part == null) return null;
+        int drawn = 0;
+        for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            if (part.Triangles[t] != part.Triangles[t + 1] && part.Triangles[t + 1] != part.Triangles[t + 2] && part.Triangles[t] != part.Triangles[t + 2])
+                drawn++;
+        return drawn;
+    }
 
     /// <summary>
     /// The cheap gate before any reading: the body has two untagged skin submeshes or more (its main skin and a piece beside
