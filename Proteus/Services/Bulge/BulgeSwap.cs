@@ -18,13 +18,16 @@ namespace Proteus.Services.Bulge;
 /// <c>j_kosi</c>. Its tangent frame is computed from its uvs in the convention the piece's own vertices carried.
 /// Other genital parts the body draws (TBSE-X's <c>_dwn_c</c>) collapse too.
 /// </summary>
-internal static class BulgeSwap
+internal static partial class BulgeSwap
 {
     /// <summary>The featureless body.</summary>
     /// <param name="Model">The rewritten model.</param>
-    /// <param name="SlotOf">Per bulge vertex, the global vertex index (part reader numbering) it was written to.</param>
+    /// <param name="SlotOf">Per bulge vertex as drawn, the global vertex index (part reader numbering) it was written to.</param>
     /// <param name="Collapsed">Triangles collapsed: the piece's spare ones and every other genital part's.</param>
-    internal sealed record Result(byte[] Model, int[] SlotOf, int Collapsed);
+    /// <param name="Land">Per bulge vertex as drawn, its landing uv (see <see cref="TbseBulge.File.land"/>); null where none.</param>
+    /// <param name="Triangles">The bulge's triangles drawn.</param>
+    /// <param name="Restitched">How the bulge was re-stitched onto a hole of another point count; null for an exact fit.</param>
+    internal sealed record Result(byte[] Model, int[] SlotOf, int Collapsed, float[]?[] Land, int Triangles, string? Restitched);
 
     /// <summary>How near the bulge's hole and the body's must be, point for point, to be the same hole (0.1 mm).</summary>
     internal const float SameHole = 1e-4f;
@@ -47,18 +50,29 @@ internal static class BulgeSwap
         if (reading is not { Penis: true }) { reason = "no penis"; return null; }
 
         // The genital piece the bulge plugs: an untagged skin submesh whose rim on the body's other skin is the bulge's
-        // hole, point for point within HoleFit.
+        // hole, point for point within HoleFit — every candidate tried so first. Failing that, one whose hole has another
+        // number of points, re-stitched (see FitHole).
         ModelPart? piece = null;
-        int[]? bodyAt = null;
-        foreach (var g in reading.Genitals.Where(g => g.Rule == "c" && g.Part.AttributeMask == 0))
-            if (MatchHole(parts, g.Part, bulge.Hole) is { } at) { piece = g.Part; bodyAt = at; break; }
-        if (piece == null || bodyAt == null) { reason = "no sculpt for this body"; return null; }
-        // The bulge warped onto the body's hole: each rim point onto its partner, the inside by inverse-distance weights.
-        var positions = Warp(bulge, bulge.Hole.Select((_, h) => At(parts, bodyAt[h]) - bulge.Hole[h]).ToArray());
+        FittedBulge? fitted = null;
+        var candidates = reading.Genitals.Where(g => g.Rule == "c" && g.Part.AttributeMask == 0).Select(g => g.Part).ToList();
+        foreach (var c in candidates)
+            if (MatchHole(parts, c, bulge.Hole) is { } at) { piece = c; fitted = Exact(bulge, parts, at); break; }
+        if (fitted == null && !BodyRetarget.Tuned.NoHoleRestitch)
+        {
+            string? far = null;
+            foreach (var c in candidates)
+            {
+                if (FitHole(parts, c, bulge, out string why) is { } f) { piece = c; fitted = f; break; }
+                if (why != "no sculpt for this body") far ??= why;
+            }
+            if (fitted == null && far != null) { reason = far; return null; }
+        }
+        if (piece == null || fitted == null) { reason = "no sculpt for this body"; return null; }
+        var positions = fitted.Positions;
 
         var others = parts.Parts.Where(p => p.Island < 0 && p != piece).SelectMany(p => p.Triangles).ToHashSet();
         var owned = piece.Triangles.Distinct().Where(v => !others.Contains(v)).OrderBy(v => v).ToArray();
-        int n = bulge.Positions.Length, tCount = bulge.Data.triangles.Length / 3;
+        int n = positions.Length, tCount = fitted.Triangles.Length / 3;
         if (owned.Length < n || piece.Triangles.Length / 3 < tCount)
         {
             reason = $"the genital piece has {owned.Length} vertices and {piece.Triangles.Length / 3} triangles, fewer than the bulge's {n} and {tCount}";
@@ -107,8 +121,8 @@ internal static class BulgeSwap
         }
 
 
-        var tris = bulge.Data.triangles;
-        var normal = Normals(positions, tris, bulge, parts, bodyAt);
+        var tris = fitted.Triangles;
+        var normal = Normals(positions, tris, fitted.RimBody, parts);
         if (positions.Any(p => !float.IsFinite(p.X) || !float.IsFinite(p.Y) || !float.IsFinite(p.Z))
             || normal.Any(v => !float.IsFinite(v.X) || !float.IsFinite(v.Y) || !float.IsFinite(v.Z)))
         { reason = "self-check: a bulge position or normal is not finite"; return null; }
@@ -120,7 +134,7 @@ internal static class BulgeSwap
             var (signRead, wRead, hRead) = PieceConvention(body, src, parts, piece, span, bel, ne.Value, Addr);
             sign = signRead; wRef = wRead; hRef = hRead;
         }
-        var bulgeUv = bulge.Data.uv.Select(u => new Vector2(u[0], u[1])).ToArray();
+        var bulgeUv = fitted.Uv;
         var (dPdu, dPdv) = Derivatives(positions, bulgeUv, tris);
 
         var o = (byte[])body.Clone();
@@ -138,16 +152,16 @@ internal static class BulgeSwap
 
             // Weights: the body's own on the rim, the bulge's inside; genital bones' share to j_kosi.
             var w = new Dictionary<string, float>(StringComparer.Ordinal);
-            if (bulge.Data.rim[i] >= 0)
+            if (fitted.RimBody[i] >= 0)
             {
-                int v = bodyAt[bulge.Data.rim[i]];
+                int v = fitted.RimBody[i];
                 for (int k = 0; k < XivLiveMesh.SkinnedMesh.MaxInfluences; k++)
                 {
                     float x = skin.BoneWeights[v * 8 + k];
                     if (x > 0f) { string b = skin.BoneNames[skin.BoneIndices[v * 8 + k]]; w[b] = w.GetValueOrDefault(b) + x; }
                 }
             }
-            else foreach (var (b, x) in bulge.Data.weights[i]) w[b] = w.GetValueOrDefault(b) + x;
+            else foreach (var (b, x) in bulge.Data.weights[fitted.Source[i]]) w[b] = w.GetValueOrDefault(b) + x;
             // A genital bone's share, and a bone the body's skin does not carry (the sculpt's rig may name one), go to j_kosi.
             foreach (var b in w.Keys.Where(b => GenitalParts.IsPenisBone(b) || (LocalBone(b) < 0 && b != "j_kosi")).ToList())
             {
@@ -201,8 +215,11 @@ internal static class BulgeSwap
                 hide.Add(PolygonSelection.Key.Of(g.Part.Triangles[t * 3], g.Part.Triangles[t * 3 + 1], g.Part.Triangles[t * 3 + 2]));
         collapsed += ModelPartHider.Hide(o, parts.MeshSpans, hide);
 
-        if (SelfCheck(o, parts, piece, bulge, positions, slotOf, bodyAt) is { } failed) { reason = "self-check: " + failed; return null; }
-        return new Result(o, slotOf, collapsed);
+        if (SelfCheck(o, parts, piece, bulge, fitted, slotOf) is { } failed) { reason = "self-check: " + failed; return null; }
+        string? note = fitted.Merged + fitted.Inserted == 0 ? null
+            : $"bulge re-stitched onto a hole of {fitted.Hole.Count} points ({bulge.Hole.Length} in the bulge): {fitted.Merged} merged, "
+              + $"{fitted.Inserted} added, worst {fitted.Worst * 1000f:0.0} mm";
+        return new Result(o, slotOf, collapsed, fitted.Land, tCount, note);
     }
 
     /// <summary>
@@ -264,7 +281,7 @@ internal static class BulgeSwap
 
     /// <summary>Per bulge vertex its normal: area-weighted over the bulge's triangles, welded by position; the rim's the
     /// body's own at its hole point, so the shading runs on across the seam.</summary>
-    private static Vector3[] Normals(Vector3[] positions, int[] tris, TbseBulge bulge, ModelParts parts, int[] bodyAt)
+    private static Vector3[] Normals(Vector3[] positions, int[] tris, int[] rimBody, ModelParts parts)
     {
         int n = positions.Length;
         var normal = new Vector3[n];
@@ -288,9 +305,9 @@ internal static class BulgeSwap
             foreach (int i in group) normal[i] = sum.LengthSquared() > 0 ? Vector3.Normalize(sum) : Vector3.UnitZ;
         }
         for (int i = 0; i < n; i++)
-            if (bulge.Data.rim[i] >= 0)
+            if (rimBody[i] >= 0)
             {
-                int v = bodyAt[bulge.Data.rim[i]];
+                int v = rimBody[i];
                 var bn = new Vector3(parts.Normals[v * 3], parts.Normals[v * 3 + 1], parts.Normals[v * 3 + 2]);
                 if (bn.LengthSquared() > 1e-12f) normal[i] = Vector3.Normalize(bn);
             }
@@ -332,9 +349,10 @@ internal static class BulgeSwap
     /// bulge's open edge is exactly the body's hole; no bulge face turned over or collapsed by the warp; and every rim vertex
     /// carries exactly the body's weights at its hole point, so the seam moves as one in any pose.
     /// </summary>
-    internal static string? SelfCheck(byte[] model, ModelParts before, ModelPart piece, TbseBulge bulge, Vector3[] positions,
-                                      int[] slotOf, int[] bodyAt)
+    internal static string? SelfCheck(byte[] model, ModelParts before, ModelPart piece, TbseBulge bulge, FittedBulge fitted,
+                                      int[] slotOf)
     {
+        var positions = fitted.Positions;
         var after = ModelPartReader.Read(model);
         var skin = ModelSkinReader.Read(model, null, null);
         if (after == null || skin == null) return "the written body does not read back";
@@ -347,7 +365,7 @@ internal static class BulgeSwap
             int a = drawnPiece.Triangles[t], b = drawnPiece.Triangles[t + 1], c = drawnPiece.Triangles[t + 2];
             if (a != b && b != c && a != c) tris.Add((a, b, c));
         }
-        if (tris.Count != bulge.Data.triangles.Length / 3) return $"{tris.Count} bulge triangles drawn, not {bulge.Data.triangles.Length / 3}";
+        if (tris.Count != fitted.Triangles.Length / 3) return $"{tris.Count} bulge triangles drawn, not {fitted.Triangles.Length / 3}";
 
         // The open edge, welded by position, is the body's hole point for point.
         (long, long, long) K(Vector3 p) => ((long)MathF.Round(p.X * 1e5f), (long)MathF.Round(p.Y * 1e5f), (long)MathF.Round(p.Z * 1e5f));
@@ -361,15 +379,17 @@ internal static class BulgeSwap
                 use[e] = use.GetValueOrDefault(e) + 1;
             }
         var edge = use.Where(kv => kv.Value == 1).SelectMany(kv => new[] { kv.Key.Item1, kv.Key.Item2 }).Distinct().ToList();
-        var hole = bodyAt.Select(v => K(At(before, v))).ToHashSet();
+        var hole = fitted.Hole.Select(v => K(At(before, v))).ToHashSet();
         if (edge.Count != hole.Count || !edge.All(hole.Contains)) return "the bulge's open edge is not the body's hole";
 
-        // No face turned over or collapsed by the warp.
+        // No face turned over or collapsed by the warp: each drawn face against the asset face it comes from.
         var bt = bulge.Data.triangles;
-        for (int t = 0; t + 2 < bt.Length; t += 3)
+        var ft = fitted.Triangles;
+        for (int f = 0; f < ft.Length / 3; f++)
         {
+            int t = fitted.Parent[f] * 3;
             var n0 = Vector3.Cross(bulge.Positions[bt[t + 1]] - bulge.Positions[bt[t]], bulge.Positions[bt[t + 2]] - bulge.Positions[bt[t]]);
-            var n1 = Vector3.Cross(positions[bt[t + 1]] - positions[bt[t]], positions[bt[t + 2]] - positions[bt[t]]);
+            var n1 = Vector3.Cross(positions[ft[f * 3 + 1]] - positions[ft[f * 3]], positions[ft[f * 3 + 2]] - positions[ft[f * 3]]);
             if (n1.LengthSquared() < 1e-16f) return "a bulge face collapsed";
             if (n0.LengthSquared() > 1e-16f && Vector3.Dot(n0, n1) <= 0f) return "a bulge face turned over";
         }
@@ -377,8 +397,8 @@ internal static class BulgeSwap
         // The rim carries the body's own weights at its hole point (as written, both sides read back).
         for (int i = 0; i < slotOf.Length; i++)
         {
-            if (bulge.Data.rim[i] < 0) continue;
-            int r = slotOf[i], b = bodyAt[bulge.Data.rim[i]];
+            if (fitted.RimBody[i] < 0) continue;
+            int r = slotOf[i], b = fitted.RimBody[i];
             float WeightOn(int v, int bone)
             {
                 float sum = 0f;

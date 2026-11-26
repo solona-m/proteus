@@ -196,6 +196,7 @@ public class CharacterFreezeWiringTests
     [Trait("Plan", "EDGE-studio-freeze-61")]
     [Trait("Plan", "EDGE-studio-freeze-62")]
     [Trait("Plan", "EDGE-studio-freeze-63")]
+    [Trait("Plan", "EDGE-studio-freeze-72")]
     public void Observe_gets_the_last_freezable_and_learning_resets_on_owner_change()
     {
         var update = OnUpdate;

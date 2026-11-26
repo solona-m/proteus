@@ -24,9 +24,25 @@ public partial class BulgeRefitTests
     /// <paramref name="pouch"/> the same on the garment's own material; with <paramref name="genitalSkin"/> its own skin
     /// over the dome (a garment made on a body with a penis, carrying it).
     /// </summary>
+    /// <param name="switchedSkin">The garment's own skin as Beach Briefs carries it (plan genital-switches): one skin mesh of
+    /// the main skin (<c>1.1</c>, untagged) and a copy of the dome per tag set, each its own submesh tagged with that set.</param>
+    /// <param name="cap">With <paramref name="switchedSkin"/>, a fan over the hole in the same mesh, tagged so (Beach Briefs'
+    /// <c>0.7</c>: shown only with the briefs).</param>
+    /// <param name="clothTags">Tags on the cloth's submesh (Beach Briefs' briefs, <c>atr_dv_g</c>).</param>
+    /// <param name="untaggedPenis">With <paramref name="switchedSkin"/>, one more copy of the dome, untagged.</param>
+    /// <param name="mergedUntaggedPenis">With <paramref name="switchedSkin"/>, the dome in the main skin's own submesh too.</param>
+    /// <param name="switchedPastWindow">With <paramref name="switchedSkin"/>, one more tagged piece: the dome and the main skin.</param>
+    /// <param name="liftedSwitched">With <paramref name="switchedSkin"/>, the main skin of that mesh lifted 2 cm off the body (less
+    /// than a penis stands, more than a laid skin misses by)
+    /// (a mesh the rebuild keeps).</param>
+    /// <param name="kneeSkin">A skin mesh tagged <c>atr_hiz</c> 60 cm below the crotch, and no other skin.</param>
+    /// <param name="setTaggedPiercing">A body piercing over the dome, tagged so.</param>
     internal static byte[] Garment(byte[] body, Func<ModelPart, bool> keep, bool genitalMaterial = false, bool pouch = false,
                                    bool genitalSkin = false, Func<Vector3, bool>? where = null, bool pubes = false,
-                                   bool liftedSkin = false)
+                                   bool liftedSkin = false, IReadOnlyList<string[]>? switchedSkin = null, string[]? cap = null,
+                                   string[]? clothTags = null, bool untaggedPenis = false, bool mergedUntaggedPenis = false,
+                                   bool switchedPastWindow = false, bool liftedSwitched = false, bool kneeSkin = false,
+                                   string[]? setTaggedPiercing = null)
     {
         var parts = ModelPartReader.Read(body)!;
         var skin = ModelSkinReader.Read(body, null, null)!;
@@ -61,8 +77,44 @@ public partial class BulgeRefitTests
                                                   [(0u, tris.ToArray())]);
         }
         var dome = parts.Parts.Where(p => p.Island < 0 && p.Label == "1.2").ToList();
-        var meshes = new List<SyntheticModel.SurfaceMesh> { MeshOf(Cloth, parts.Parts.Where(p => p.Island < 0 && keep(p)), 0.005f) };
+        var names = new List<string>();
+        uint Mask(IEnumerable<string>? tags)
+        {
+            uint m = 0;
+            foreach (string t in tags ?? [])
+            {
+                int i = names.IndexOf(t);
+                if (i < 0) { i = names.Count; names.Add(t); }
+                m |= 1u << i;
+            }
+            return m;
+        }
+        var clothMesh = MeshOf(Cloth, parts.Parts.Where(p => p.Island < 0 && keep(p)), 0.005f);
+        if (clothTags != null) clothMesh = clothMesh with { Submeshes = [(Mask(clothTags), clothMesh.Submeshes[0].Triangles)] };
+        var meshes = new List<SyntheticModel.SurfaceMesh> { clothMesh };
         where = null;   // the extras sit over the dome whatever the cloth's band
+        if (switchedSkin != null)
+        {
+            var main = MeshOf(SyntheticBulge.Skin, parts.Parts.Where(p => p.Island < 0 && p.Label == "1.1"), liftedSwitched ? 0.02f : 0f);
+            var domeMesh = MeshOf(SyntheticBulge.Skin, dome, 0f);
+            int n0 = main.Positions.Length;
+            var domeTris = domeMesh.Submeshes[0].Triangles.Select(i => i + n0).ToArray();
+            var subs = new List<(uint, int[])> { (0u, mergedUntaggedPenis ? [.. main.Submeshes[0].Triangles, .. domeTris] : main.Submeshes[0].Triangles) };
+            foreach (var set in switchedSkin) subs.Add((Mask(set), domeTris));
+            if (untaggedPenis) subs.Add((0u, domeTris));
+            if (switchedPastWindow) subs.Add((Mask(["atr_dv_h", "atr_dv_j"]), [.. domeTris, .. main.Submeshes[0].Triangles]));
+            if (cap != null)
+            {
+                // The hole's points in the dome mesh, in the hole's order, fanned from the first.
+                var hole = TbseBulge.Shared!.Hole;
+                var at = hole.Select(h => Array.FindIndex(domeMesh.Positions, p => Vector3.Distance(p, h) < 1e-5f) + n0).ToArray();
+                var fan = new List<int>();
+                for (int i = 1; i + 1 < at.Length; i++) fan.AddRange([at[0], at[i + 1], at[i]]);
+                subs.Add((Mask(cap), fan.ToArray()));
+            }
+            meshes.Add(new SyntheticModel.SurfaceMesh(SyntheticBulge.Skin, [.. main.Positions, .. domeMesh.Positions],
+                [.. main.Normals, .. domeMesh.Normals], [.. main.Uv, .. domeMesh.Uv], [.. main.Weights, .. domeMesh.Weights], [.. subs]));
+        }
         if (genitalMaterial) meshes.Add(MeshOf(Benis, dome, 0.0005f));
         if (pouch) meshes.Add(MeshOf(Pouch, dome, 0.008f));
         if (genitalSkin && !liftedSkin) meshes.Add(MeshOf(SyntheticBulge.Skin, dome, 0f));
@@ -77,7 +129,18 @@ public partial class BulgeRefitTests
                 [(0u, [.. on.Submeshes[0].Triangles, .. off.Submeshes[0].Triangles.Select(i => i + n0)])]));
         }
         if (pubes) meshes.Add(MeshOf("/mt_c0101b0001_bibopube.mtrl", dome, 0.003f));
-        return SyntheticModel.BuildSurface([], [.. meshes]);
+        if (kneeSkin)
+        {
+            var knee = MeshOf(SyntheticBulge.Skin, parts.Parts.Where(p => p.Island < 0 && p.Label == "1.1"), 0f);
+            meshes.Add(knee with { Positions = [.. knee.Positions.Select(p => p - new Vector3(0, 0.6f, 0))],
+                                   Submeshes = [(Mask(["atr_hiz"]), knee.Submeshes[0].Triangles)] });
+        }
+        if (setTaggedPiercing != null)
+        {
+            var ring = MeshOf("/mt_c0101b0001_genitalpierce.mtrl", dome, 0.002f);
+            meshes.Add(ring with { Submeshes = [(Mask(setTaggedPiercing), ring.Submeshes[0].Triangles)] });
+        }
+        return SyntheticModel.BuildSurface(names, [.. meshes]);
     }
 
     /// <summary>The made-on body: the synthetic body with its dome a little taller, so the two bodies are two files.</summary>
@@ -104,7 +167,8 @@ public partial class BulgeRefitTests
                 foreach (int slot in swapped.SlotOf) { uvF[slot * 2] = f.Positions[slot * 3] + 0.5f; uvF[slot * 2 + 1] = f.Positions[slot * 3 + 1]; }
                 if (!BodyCorrespondence.TryBuild(sourceParts, BodyRetarget.Uv(source), f, uvF, "_dwn", out var fc, out string r, out _, null, true, true))
                     return (null, r);
-                return (plain with { Correspondence = fc!, Target = f, TargetModel = swapped.Model }, "");
+                // As BuildPair's factory: a re-stitched bulge's note comes back as the reason, logged beside its line.
+                return (plain with { Correspondence = fc!, Target = f, TargetModel = swapped.Model }, swapped.Restitched ?? "");
             }),
         };
     }

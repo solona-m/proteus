@@ -65,6 +65,11 @@ internal static class LocalData
     /// a sheet of their own) where the hips, butt and crotch skin would be — that skin is cut away under them.</summary>
     internal const string MusePack = ModPacks + ":[YAS] Muse+.pmp";
 
+    /// <summary>red's "[HS] Beach Briefs (TBSE)" v3.1.0: e0194 legs made on The Body SE, whose own skin carries Gen A–D's
+    /// penises each behind an IMC variant tag (<c>atr_dv_e…f</c> with <c>atr_dv_j</c>); its "Briefs" option turns
+    /// <c>j</c> off and hides them all (plan genital-switches).</summary>
+    internal const string BeachBriefsPack = ModPacks + ":Beach Briefs (TBSE) v3.1.0.pmp";
+
     /// <summary>Bijeon's "Frost Veil Plus+": an invisible a0002 bracelet whose whole look is an item effect, in the v3 layout.</summary>
     internal const string FrostVeilPack = ModPacks + ":Frost Veil Plus+.pmp";
 

@@ -92,6 +92,13 @@ internal static partial class BodyRetarget
     /// chord rule allows, pressed in under a band or not, as builds before 1501 did (see <see cref="PressedUnder"/>).</param>
     /// <param name="NoKneeStandoff">Leave the coarse cloth behind the knees where the face settle left it, as builds
     /// before 1504 did (see <see cref="KneeFaces"/>).</param>
+    /// <param name="NoGenitalSwitches">Put the new body's genitals in untagged whatever switches the garment's own carried,
+    /// and try the bulge on a garment that switches its own penis, as builds before genital-switches did (see
+    /// <see cref="Bulge.GenitalSwitches"/>). A fault in the switch path is not this: the bulge was already left out for such a
+    /// garment, so the fallback is the new body's penis without switches and without the bulge.</param>
+    /// <param name="NoHoleRestitch">Fit the bulge only to a hole of its own point count, as builds before genital-switches
+    /// did (see <c>BulgeSwap.FitHole</c>).</param>
+    /// <param name="GenitalSwitchFault">Tests only: make the switched rebuild fail, to drive its fallback.</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -110,7 +117,20 @@ internal static partial class BodyRetarget
                                   bool CutOpenSkinAnyFacing = false, bool NoCutInside = false,
                                   bool NoReshapeEnds = false, bool NoSharedSeam = false, bool NoBulge = false,
                                   bool BulgeFault = false, bool BulgeForceGuard = false, bool NoLayerFloor = false,
-                                  bool NoCoarseSag = false, bool NoPressedSkinCut = false, bool NoKneeStandoff = false);
+                                  bool NoCoarseSag = false, bool NoPressedSkinCut = false, bool NoKneeStandoff = false,
+                                  bool NoGenitalSwitches = false, bool NoHoleRestitch = false,
+                                  SwitchFault GenitalSwitchFault = SwitchFault.None);
+
+    /// <summary>Where the tests make the genital switches fail (see <see cref="Tuning.GenitalSwitchFault"/>).</summary>
+    internal enum SwitchFault
+    {
+        /// <summary>Nowhere.</summary>
+        None,
+        /// <summary>In <see cref="Bulge.GenitalSwitches.For"/>, inside the switched rebuild.</summary>
+        InFor,
+        /// <summary>In the read-back of the switched rebuild, as a count that disagrees.</summary>
+        ReadBack,
+    }
 
     private static readonly Tuning DefaultTuning = new();
 

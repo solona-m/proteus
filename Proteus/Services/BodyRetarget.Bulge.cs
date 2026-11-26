@@ -155,6 +155,25 @@ internal static partial class BodyRetarget
                     log?.Invoke($"bulge: {slot} left as it is — crotch not covered");
                     continue;
                 }
+                // A garment that switches its own penis, on a refit that swaps its skin, keeps the new body's penis under
+                // those switches (see GenitalSwitches): a bulge would take away the penis its options show. Read before
+                // the featureless body is made only when the cheap gate passes; otherwise after it, as before.
+                XivLiveMesh.SkinnedMesh? sourceSkin = null;
+                GenitalParts.Reading? sourceReading = null;
+                bool sourceRead = false;
+                if (!Tuned.NoGenitalSwitches && replaceSkin && pair.Swaps && GenitalSwitches.MayHaveSwitches(garment, pair.Correspondence.Source))
+                {
+                    sourceSkin = pair.SourceModel != null ? ModelSkinReader.Read(pair.SourceModel, null, null) : null;
+                    sourceReading = sourceSkin != null ? GenitalParts.Read(pair.Correspondence.Source, sourceSkin) : null;
+                    sourceRead = true;
+                    var sets = GenitalSwitches.Of(garment, ModelSkinReader.Read(garmentBytes, null, null), pair.Correspondence.Source,
+                                                  sourceReading, out _);
+                    if (sets != null)
+                    {
+                        log?.Invoke($"bulge: {slot} left as it is — the garment switches its own penis ({sets.Count} switch sets)");
+                        continue;
+                    }
+                }
                 var (fp, why) = pair.Featureless();
                 if (fp is not { } made)
                 {
@@ -167,8 +186,11 @@ internal static partial class BodyRetarget
                                               Featureless = null };
 
                 // The garment's own genitals, against the body it was made on.
-                var sourceSkin = pair.SourceModel != null ? ModelSkinReader.Read(pair.SourceModel, null, null) : null;
-                var sourceReading = sourceSkin != null ? GenitalParts.Read(pair.Correspondence.Source, sourceSkin) : null;
+                if (!sourceRead)
+                {
+                    sourceSkin = pair.SourceModel != null ? ModelSkinReader.Read(pair.SourceModel, null, null) : null;
+                    sourceReading = sourceSkin != null ? GenitalParts.Read(pair.Correspondence.Source, sourceSkin) : null;
+                }
                 var (materials, skinTris) = GarmentGenitals(garment, pair.Correspondence.Source, sourceReading);
                 garmentSkinCollapsed |= skinTris.Count > 0;
                 if (skinTris.Count > 0 && !(replaceSkin && pair.Swaps))
@@ -180,9 +202,12 @@ internal static partial class BodyRetarget
                 foreach (var (part, tris) in skinTris)
                     (dropTris.TryGetValue(part, out var set) ? set : dropTris[part] = []).UnionWith(tris);
                 int genitalTris = targetReading.Genitals.Sum(g => g.Triangles.Count);
+                // A re-stitched bulge's note (see BulgeSwap.FitHole) and its own triangle count; the asset's otherwise.
+                if (why.Length > 0) log?.Invoke($"bulge: {slot} {why}");
+                int drawnTris = BulgeTriangles(made.TargetModel, made.Target) ?? TbseBulge.Shared?.Data.triangles.Length / 3 ?? 0;
                 log?.Invoke($"bulge: {slot} featureless — {genitalTris} genital triangles out (garment: "
                             + $"{materials.Sum(p => p.Triangles.Length / 3) + skinTris.Sum(kv => kv.Value.Count)}), "
-                            + $"bulge {TbseBulge.Shared?.Data.triangles.Length / 3 ?? 0} triangles drawn");
+                            + $"bulge {drawnTris} triangles drawn");
                 result[i] = featureless;
                 any = true;
             }
@@ -233,6 +258,21 @@ internal static partial class BodyRetarget
     }
 
     private static Vector3 PointOf(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
+
+    /// <summary>The bulge's triangles a featureless body draws (its shipped-bulge part's, collapsed spares aside); null when
+    /// none of its parts reads as the bulge.</summary>
+    private static int? BulgeTriangles(byte[]? model, ModelParts body)
+    {
+        if (model == null) return null;
+        var part = body.Parts.FirstOrDefault(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)
+                                                  && GenitalParts.IsShippedBulge(body, p));
+        if (part == null) return null;
+        int drawn = 0;
+        for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            if (part.Triangles[t] != part.Triangles[t + 1] && part.Triangles[t + 1] != part.Triangles[t + 2] && part.Triangles[t] != part.Triangles[t + 2])
+                drawn++;
+        return drawn;
+    }
 
     /// <summary>
     /// The cheap gate before any reading: the body has two untagged skin submeshes or more (its main skin and a piece beside

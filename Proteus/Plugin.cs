@@ -35,7 +35,7 @@ public sealed class Plugin : IDalamudPlugin
 #endif
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1505;
+    public const int BuildNumber = 1507;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window

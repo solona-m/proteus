@@ -63,9 +63,25 @@ public static partial class SecondSkinWriter
             private ushort keptSubs;
             private List<byte[]> subsForMesh = null!;
 
+            /// <summary>This mesh's switches by submesh (see <see cref="ContentGeometry.Switches"/>); null for none.</summary>
+            private readonly Dictionary<int, SubmeshSwitch>? switches;
+
+            /// <summary>Per submesh, the source ordinal of each triangle in <see cref="keptPerSub"/>, in step with it.</summary>
+            private List<int[]> keptOrdinals = null!;
+
             public MeshEmitter(ShellBuild build, Source src, int m, ushort materialIndex, float push, bool preserve, SecondSkinLayer? cov, bool mirrorUv1, IReadOnlySet<string>? hiddenAttrs, bool clearAttrs, CapUvPlan? capUv, bool dropVariantAttrs = false,
-                               (string Bone, float W)[]?[]? reskin = null, IReadOnlySet<string>? dropAttrs = null)
+                               (string Bone, float W)[]?[]? reskin = null, IReadOnlySet<string>? dropAttrs = null,
+                               IReadOnlyList<SubmeshSwitch>? switches = null)
             {
+                var mine = switches?.Where(w => w.Mesh == m).ToList();
+                if (mine is { Count: > 0 })
+                {
+                    // The passes that add, move or drop kept triangles after the loop (a coverage trim, the toe cap, the cap
+                    // weld) would leave the ordinals behind; switches are only ever given to geometry copied exactly.
+                    if (cov != null || capUv != null || !preserve)
+                        throw new InvalidOperationException("switches on a mesh emitted with coverage, a cap or a push");
+                    this.switches = mine.GroupBy(w => w.Submesh).ToDictionary(g => g.Key, g => g.Single());
+                }
                 this.reskin = reskin;
                 this.dropVariantAttrs = dropVariantAttrs;
                 this.dropAttrs = dropAttrs;
@@ -295,6 +311,7 @@ public static partial class SecondSkinWriter
 
                 // Keep a triangle if ANY texel under its UV footprint is visible (cov null = keep all).
                 keptPerSub = new List<ushort[]>();
+                keptOrdinals = new List<int[]>();
                 used = new bool[vc];
                 // Vertices the TOE-CAP cut exposed: the weld may drag these a long way, since the cap fills that space.
                 cutAway = new bool[vc];
@@ -314,12 +331,14 @@ public static partial class SecondSkinWriter
                     // The triangle loop below runs floor(sc/3) times, the same count CapTriangles walked.
                     if (capUv != null) cornerCursor += (int)(sc / 3) * 3;
                     keptPerSub.Add([]);
+                    keptOrdinals.Add([]);
                 }
                 for (int su = 0; su < srcSubCount; su++)
                 {
                     int ss = src.SubmeshStart + (srcSubIdx + su) * 16;
                     uint so = U32(ss), sc = U32(ss + 4);
                     var keep = new List<ushort>();
+                    var ordinals = new List<int>();
 
                     // Already drawn by something else — see PlanConnectorDrops. Kept empty so every index and bone table
                     // keeps its shape.
@@ -386,10 +405,12 @@ public static partial class SecondSkinWriter
                         if (capPlan != null && capPlan.IsDropped(a, b, c)) continue;
                         if (capOutPos != null && CapDegenerate(capSrcPos!, capOutPos, a, b, c)) continue;
                         keep.Add(a); keep.Add(b); keep.Add(c);
+                        ordinals.Add((int)(t / 3));
                         used[a] = used[b] = used[c] = true;
                         build.triOut++;
                     }
                     keptPerSub.Add(keep.ToArray());
+                    keptOrdinals.Add(ordinals.ToArray());
                 }
             }
 
@@ -521,31 +542,65 @@ public static partial class SecondSkinWriter
                     var keep = keptPerSub[su];
                     if (keep.Length == 0) continue;
                     int ss = src.SubmeshStart + (srcSubIdx + su) * 16;
-                    uint subStart = build.idxCursor;
-                    var idxBytes = new byte[keep.Length * 2];
-                    for (int k = 0; k < keep.Length; k++)
-                        BitConverter.TryWriteBytes(idxBytes.AsSpan(k * 2), remap[keep[k]]);
-                    build.iBuf.Write(idxBytes);
-                    build.idxCursor += (uint)keep.Length;
-
-                    var ns = new byte[16];
-                    W32(ns, 0, subStart);
-                    W32(ns, 4, (uint)keep.Length);
                     // Cleared when Proteus owns this geometry's visibility (ContentGeometry.OwnAttributes), or the HOST's
                     // IMC mask could cull it.
                     // With dropVariantAttrs, the variant bits go and every other tag stays (ContentGeometry.DropVariantAttributes).
                     uint mask = dropVariantAttrs ? U32(ss + 8) & ~VariantBits(src) : U32(ss + 8);
                     // With dropAttrs, the named tags go too (ContentGeometry.DropAttributes).
                     mask &= ~NamedBits(src, dropAttrs);
-                    W32(ns, 8, clearAttrs ? 0 : build.RemapAttrs(src, mask));
-                    // A window of its OWN, never one shared by every submesh of the mesh: of 275 game and author
-                    // models measured, every one gives each submesh its own and not one shares.
-                    W16(ns, 12, (ushort)build.submeshBoneMap.Count);
-                    W16(ns, 14, (ushort)window.Length);
-                    foreach (var bn in window) build.submeshBoneMap.Add(bn);
-                    subsForMesh.Add(ns);
-                    keptSubs++;
+                    uint outMask = clearAttrs ? 0 : build.RemapAttrs(src, mask);
+                    if (switches == null || !switches.TryGetValue(su, out var sw))
+                    {
+                        WriteSubmesh(keep, outMask, window);
+                        continue;
+                    }
+                    // Switched (ContentGeometry.Switches): the listed triangles leave the submesh and are written again once
+                    // per tag set, each copy tagged as the submesh is plus the set's names, on the same vertices.
+                    var ords = keptOrdinals[su];
+                    if (ords.Length * 3 != keep.Length)
+                        throw new InvalidOperationException($"mesh {m} submesh {su}: switched triangles out of step with their ordinals");
+                    var rest = new List<ushort>();
+                    var switched = new List<ushort>();
+                    for (int k = 0; k < ords.Length; k++)
+                        (sw.Ordinals == null || sw.Ordinals.Contains(ords[k]) ? switched : rest).AddRange(keep.AsSpan(k * 3, 3));
+                    if (rest.Count > 0) WriteSubmesh(rest.ToArray(), outMask, window);
+                    if (switched.Count == 0) continue;
+                    var copy = switched.ToArray();
+                    foreach (var set in sw.TagSets)
+                    {
+                        uint bits = 0;
+                        foreach (string name in set)
+                            bits |= build.attrIndex.TryGetValue(name, out int at)
+                                ? 1u << at
+                                : throw new InvalidOperationException($"switch tag {name} has no attribute slot");
+                        WriteSubmesh(copy, outMask | bits, window);
+                        build.switchCopies++;
+                        build.switchTriangles += copy.Length / 3;
+                    }
                 }
+            }
+
+            /// <summary>One output submesh: its indices, its tags and a bone window of its own.</summary>
+            private void WriteSubmesh(ushort[] keep, uint outMask, ushort[] window)
+            {
+                uint subStart = build.idxCursor;
+                var idxBytes = new byte[keep.Length * 2];
+                for (int k = 0; k < keep.Length; k++)
+                    BitConverter.TryWriteBytes(idxBytes.AsSpan(k * 2), remap[keep[k]]);
+                build.iBuf.Write(idxBytes);
+                build.idxCursor += (uint)keep.Length;
+
+                var ns = new byte[16];
+                W32(ns, 0, subStart);
+                W32(ns, 4, (uint)keep.Length);
+                W32(ns, 8, outMask);
+                // A window of its OWN, never one shared by every submesh of the mesh: of 275 game and author
+                // models measured, every one gives each submesh its own and not one shares.
+                W16(ns, 12, (ushort)build.submeshBoneMap.Count);
+                W16(ns, 14, (ushort)window.Length);
+                foreach (var bn in window) build.submeshBoneMap.Add(bn);
+                subsForMesh.Add(ns);
+                keptSubs++;
             }
 
             /// <summary>

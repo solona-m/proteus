@@ -267,6 +267,7 @@ public class FreezeSlotsTests
     [Fact]
     [Trait("Plan", "AC-studio-freeze-3")]
     [Trait("Plan", "EDGE-studio-freeze-66")]
+    [Trait("Plan", "EDGE-studio-freeze-71")]
     public void A_swap_right_after_a_write_back_is_learned_too()
     {
         var a = new FakeSlots();

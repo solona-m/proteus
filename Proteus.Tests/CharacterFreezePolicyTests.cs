@@ -46,6 +46,7 @@ public class CharacterFreezePolicyTests
 
     [Fact]
     [Trait("Plan", "EDGE-studio-freeze-64")]
+    [Trait("Plan", "EDGE-studio-freeze-71")]
     public void Quiet_only_when_nothing_changed()
     {
         Assert.True(CharacterFreezePolicy.Quiet(Standing(), Standing()));

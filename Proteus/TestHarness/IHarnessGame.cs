@@ -108,6 +108,10 @@ internal interface IHarnessGame
     /// <summary>Reload the mod, ask for a redraw, refresh an open Studio. Framework thread.</summary>
     AfterChangeResult AfterModChange(string modDir);
 
+    /// <summary>Have Penumbra install a mod package (.pmp) with its own importer, in the background (Success means it was
+    /// queued; the new folder shows in <see cref="Mods"/> once imported). Framework thread.</summary>
+    Penumbra.Api.Enums.PenumbraApiEc InstallMod(string pmpPath);
+
     /// <summary>Local-player redraws seen so far. Any thread.</summary>
     long RedrawCount { get; }
 
