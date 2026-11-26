@@ -160,6 +160,18 @@ public partial class GenitalSwitchesTests(ITestOutputHelper output)
     }
 
     [Fact]
+    [Trait("Plan", "AC-genital-switches-7")]
+    public void The_knob_tries_the_bulge_as_before()
+    {
+        // NoGenitalSwitches is today's build: the switched garment onto a body the bulge serves goes featureless again.
+        var body = SwBody();
+        var source = SwSource();
+        var (_, log, _) = Run(Switched(source), BulgeRefitTests.Pair(source, body), tuning: new BodyRetarget.Tuning(NoGenitalSwitches: true));
+        Assert.DoesNotContain(log, l => l.Contains("the garment switches its own penis", StringComparison.Ordinal));
+        Assert.Contains(log, l => l.StartsWith("bulge: _dwn featureless", StringComparison.Ordinal));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-genital-switches-4")]
     public void Kept_skin_refit_is_today()
     {
@@ -216,7 +228,10 @@ public partial class GenitalSwitchesTests(ITestOutputHelper output)
         var body = SwBody();
         var source = SwSource();
         var garment = Switched(source);
-        var (today, _, _) = Run(garment, BulgeRefitTests.Pair(source, body), tuning: new BodyRetarget.Tuning(NoGenitalSwitches: true));
+        // The fallback (AC-8 as the plan records it): the new body's penis without switches and without the bulge, which was
+        // already left out for a garment that switches its own penis — the refit with neither.
+        var (today, _, _) = Run(garment, BulgeRefitTests.Pair(source, body) with { Featureless = null },
+                                tuning: new BodyRetarget.Tuning(NoGenitalSwitches: true));
         foreach (var fault in new[] { BodyRetarget.SwitchFault.InFor, BodyRetarget.SwitchFault.ReadBack })
         {
             var (plan, _, warn) = Run(garment, BulgeRefitTests.Pair(source, body), tuning: new BodyRetarget.Tuning(GenitalSwitchFault: fault));

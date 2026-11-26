@@ -119,6 +119,40 @@ public partial class BulgeTransplantTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-genital-switches-51")]
+    public void Hole_read_off_the_skin()
+    {
+        // Three of the piece's rim points off the skin (as Flaccid L's): the piece's rim is no loop on the skin, so the exact
+        // match refuses it; the hole the skin leaves is the bulge's own 28 points, and the bulge closes it.
+        var bulge = TbseBulge.Shared!;
+        var body = SyntheticBulge.Body(liftRim: 3);
+        var (piece, parts) = PieceOf(body);
+        Assert.Null(BulgeSwap.MatchHole(parts, piece, bulge.Hole));
+        var loop = BulgeSwap.HoleLoop(parts, piece);
+        Assert.NotNull(loop);
+        Assert.Equal(bulge.Hole.Length, loop!.Count);
+        var swapped = BulgeSwap.Featureless(body, bulge, out var why);
+        Assert.True(swapped != null, why);
+        Assert.Null(swapped!.Restitched);
+        var after = ModelPartReader.Read(swapped.Model)!;
+        Assert.False(GenitalParts.Read(after, ModelSkinReader.Read(swapped.Model, null, null)!)!.Penis);
+        Assert.Equal('a', GenitalParts.ShippedBulgeBranch(after, after.Parts.Single(p => p.Island < 0 && p.Label == "1.2")));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-genital-switches-22")]
+    public void A_hole_that_is_no_loop_is_refused()
+    {
+        // The piece alone, no skin round it: there is no hole on the skin to read, so nothing is fitted.
+        var (piece, parts) = PieceOf(SyntheticBulge.Body());
+        var alone = new ModelParts { Positions = parts.Positions, Normals = parts.Normals, MeshSpans = parts.MeshSpans, Parts = [piece],
+                                     AttributeNames = parts.AttributeNames, Min = parts.Min, Max = parts.Max, ShatteredSubmeshes = parts.ShatteredSubmeshes };
+        Assert.Null(BulgeSwap.HoleLoop(alone, piece));
+        Assert.Null(BulgeSwap.FitHole(alone, piece, TbseBulge.Shared!, out var why));
+        Assert.Equal("no sculpt for this body", why);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-genital-switches-37")]
     public void Rim_count_outside_the_band_is_no_sculpt()
     {

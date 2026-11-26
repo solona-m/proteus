@@ -59,7 +59,7 @@ public class HarnessInstallModTests : IDisposable
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-genital-switches-42")]
+    [Trait("Plan", "EDGE-genital-switches-52")]
     public async Task An_install_already_listed_is_reused_never_doubled()
     {
         f.AddMod("Already There");
@@ -72,7 +72,7 @@ public class HarnessInstallModTests : IDisposable
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-genital-switches-43")]
+    [Trait("Plan", "EDGE-genital-switches-53")]
     public async Task An_unrelated_new_folder_is_never_taken_for_the_install()
     {
         // Penumbra's import fails quietly; the user installs something else meanwhile: that folder is new, but not ours.
@@ -85,7 +85,7 @@ public class HarnessInstallModTests : IDisposable
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-genital-switches-43")]
+    [Trait("Plan", "EDGE-genital-switches-47")]
     public async Task Ours_is_picked_out_among_other_new_folders()
     {
         f.Game.InstallAdds = [("Something Else", "Something Else"), ("Test Pack (2)", "Test Pack")];
@@ -96,32 +96,69 @@ public class HarnessInstallModTests : IDisposable
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-genital-switches-46")]
+    [Trait("Plan", "EDGE-genital-switches-44")]
     public async Task No_new_mod_within_the_wait_times_out_and_names_it()
     {
         var (_, body) = await f.Post("/actions/install-mod", Body(Pack()));
         var job = await f.WaitJob(body.GetProperty("job").GetString()!);
         Assert.Equal("install-timeout", job.GetProperty("error").GetProperty("code").GetString());
-        Assert.Contains("Test Pack", job.GetProperty("error").GetProperty("message").GetString());
+        string message = job.GetProperty("error").GetProperty("message").GetString()!;
+        Assert.Contains("Test Pack", message);
+        Assert.Contains("/state", message);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-genital-switches-46")]
+    public async Task A_folder_already_listed_is_never_reported_even_if_touched()
+    {
+        // An existing mod Penumbra drops from its list and lists again while the install runs (a reload): not new.
+        f.AddMod("Old Mod");
+        f.Game.ModFolders["Old Mod"] = "Old Mod";
+        f.Game.OnMods = n => { if (n == 2) f.Game.ModFolders.Remove("Old Mod"); else if (n == 3) f.Game.ModFolders["Old Mod"] = "Old Mod"; };
+        f.Game.InstallAdds = [("Test Pack", "Test Pack")];
+        f.Game.InstallAppearsAfter = 3;
+        var (_, body) = await f.Post("/actions/install-mod", Body(Pack()));
+        var job = await f.WaitJob(body.GetProperty("job").GetString()!);
+        Assert.Equal("done", job.GetProperty("state").GetString());
+        Assert.Equal("Test Pack", job.GetProperty("result").GetProperty("modDir").GetString());
+        Assert.DoesNotContain("Old Mod", job.GetProperty("result").GetProperty("candidates").EnumerateArray().Select(e => e.GetString()));
     }
 
     [Fact]
     [Trait("Plan", "EDGE-genital-switches-47")]
-    public async Task The_installers_refusal_is_said()
+    public async Task Two_new_folders_of_the_packs_name_are_ambiguous()
+    {
+        f.Game.InstallAdds = [("Test Pack", "Test Pack"), ("Test Pack (2)", "Test Pack")];
+        var (_, body) = await f.Post("/actions/install-mod", Body(Pack()));
+        var job = await f.WaitJob(body.GetProperty("job").GetString()!);
+        Assert.Equal("install-ambiguous", job.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(2, job.GetProperty("result").GetProperty("candidates").GetArrayLength());
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-genital-switches-43")]
+    public async Task The_installers_refusal_is_said_and_nothing_waits()
     {
         f.Game.InstallAnswer = PenumbraApiEc.InvalidArgument;
         var (status, body) = await f.Post("/actions/install-mod", Body(Pack()));
         Assert.Equal(500, status);
         Assert.Equal("install-failed", body.GetProperty("error").GetProperty("code").GetString());
-        f.Game.InstallAnswer = PenumbraApiEc.Success;
-        f.Game.PenumbraUp = false;
-        (status, body) = await f.Post("/actions/install-mod", Body(Pack()));
-        Assert.Equal(503, status);
-        Assert.Equal("penumbra-unavailable", body.GetProperty("error").GetProperty("code").GetString());
+        Assert.False(body.TryGetProperty("job", out _));   // no job, so no polling
+        Assert.Single(f.Game.Installs);
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-genital-switches-44")]
+    [Trait("Plan", "EDGE-genital-switches-42")]
+    public async Task Penumbra_unavailable_is_said_and_never_called()
+    {
+        f.Game.PenumbraUp = false;
+        var (status, body) = await f.Post("/actions/install-mod", Body(Pack()));
+        Assert.Equal(503, status);
+        Assert.Equal("penumbra-unavailable", body.GetProperty("error").GetProperty("code").GetString());
+        Assert.Empty(f.Game.Installs);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-genital-switches-41")]
     public async Task Install_validates_its_input()
     {

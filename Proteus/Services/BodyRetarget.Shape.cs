@@ -93,7 +93,9 @@ internal static partial class BodyRetarget
     /// <param name="NoKneeStandoff">Leave the coarse cloth behind the knees where the face settle left it, as builds
     /// before 1504 did (see <see cref="KneeFaces"/>).</param>
     /// <param name="NoGenitalSwitches">Put the new body's genitals in untagged whatever switches the garment's own carried,
-    /// as builds before genital-switches did (see <see cref="Bulge.GenitalSwitches"/>).</param>
+    /// and try the bulge on a garment that switches its own penis, as builds before genital-switches did (see
+    /// <see cref="Bulge.GenitalSwitches"/>). A fault in the switch path is not this: the bulge was already left out for such a
+    /// garment, so the fallback is the new body's penis without switches and without the bulge.</param>
     /// <param name="NoHoleRestitch">Fit the bulge only to a hole of its own point count, as builds before genital-switches
     /// did (see <c>BulgeSwap.FitHole</c>).</param>
     /// <param name="GenitalSwitchFault">Tests only: make the switched rebuild fail, to drive its fallback.</param>

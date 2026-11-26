@@ -117,7 +117,7 @@ public class GenitalSwitchesLocalTests(ITestOutputHelper output)
             var target = File.ReadAllBytes(LocalData.Path(need));
             var log = new List<string>();
             var plan = Refit(garment, genA, target, across, maps, log);
-            var today = Refit(garment, genA, target, across, maps, [], new BodyRetarget.Tuning(NoGenitalSwitches: true));
+            var today = Refit(garment, genA, target, across, maps, [], new BodyRetarget.Tuning(NoGenitalSwitches: true, NoBulge: true));   // the same refit, switches off: the bulge is left out of both
             foreach (var l in log.Where(l => l.StartsWith("genital switches:", StringComparison.Ordinal) || l.StartsWith("bulge:", StringComparison.Ordinal)
                                              || l.StartsWith("WARN", StringComparison.Ordinal)))
                 output.WriteLine($"{name}: {l}");
@@ -135,11 +135,16 @@ public class GenitalSwitchesLocalTests(ITestOutputHelper output)
             var t = ModelPartReader.Read(target)!;
             var reading = GenitalParts.Read(t, ModelSkinReader.Read(target, null, null)!)!;
             var plain = GenitalParts.PlainSkin(t, reading.Genitals);
-            var proud = reading.Genitals.Where(x => SecondSkinWriter.IsBodySkinMaterial(x.Part.Material))
+            // Every genital part of the new body (its smallclothes' genital piece, TBSE-X's _dwn_c, among them: EDGE-15).
+            var proud = reading.Genitals
                                .SelectMany(x => x.Triangles.SelectMany(i => new[] { x.Part.Triangles[i * 3], x.Part.Triangles[i * 3 + 1], x.Part.Triangles[i * 3 + 2] }))
                                .Distinct().Select(v => At(t, v)).Where(p => plain.Nearest(p, 0.02f) > 0.01f).ToList();
             var grid = new GenitalParts.PointGrid(proud, 0.01f);
-            int untagged = o!.Parts.Where(p => p.Island < 0 && p.AttributeMask == 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+            // Untagged output parts the refit brought in: skin, and any material the garment did not have (the body's
+            // smallclothes, under the garment's own name for their copy).
+            var garmentMaterials = g.Parts.Select(p => p.Material).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            int untagged = o!.Parts.Where(p => p.Island < 0 && p.AttributeMask == 0
+                                               && (SecondSkinWriter.IsBodySkinMaterial(p.Material) || !garmentMaterials.Contains(p.Material)))
                              .SelectMany(p => p.Triangles).Distinct().Count(v => grid.Nearest(At(o, v), 0.002f) < 0.001f);
             var swap = plan.Report.Swap!.Value;
             output.WriteLine($"{name}: {swap.SwitchCopies} copies, {swap.Switched} switched triangles, fringe {swap.SwitchFringe}; untagged genital "

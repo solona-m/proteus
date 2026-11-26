@@ -49,11 +49,13 @@ internal static class SyntheticBulge
     /// bone with <paramref name="domeBone"/> so the reading finds it.</param>
     /// <param name="piercing">A genital piercing: a body piercing material's mesh 2 mm off the dome's top.</param>
     /// <param name="basePubes">Pubic hair on the main skin round the hole, on the hips (never the penis's).</param>
+    /// <param name="liftRim">That many of the dome's rim points (spread round it) lifted 0.5 mm off the skin's hole, as TBSE-X
+    /// Flaccid L's piece has three rim points off its skin: the piece's rim is then no loop on the skin, the hole still is.</param>
     /// <param name="feet">A skin triangle 90 cm below the hole, so the body stands as tall as real legs (the crotch at about
     /// 80% of its height) rather than being the crotch alone.</param>
     internal static byte[] Body(IReadOnlyList<Vector3>? hole = null, float height = 0.06f, int rings = 5, string? domeBone = null,
                                 int outerRings = 0, string? ringBone = null, bool mergedDome = false, bool piercing = false,
-                                bool basePubes = false, bool feet = false)
+                                bool basePubes = false, bool feet = false, int liftRim = 0)
     {
         hole ??= TbseBulge.Shared!.Hole;
         int h = hole.Count;
@@ -99,12 +101,15 @@ internal static class SyntheticBulge
         // The dome: its own slots — the rim again at the hole's points, rings toward an apex `height` out.
         int domeStart = pos.Count;
         var domeW = new (string, float)[] { (domeBone ?? "j_kosi", 1f) };
+        var lifted = Enumerable.Range(0, liftRim).Select(k => k * h / Math.Max(liftRim, 1)).ToHashSet();
         for (int r = 0; r <= rings; r++)
         {
             float t = r / (float)(rings + 1);
-            foreach (var p in hole)
+            for (int i = 0; i < h; i++)
             {
-                pos.Add(centre + (p - centre) * (1f - t) + normal * (height * MathF.Sin(t * MathF.PI / 2)));
+                var p = hole[i];
+                pos.Add(centre + (p - centre) * (1f - t) + normal * (height * MathF.Sin(t * MathF.PI / 2))
+                        + (r == 0 && lifted.Contains(i) ? normal * 0.0005f : Vector3.Zero));
                 nrm.Add(normal);
                 w.Add(r == 0 ? ringW : domeW);
             }

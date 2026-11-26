@@ -161,7 +161,7 @@ internal static partial class BodyRetarget
                 XivLiveMesh.SkinnedMesh? sourceSkin = null;
                 GenitalParts.Reading? sourceReading = null;
                 bool sourceRead = false;
-                if (replaceSkin && pair.Swaps && GenitalSwitches.MayHaveSwitches(garment, pair.Correspondence.Source))
+                if (!Tuned.NoGenitalSwitches && replaceSkin && pair.Swaps && GenitalSwitches.MayHaveSwitches(garment, pair.Correspondence.Source))
                 {
                     sourceSkin = pair.SourceModel != null ? ModelSkinReader.Read(pair.SourceModel, null, null) : null;
                     sourceReading = sourceSkin != null ? GenitalParts.Read(pair.Correspondence.Source, sourceSkin) : null;

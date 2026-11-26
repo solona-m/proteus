@@ -416,6 +416,20 @@ internal static partial class BodyRetarget
         {
             if (!switchesOf.TryGetValue(s, out var sw)) return null;
             var specs = Bulge.GenitalSwitches.For(swappable[s].Target, sw.Skin, sw.Reading, sw.Sets, keep, out int fringe, out _);
+            // The switches name the new body's file's submeshes and triangle ordinals; the body drawn may be that file with its
+            // skin pulled back to the author's edge (PullToEdge), which moves positions only. Held to that: a body drawn with
+            // its submeshes changed fails here, and Plan rebuilds without switches.
+            if (!ReferenceEquals(bodyOf[s], swappable[s].TargetModel) && specs.Count > 0)
+            {
+                var drawn = ModelPartReader.Read(bodyOf[s]) ?? throw new InvalidOperationException("the body drawn cannot be read");
+                foreach (var spec in specs)
+                {
+                    var was = swappable[s].Target.Parts.First(p => p.Island < 0 && p.Mesh == spec.Mesh && p.Submesh == spec.Submesh);
+                    var now = drawn.Parts.FirstOrDefault(p => p.Island < 0 && p.Mesh == spec.Mesh && p.Submesh == spec.Submesh);
+                    if (now == null || !now.Ordinals.AsSpan().SequenceEqual(was.Ordinals))
+                        throw new InvalidOperationException("the new body's genitals are not where its file has them in the body drawn");
+                }
+            }
             switchFringe += fringe;
             return specs.Count > 0 ? specs : null;
         }
