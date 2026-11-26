@@ -31,7 +31,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
         ("GET", "/matcaps"), ("POST", "/actions/matcap-image"), ("POST", "/actions/matcap"), ("POST", "/actions/matcap-preview"),
         ("POST", "/actions/boot-rearm"), ("POST", "/actions/sidecar-edit"), ("GET", "/sidecar"), ("POST", "/actions/auto-refit"),
         ("POST", "/actions/output-lock"), ("POST", "/actions/shell-fault"), ("POST", "/actions/auto-redraw"),
-        ("POST", "/actions/emote"), ("POST", "/actions/camera"), ("POST", "/actions/posedump"),
+        ("POST", "/actions/emote"), ("POST", "/actions/camera"), ("POST", "/actions/posedump"), ("POST", "/actions/install-mod"),
     ];
 
     private IHarnessGame Game => jobs.Game;
@@ -85,6 +85,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                 "/actions/emote" => await EmoteAction(request),
                 "/actions/camera" => await CameraAction(request),
                 "/actions/posedump" => await PoseDumpAction(request),
+                "/actions/install-mod" => await InstallModAction(request),
                 _ => Job(path["/jobs/".Length..]),
             };
         }
@@ -710,6 +711,57 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
             _ = jobs.Start(job, j => RestoreJob.Run(jobs, j, selection, modRoot));
             started = true;
             return HarnessResponse.Json(202, new { job = job.Id, modDir = dir, state = "queued" });
+        }
+        finally
+        {
+            if (!started) jobs.Release();
+        }
+    }
+
+    /// <summary>
+    /// Install a local .pmp through Penumbra's own importer (see <see cref="InstallModJob"/>): the request is checked, the
+    /// mod list snapshotted and the install asked for on the framework thread; the job then waits for the new folder.
+    /// </summary>
+    private async Task<HarnessResponse> InstallModAction(HarnessRequest request)
+    {
+        var (body, bad) = JsonBody(request, "pmp");
+        if (bad != null) return bad;
+        string? pmp = OptionalString(body, "pmp", out bad);
+        if (bad != null) return bad;
+        // A local drive path only: a network share (UNC, //host/share) is never reached for.
+        if (pmp == null || !Path.IsPathFullyQualified(pmp) || !pmp.EndsWith(".pmp", StringComparison.OrdinalIgnoreCase)
+            || pmp.StartsWith(@"\\", StringComparison.Ordinal) || pmp.StartsWith("//", StringComparison.Ordinal)
+            || pmp.StartsWith(@"\/", StringComparison.Ordinal) || pmp.StartsWith(@"/\", StringComparison.Ordinal))
+            return HarnessResponse.Error(400, "invalid-field", "pmp must be an absolute local path to a .pmp file");
+        if (!File.Exists(pmp)) return HarnessResponse.Error(404, "not-found", "no such .pmp file");
+        // The name the package gives itself, read only: an install of it already listed is reused, never doubled, and the
+        // folder that appears must carry it.
+        if (InstallModJob.PackName(pmp) is not { } name || string.IsNullOrWhiteSpace(name))
+            return HarnessResponse.Error(400, "invalid-field", "the .pmp has no meta.json Name");
+
+        if (!jobs.TryReserve()) return HarnessResponse.Error(409, "busy", "a job is already running");
+        bool started = false;
+        try
+        {
+            var (before, existing, code) = await OnFramework(() =>
+            {
+                if (Game.Mods() is not { } mods) return ((IReadOnlySet<string>?)null, (string?)null, Penumbra.Api.Enums.PenumbraApiEc.SystemDisposed);
+                if (mods.Mods.FirstOrDefault(m => string.Equals(m.Value, name, StringComparison.Ordinal)).Key is { } have)
+                    return (null, have, Penumbra.Api.Enums.PenumbraApiEc.NothingChanged);
+                var snapshot = new HashSet<string>(mods.Mods.Keys, StringComparer.OrdinalIgnoreCase);
+                return (snapshot, null, Game.InstallMod(pmp));
+            });
+            if (existing != null)
+                return HarnessResponse.Json(409, new { error = new { code = "exists", message = $"Penumbra already lists \"{name}\"; nothing installed" }, modDir = existing });
+            if (before == null) return HarnessResponse.Error(503, "penumbra-unavailable", "Penumbra is not available");
+            log.Information("[Proteus] harness: install-mod asked Penumbra to install \"{0}\": {1}", name, code);
+            if (code != Penumbra.Api.Enums.PenumbraApiEc.Success)
+                return HarnessResponse.Error(500, "install-failed", $"Penumbra answered {code} to the install");
+            // No folder yet: the job names it once Penumbra lists it.
+            var job = new HarnessJob(HarnessJobs.NewJobId(), "install-mod", "");
+            _ = jobs.Start(job, j => InstallModJob.Run(jobs, j, new InstallModJob.Args(pmp, before, name)));
+            started = true;
+            return HarnessResponse.Json(202, new { job = job.Id, state = "queued" });
         }
         finally
         {

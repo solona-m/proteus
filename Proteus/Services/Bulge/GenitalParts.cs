@@ -61,10 +61,10 @@ internal static class GenitalParts
         => MathF.Abs(p.X - a.MidX) <= 0.08f * a.Scale && p.Y >= a.Y - 0.08f * a.Scale && p.Y <= a.Y + 0.16f * a.Scale
            && p.Z >= a.At.Z - 0.04f * a.Scale;
 
-    private static Vector3 At(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
+    internal static Vector3 At(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
 
     /// <summary>A vertex's weight on penis bones.</summary>
-    private static float OnPenis(XivLiveMesh.SkinnedMesh skin, int v)
+    internal static float OnPenis(XivLiveMesh.SkinnedMesh skin, int v)
     {
         float w = 0f;
         if (v < 0 || v >= skin.VertexCount) return 0f;
@@ -101,26 +101,39 @@ internal static class GenitalParts
         }
 
         // Protrusion of each candidate off the skin that is no candidate: a penis stands well off it.
-        var plainSkin = body.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)
-                                              && !candidates.Any(c => c.Part == p && c.Rule != "b"))
-                                  .SelectMany(p => p.Triangles).Distinct().Select(v => At(body, v)).ToList();
-        var grid = new PointGrid(plainSkin, 0.01f);
+        var grid = PlainSkin(body, candidates);
         var genitals = new List<Genital>();
         foreach (var c in candidates)
-        {
-            float protrusion = 0f;
-            foreach (int t in c.Triangles)
-                for (int k = 0; k < 3; k++)
-                {
-                    var p = At(body, c.Part.Triangles[t * 3 + k]);
-                    if (InWindow(p, anchor)) protrusion = MathF.Max(protrusion, grid.Nearest(p, 0.2f));
-                }
-            genitals.Add(c with { Protrusion = protrusion });
-        }
+            genitals.Add(c with { Protrusion = Protrusion(body, c.Triangles.SelectMany(t => new[] { c.Part.Triangles[t * 3],
+                                                                    c.Part.Triangles[t * 3 + 1], c.Part.Triangles[t * 3 + 2] }), grid, anchor) });
 
         bool penis = genitals.Any(g => g.Rule == "b" || g.Protrusion > PenisProtrusion
                                        || g.Part.Triangles.Distinct().Average(v => OnPenis(skin, v)) >= PenisWeight);
         return new Reading(anchor, socket, genitals, penis);
+    }
+
+    /// <summary>The body's skin that is no genital piece (a piece merged into the skin, rule b, stays in it): what a
+    /// penis stands off.</summary>
+    internal static PointGrid PlainSkin(ModelParts body, IReadOnlyList<Genital> genitals)
+        => new(body.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)
+                                     && !genitals.Any(c => c.Part == p && c.Rule != "b"))
+                         .SelectMany(p => p.Triangles).Distinct().Select(v => At(body, v)).ToList(), 2f * ProtrusionReach / 3f);
+
+    /// <summary>How far a protrusion is measured out to (<see cref="PenisProtrusion"/> and 1 mm): it is only ever compared
+    /// with that, and the search for a point standing far off scans every cell out to its reach.</summary>
+    internal const float ProtrusionReach = PenisProtrusion + 0.001f;
+
+    /// <summary>How far the farthest of <paramref name="verts"/> inside the crotch window stands off
+    /// <paramref name="plain"/>, up to <see cref="ProtrusionReach"/>; 0 when none is in the window.</summary>
+    internal static float Protrusion(ModelParts m, IEnumerable<int> verts, PointGrid plain, BodyRetarget.CrotchAnchor a)
+    {
+        float protrusion = 0f;
+        foreach (int v in verts)
+        {
+            var p = At(m, v);
+            if (InWindow(p, a)) protrusion = MathF.Max(protrusion, plain.Nearest(p, ProtrusionReach));
+        }
+        return protrusion;
     }
 
     /// <summary>The parts that are genital by rule (a), (b) or (c), about <paramref name="a"/>.</summary>
@@ -169,26 +182,74 @@ internal static class GenitalParts
         return found;
     }
 
-    /// <summary>Whether a skin part is the shipped TBSE bulge as <see cref="BulgeSwap"/> draws it: as many drawn vertices and
-    /// triangles as the bulge (the collapsed spares aside), every drawn vertex within <see cref="BulgeSwap.HoleFit"/> of one
-    /// of its points (it may be warped onto a body's hole by that much).</summary>
-    internal static bool IsShippedBulge(ModelParts body, ModelPart part)
+    /// <summary>Whether a skin part is the shipped TBSE bulge as <see cref="BulgeSwap"/> draws it (see
+    /// <see cref="ShippedBulgeBranch"/>).</summary>
+    internal static bool IsShippedBulge(ModelParts body, ModelPart part) => ShippedBulgeBranch(body, part) != null;
+
+    /// <summary>
+    /// How a skin part reads as the shipped TBSE bulge, or null when it does not:
+    /// <list type="bullet">
+    /// <item>'a', fitted exactly: as many drawn vertices and triangles as the bulge (the collapsed spares aside), every drawn
+    /// vertex within <see cref="BulgeSwap.HoleFit"/> of one of its points (it may be warped onto a body's hole by that much);</item>
+    /// <item>'b', re-stitched onto a hole of another point count (<see cref="BulgeSwap.FitHole"/>): not both counts the
+    /// bulge's, each within a hole's worth of it (a vertex for each point merged or added, two triangles); every drawn vertex
+    /// within <see cref="BulgeSwap.RestitchReach"/> of one of its points; and its open edge, welded by position, one loop of
+    /// a count the re-stitch takes and not the bulge's own (a re-stitch is only ever drawn on a hole of another count).</item>
+    /// </list>
+    /// </summary>
+    internal static char? ShippedBulgeBranch(ModelParts body, ModelPart part)
     {
-        if (TbseBulge.Shared is not { } bulge) return false;
+        if (TbseBulge.Shared is not { } bulge) return null;
         var drawn = new HashSet<int>();
+        var faces = new List<(int, int, int)>();
         for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
         {
             int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
             if (a == b || b == c || a == c) continue;
             drawn.Add(a); drawn.Add(b); drawn.Add(c);
+            faces.Add((a, b, c));
         }
-        int drawnTris = 0;
-        for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
-            if (part.Triangles[t] != part.Triangles[t + 1] && part.Triangles[t + 1] != part.Triangles[t + 2] && part.Triangles[t] != part.Triangles[t + 2])
-                drawnTris++;
-        if (drawn.Count != bulge.Positions.Length || drawnTris != bulge.Data.triangles.Length / 3) return false;
-        var grid = new PointGrid(bulge.Positions, 0.01f);
-        return drawn.All(v => grid.Nearest(At(body, v), BulgeSwap.HoleFit * 2) <= BulgeSwap.HoleFit);
+        int nv = bulge.Positions.Length, nt = bulge.Data.triangles.Length / 3, nh = bulge.Hole.Length;
+        if (drawn.Count == nv && faces.Count == nt)
+        {
+            var grid = new PointGrid(bulge.Positions, 0.01f);
+            return drawn.All(v => grid.Nearest(At(body, v), BulgeSwap.HoleFit * 2) <= BulgeSwap.HoleFit) ? 'a' : null;
+        }
+        if (Math.Abs(drawn.Count - nv) > nh || Math.Abs(faces.Count - nt) > 2 * nh) return null;
+        var near = new PointGrid(bulge.Positions, 0.01f);
+        if (!drawn.All(v => near.Nearest(At(body, v), BulgeSwap.RestitchReach * 2) <= BulgeSwap.RestitchReach)) return null;
+        // The open edge, welded by position as BulgeSwap.SelfCheck welds it: one loop, of a count the re-stitch takes.
+        (long, long, long) K(int v) { var p = At(body, v); return ((long)MathF.Round(p.X * 1e5f), (long)MathF.Round(p.Y * 1e5f), (long)MathF.Round(p.Z * 1e5f)); }
+        var use = new Dictionary<((long, long, long), (long, long, long)), int>();
+        foreach (var (a, b, c) in faces)
+            foreach (var (x, y) in new[] { (a, b), (b, c), (c, a) })
+            {
+                var kx = K(x); var ky = K(y);
+                var e = kx.CompareTo(ky) < 0 ? (kx, ky) : (ky, kx);
+                use[e] = use.GetValueOrDefault(e) + 1;
+            }
+        var adj = new Dictionary<(long, long, long), List<(long, long, long)>>();
+        foreach (var (e, _) in use.Where(kv => kv.Value == 1))
+        {
+            (adj.TryGetValue(e.Item1, out var l1) ? l1 : adj[e.Item1] = []).Add(e.Item2);
+            (adj.TryGetValue(e.Item2, out var l2) ? l2 : adj[e.Item2] = []).Add(e.Item1);
+        }
+        // A count the re-stitch takes, and never the bulge's own: a re-stitch only ever draws on a hole of another count, and a
+        // penis plugging the bulge's own hole (its rim the hole's 28 points) is no bulge however near it stands.
+        if (adj.Count == nh || adj.Count < BulgeSwap.RestitchBandMin || adj.Count > BulgeSwap.RestitchBandMax
+            || adj.Values.Any(l => l.Count != 2)) return null;
+        var start = adj.Keys.Min();
+        var prev = start;
+        var cur = adj[start][0];
+        int walked = 1;
+        while (cur != start && walked <= adj.Count)
+        {
+            var next = adj[cur][0] == prev ? adj[cur][1] : adj[cur][0];
+            prev = cur;
+            cur = next;
+            walked++;
+        }
+        return walked == adj.Count ? 'b' : null;
     }
 
     private static ModelParts WithoutParts(ModelParts model, IReadOnlySet<ModelPart> drop)
@@ -247,7 +308,7 @@ internal static class GenitalParts
     }
 
     /// <summary>Points bucketed in cubes, for the nearest distance to any of them.</summary>
-    private sealed class PointGrid(IReadOnlyList<Vector3> points, float cell)
+    internal sealed class PointGrid(IReadOnlyList<Vector3> points, float cell)
     {
         private readonly Dictionary<(int, int, int), List<Vector3>> cells = points
             .GroupBy(p => ((int)MathF.Floor(p.X / cell), (int)MathF.Floor(p.Y / cell), (int)MathF.Floor(p.Z / cell)))
@@ -262,12 +323,15 @@ internal static class GenitalParts
             for (int r = 0; r <= rings && best > (r - 1) * cell; r++)
                 for (int dx = -r; dx <= r; dx++)
                     for (int dy = -r; dy <= r; dy++)
-                        for (int dz = -r; dz <= r; dz++)
+                    {
+                        // Only the ring's own shell: every dz on the x or y faces, the two z faces elsewhere.
+                        bool side = Math.Abs(dx) == r || Math.Abs(dy) == r;
+                        for (int dz = side ? -r : -r; dz <= r; dz += side || r == 0 ? 1 : 2 * r)
                         {
-                            if (Math.Max(Math.Abs(dx), Math.Max(Math.Abs(dy), Math.Abs(dz))) != r) continue;
                             if (!cells.TryGetValue((c.Item1 + dx, c.Item2 + dy, c.Item3 + dz), out var list)) continue;
                             foreach (var q in list) best = MathF.Min(best, Vector3.Distance(p, q));
                         }
+                    }
             return MathF.Min(best, reach);
         }
     }

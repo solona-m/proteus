@@ -282,6 +282,7 @@ Where each row lives:
 | G8 | Glamourer.Api.dll | Glamourer.Api.IpcSubscribers.StateFinalized |
 | H1 | Glamourer.Api.dll | Glamourer.Api.IpcSubscribers.ApplyDesign |
 | H2 | Glamourer.Api.dll | Glamourer.Api.IpcSubscribers.ApplyState |
+| H3 | Penumbra.Api.dll | Penumbra.Api.IpcSubscribers.InstallMod |
 
 Rules for the test:
 - M1 **Namespace.** Look up each type by its exact full name above. Both assemblies also have a `….IpcSubscribers.Legacy` namespace that reuses some simple names with older labels; for example `Penumbra.Api.IpcSubscribers.Legacy.GetGameObjectResourcePaths` has label `Penumbra.GetGameObjectResourcePaths`. Never match by simple name alone.
@@ -304,6 +305,7 @@ Used only in `Proteus/TestHarness/GameHarnessAdapter.cs`, which is compiled only
 |---|---|---|---|---|---|
 | H1 Glamourer | `Glamourer.ApplyDesign` | Func | `Guid` designId, `int` objectIndex (harness passes 0), `uint` key (harness passes 0), `ulong` (ApplyFlag as ulong; harness passes ApplyFlagEx.DesignDefault = 7) | `int` (GlamourerApiEc) | GameHarnessAdapter: field `applyDesign` (constructor); `ApplyDesign` (returns null on Success, else the code's name, or "unavailable" on an exception) |
 | H2 Glamourer | `Glamourer.ApplyState` | Func | `object` state (the harness passes a JObject, a deep copy of a G3 state; the API also accepts a base64 string here), `int` objectIndex (0), `uint` key (0), `ulong` (ApplyFlag as ulong; harness passes Once, Equipment, Customization = 7) | `int` (GlamourerApiEc) | GameHarnessAdapter: field `applyState` (constructor); `RestoreGlamourerState` (same result mapping as H1) |
+| H3 Penumbra | `Penumbra.InstallMod.V5` | Func | `string` modFilePackagePath (an existing absolute .pmp the install route was given) | `int` (PenumbraApiEc) | GameHarnessAdapter: field `installMod` (constructor); `InstallMod` (framework thread; SystemDisposed while Penumbra is unavailable, UnknownError on an exception). Penumbra imports the package itself, in the background, into its own mod root: Success means queued |
 
 Rules:
 - R6.1 In H2 the first generic argument is System.Object, not JObject: the gate takes either form, and Dalamud passes whichever object it is given (A6).

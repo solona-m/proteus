@@ -318,9 +318,27 @@ internal sealed partial class FakeGame : IHarnessGame
     public Action<int>? OnMods { get; set; }
     private int modsCalls;
 
+    /// <summary>What Penumbra answers to an install, and the folders (dir, mod name) that appear in the mod list on the
+    /// <see cref="Mods"/> call after <see cref="InstallAppearsAfter"/> more calls.</summary>
+    public Penumbra.Api.Enums.PenumbraApiEc InstallAnswer { get; set; } = Penumbra.Api.Enums.PenumbraApiEc.Success;
+    public List<(string Dir, string Name)> InstallAdds { get; set; } = [];
+    public int InstallAppearsAfter { get; set; } = 1;
+    public List<string> Installs { get; } = [];
+    private int installCountdown = -1;
+
+    public Penumbra.Api.Enums.PenumbraApiEc InstallMod(string pmpPath)
+    {
+        Fw(nameof(InstallMod));
+        Installs.Add(pmpPath);
+        if (InstallAnswer == Penumbra.Api.Enums.PenumbraApiEc.Success) installCountdown = InstallAppearsAfter;
+        return InstallAnswer;
+    }
+
     public ModList? Mods()
     {
         Fw(nameof(Mods));
+        if (installCountdown > 0 && --installCountdown == 0)
+            foreach (var (dir, name) in InstallAdds) ModFolders[dir] = name;
         OnMods?.Invoke(++modsCalls);
         return PenumbraUp ? new ModList(new Dictionary<string, string>(ModFolders), ModsRoot) : null;
     }

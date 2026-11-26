@@ -706,6 +706,17 @@ public static partial class SecondSkinWriter
                 }
             // Counted over the same names the union was built from: a name dropped on purpose did not overflow.
             attrOverflow = boneSources.SelectMany(Wanted).Distinct(StringComparer.Ordinal).Count() - attrNames.Count;
+            // The names switched copies are tagged with (ContentGeometry.Switches), after every source's own: in a refit
+            // they are the host's, already here at their own indices. One left without a slot is never dropped — a copy
+            // missing a tag would draw more often than the garment's options say — so the build fails instead.
+            foreach (string name in layers.SelectMany(l => l.Geometry).SelectMany(g => g.Switches ?? [])
+                                          .SelectMany(s => s.TagSets).SelectMany(set => set))
+            {
+                if (attrIndex.ContainsKey(name)) continue;
+                if (attrNames.Count >= 32) throw new InvalidOperationException($"switch tag {name} has no attribute slot");
+                attrIndex[name] = attrNames.Count;
+                attrNames.Add(name);
+            }
         }
 
         private void AllocateOutput()
@@ -727,6 +738,8 @@ public static partial class SecondSkinWriter
             uvUnmapped = 0;   // vertices put through a UV-space conversion, and those it couldn't place
             uvRetangented = 0;             // meshes whose tangent frame was re-fitted to the converted UVs
             hiddenSubs = 0;                // submeshes dropped by a pack's own hide toggles
+            switchCopies = 0;              // submeshes written as copies under a switch set
+            switchTriangles = 0;           // and their triangles
             trimmedOut = 0;                // triangles dropped as a second layer over an overlapping part
 
             // The rim of the cap the current layer grafts, pushed to that layer's offset; null on a layer with no cap.
@@ -1031,6 +1044,8 @@ public static partial class SecondSkinWriter
                 reskinReport.Reskinned = reskinned;
                 reskinReport.Dropped = reskinDropped;
                 reskinReport.Trimmed = reskinTrimmed;
+                reskinReport.SwitchCopies = switchCopies;
+                reskinReport.SwitchTriangles = switchTriangles;
             }
             timings?.Serialize.Stop(tSerialize);
             return o;
@@ -1054,11 +1069,16 @@ public static partial class SecondSkinWriter
                       SecondSkinLayer? cov,
                       bool mirrorUv1 = false, IReadOnlySet<string>? hiddenAttrs = null,
                       bool clearAttrs = false, CapUvPlan? capUv = null, bool dropVariantAttrs = false,
-                      (string Bone, float W)[]?[]? reskin = null, IReadOnlySet<string>? dropAttrs = null)
+                      (string Bone, float W)[]?[]? reskin = null, IReadOnlySet<string>? dropAttrs = null,
+                      IReadOnlyList<SubmeshSwitch>? switches = null)
         {
             new MeshEmitter(this, src, m, materialIndex, push, preserve, cov, mirrorUv1, hiddenAttrs, clearAttrs, capUv,
-                            dropVariantAttrs, reskin, dropAttrs).Run();
+                            dropVariantAttrs, reskin, dropAttrs, switches).Run();
         }
+
+        /// <summary>Submeshes written as copies under a switch set (see <see cref="ContentGeometry.Switches"/>), and their
+        /// triangles, every copy counted.</summary>
+        private int switchCopies, switchTriangles;
 
         /// <summary>
         /// Take the hands' nail beds back out of the join cut: each is a small island bounded by the finger it lies

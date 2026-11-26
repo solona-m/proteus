@@ -49,6 +49,8 @@ internal sealed class HarnessJob(string id, string kind, string modDir)
     public void Running() => Set(j => j.state = "running");
     public void Progress(string p) => Set(j => j.progress = p);
     public void SetBackup(BackupRef b) => Set(j => j.backup = b);
+    /// <summary>The mod folder, once a job finds it (the install route: the folder Penumbra made).</summary>
+    public void SetModDir(string dir) => Set(j => j.ModDir = dir);
     public void SetResult(object r) => Set(j => j.result = r);
     public void SetRestored(RestoredInfo r) => Set(j => j.restored = r);
     public void SetFollow(bool observed, bool? followed) => Set(j => { j.redrawObserved = observed; j.autoRefitFollowed = followed; });
@@ -100,6 +102,11 @@ internal sealed record HarnessTimings(TimeSpan FrameworkStart, TimeSpan RedrawWa
     public TimeSpan PutBackConfirm { get; init; } = TimeSpan.FromSeconds(4);
     public TimeSpan EmoteInterval { get; init; } = TimeSpan.FromSeconds(3);
     public TimeSpan PoseDumpInterval { get; init; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>The install route's wait for Penumbra to list the mod it imported (<see cref="InstallModJob"/>): looked for
+    /// once a second for up to a minute. Tests set them short.</summary>
+    public TimeSpan InstallPoll { get; init; } = TimeSpan.FromSeconds(1);
+    public TimeSpan InstallWait { get; init; } = TimeSpan.FromSeconds(60);
 
     public static readonly HarnessTimings Default = new(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10),
                                                         TimeSpan.FromSeconds(5), TimeSpan.FromMilliseconds(500),

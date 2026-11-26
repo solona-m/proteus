@@ -220,6 +220,18 @@ for any equip. `/state` gains read-only `materials` (gear material game paths an
 files Penumbra resolves them to, scrubbed like `models`). A glass part's row cut is
 written by the same `matcap` job and backup as before.
 
+**Amendment (2026-11-25, install a local mod pack).** `install-mod` asks Penumbra to
+install a local `.pmp` with Penumbra's own importer (`Penumbra.InstallMod.V5`, a
+harness-only gate created in `GameHarnessAdapter`, docs/ipc-contract.md §6 H3; never
+in the shipped bridge or `IpcContract.Entries`), so QA can try a mod the owner has as
+a file but not installed (the owner allowed it, plan genital-switches). The threat: a
+local caller with the token can add a mod to the owner's Penumbra. Mitigations: the
+token; local builds only, compiled out of every CI build like the rest of the harness;
+the path must be an existing absolute `.pmp` with a `meta.json` `Name`; a mod of that
+name already listed is reused (409 `exists`), never installed twice; the new folder is
+found by that name in Penumbra's list, never by count alone; Proteus itself writes and
+deletes nothing under the mod root. The installed mod stays: it is never put back.
+
 ## Consequences
 
 Easier: QA can test the plugin in a running game unattended once the user turns

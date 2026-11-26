@@ -62,6 +62,7 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     private readonly PresetService presets;
     private readonly SidecarDiscoveryService discovery;
     private readonly GlamourerApplyDesign applyDesign;
+    private readonly PenumbraInstallMod installMod;
     private readonly GlamourerApplyState applyState;
     private readonly ICondition? condition;
     private readonly IDataManager? data;
@@ -110,6 +111,7 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
         this.presets = presets;
         // Created here, not in GlamourerBridge: apply and state-write IPC never ship outside a harness build.
         applyDesign = new GlamourerApplyDesign(pluginInterface);
+        installMod = new PenumbraInstallMod(pluginInterface);
         applyState = new GlamourerApplyState(pluginInterface);
         glamourer.LocalPlayerStateFinalized += OnStateFinalized;
         penumbra.LocalPlayerRedrawn += redraws.Note;
@@ -232,6 +234,13 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
 
     public ModList? Mods()
         => penumbra.GetAllMods() is { } mods && penumbra.GetModDirectory() is { } root ? new ModList(mods, root) : null;
+
+    public PenumbraApiEc InstallMod(string pmpPath)
+    {
+        if (!penumbra.IsAvailable) return PenumbraApiEc.SystemDisposed;
+        try { return installMod.Invoke(pmpPath); }
+        catch (Exception ex) { log.Error(ex, "[Proteus] harness: Penumbra's InstallMod failed"); return PenumbraApiEc.UnknownError; }
+    }
 
     public AutoRefitInfo AutoRefit() => new(autoRefit.Current, autoRefit.Activity());
 
