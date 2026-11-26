@@ -411,13 +411,12 @@ internal static partial class BodyRetarget
                                                                    switchesOf.Values.SelectMany(v => v.Sets).ToList());
             }
         }
-        int switchedTris = 0, switchFringe = 0;
+        int switchFringe = 0;
         IReadOnlyList<SubmeshSwitch>? SwitchesFor(int s, Func<string, bool> keep)
         {
             if (!switchesOf.TryGetValue(s, out var sw)) return null;
-            var specs = Bulge.GenitalSwitches.For(swappable[s].Target, sw.Skin, sw.Reading, sw.Sets, keep, out int fringe, out int tris);
+            var specs = Bulge.GenitalSwitches.For(swappable[s].Target, sw.Skin, sw.Reading, sw.Sets, keep, out int fringe, out _);
             switchFringe += fringe;
-            switchedTris += tris;
             return specs.Count > 0 ? specs : null;
         }
 
@@ -482,7 +481,7 @@ internal static partial class BodyRetarget
         report = new SwapReport(removed, keptTris, kept, SecondSkinWriter.Parse(garment).Shapes.Count,
                                 weights?.Reweighted ?? 0, weights?.Trimmed ?? 0, extras, reskinned.Dropped, posed,
                                 cutTris, reskinned.Trimmed, adorned, tuckedTris, tuckUnreadSlots, openedTris,
-                                smallclothesTris, seenIntoTris, spannedTris, switchedTris, switchFringe,
+                                smallclothesTris, seenIntoTris, spannedTris, reskinned.SwitchTriangles, switchFringe,
                                 reskinned.SwitchCopies, reskinned.SwitchCopies > 0 ? hostSetParts : 0);
         if (addedBySlot != null)
             foreach (int s in claimedBy)

@@ -575,6 +575,7 @@ public static partial class SecondSkinWriter
                                 : throw new InvalidOperationException($"switch tag {name} has no attribute slot");
                         WriteSubmesh(copy, outMask | bits, window);
                         build.switchCopies++;
+                        build.switchTriangles += copy.Length / 3;
                     }
                 }
             }

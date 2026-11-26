@@ -739,6 +739,7 @@ public static partial class SecondSkinWriter
             uvRetangented = 0;             // meshes whose tangent frame was re-fitted to the converted UVs
             hiddenSubs = 0;                // submeshes dropped by a pack's own hide toggles
             switchCopies = 0;              // submeshes written as copies under a switch set
+            switchTriangles = 0;           // and their triangles
             trimmedOut = 0;                // triangles dropped as a second layer over an overlapping part
 
             // The rim of the cap the current layer grafts, pushed to that layer's offset; null on a layer with no cap.
@@ -1044,6 +1045,7 @@ public static partial class SecondSkinWriter
                 reskinReport.Dropped = reskinDropped;
                 reskinReport.Trimmed = reskinTrimmed;
                 reskinReport.SwitchCopies = switchCopies;
+                reskinReport.SwitchTriangles = switchTriangles;
             }
             timings?.Serialize.Stop(tSerialize);
             return o;
@@ -1074,8 +1076,9 @@ public static partial class SecondSkinWriter
                             dropVariantAttrs, reskin, dropAttrs, switches).Run();
         }
 
-        /// <summary>Submeshes written as copies under a switch set (see <see cref="ContentGeometry.Switches"/>).</summary>
-        private int switchCopies;
+        /// <summary>Submeshes written as copies under a switch set (see <see cref="ContentGeometry.Switches"/>), and their
+        /// triangles, every copy counted.</summary>
+        private int switchCopies, switchTriangles;
 
         /// <summary>
         /// Take the hands' nail beds back out of the join cut: each is a small island bounded by the finger it lies

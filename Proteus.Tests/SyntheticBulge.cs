@@ -20,8 +20,13 @@ internal static class SyntheticBulge
     /// <param name="rings">Rings of the dome between rim and apex: 5 gives 169 vertices and 308 triangles, room for the bulge.</param>
     /// <param name="outerRings">Rings of main skin beyond the first two (each a little further out): a big body, so the bulge's
     /// own vertices are a small share of it (as on a real body, where a same-mesh landing reads as identity).</param>
+    /// <param name="mergedDome">The dome in the main skin's own submesh (TBSE-X's erect options, rule b): rig it to a penis
+    /// bone with <paramref name="domeBone"/> so the reading finds it.</param>
+    /// <param name="piercing">A genital piercing: a body piercing material's mesh 2 mm off the dome's top.</param>
+    /// <param name="basePubes">Pubic hair on the main skin round the hole, on the hips (never the penis's).</param>
     internal static byte[] Body(IReadOnlyList<Vector3>? hole = null, float height = 0.06f, int rings = 5, string? domeBone = null,
-                                int outerRings = 0, string? ringBone = null)
+                                int outerRings = 0, string? ringBone = null, bool mergedDome = false, bool piercing = false,
+                                bool basePubes = false)
     {
         hole ??= TbseBulge.Shared!.Hole;
         int h = hole.Count;
@@ -92,8 +97,29 @@ internal static class SyntheticBulge
             domeTris.AddRange([domeStart + rings * h + i, domeStart + rings * h + (i + 1) % h, apex]);
 
         var pa = pos.ToArray();
-        return SyntheticModel.BuildSurface([], new SyntheticModel.SurfaceMesh(Skin, pa, nrm.ToArray(),
-            pa.Select(p => new Vector2(p.X + 0.5f, p.Y)).ToArray(), w.ToArray(),
-            [(0u, skinTris.ToArray()), (0u, domeTris.ToArray())]));
+        var meshes = new List<SyntheticModel.SurfaceMesh>
+        {
+            new(Skin, pa, nrm.ToArray(), pa.Select(p => new Vector2(p.X + 0.5f, p.Y)).ToArray(), w.ToArray(),
+                mergedDome ? [(0u, [.. skinTris, .. domeTris])] : [(0u, skinTris.ToArray()), (0u, domeTris.ToArray())]),
+        };
+        // An extra mesh copying some triangles of this body's, each corner moved `off` along the normal.
+        SyntheticModel.SurfaceMesh Copy(string material, IEnumerable<int> tris, float off, (string, float)[] weights)
+        {
+            var map = new Dictionary<int, int>();
+            var p2 = new List<Vector3>();
+            var t2 = new List<int>();
+            foreach (int v in tris)
+            {
+                if (!map.TryGetValue(v, out int o)) { map[v] = o = p2.Count; p2.Add(pa[v] + normal * off); }
+                t2.Add(o);
+            }
+            return new SyntheticModel.SurfaceMesh(material, [.. p2], [.. p2.Select(_ => normal)], [.. p2.Select(p => new Vector2(p.X + 0.5f, p.Y))],
+                                                  [.. p2.Select(_ => weights)], [(0u, t2.ToArray())]);
+        }
+        if (piercing)   // the dome's last ring and apex
+            meshes.Add(Copy("/mt_c0101b0001_genitalpierce.mtrl", domeTris.Skip(domeTris.Count - 3 * h), 0.002f, domeW));
+        if (basePubes)  // the main skin's first ring out from the hole
+            meshes.Add(Copy("/mt_c0101b0001_bibopube.mtrl", skinTris.Take(6 * h), 0.001f, bodyW));
+        return SyntheticModel.BuildSurface([], [.. meshes]);
     }
 }

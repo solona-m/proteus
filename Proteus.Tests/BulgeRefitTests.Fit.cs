@@ -29,10 +29,20 @@ public partial class BulgeRefitTests
     /// <param name="cap">With <paramref name="switchedSkin"/>, a fan over the hole in the same mesh, tagged so (Beach Briefs'
     /// <c>0.7</c>: shown only with the briefs).</param>
     /// <param name="clothTags">Tags on the cloth's submesh (Beach Briefs' briefs, <c>atr_dv_g</c>).</param>
+    /// <param name="untaggedPenis">With <paramref name="switchedSkin"/>, one more copy of the dome, untagged.</param>
+    /// <param name="mergedUntaggedPenis">With <paramref name="switchedSkin"/>, the dome in the main skin's own submesh too.</param>
+    /// <param name="switchedPastWindow">With <paramref name="switchedSkin"/>, one more tagged piece: the dome and the main skin.</param>
+    /// <param name="liftedSwitched">With <paramref name="switchedSkin"/>, the main skin of that mesh lifted 2 cm off the body (less
+    /// than a penis stands, more than a laid skin misses by)
+    /// (a mesh the rebuild keeps).</param>
+    /// <param name="kneeSkin">A skin mesh tagged <c>atr_hiz</c> 60 cm below the crotch, and no other skin.</param>
+    /// <param name="setTaggedPiercing">A body piercing over the dome, tagged so.</param>
     internal static byte[] Garment(byte[] body, Func<ModelPart, bool> keep, bool genitalMaterial = false, bool pouch = false,
                                    bool genitalSkin = false, Func<Vector3, bool>? where = null, bool pubes = false,
                                    bool liftedSkin = false, IReadOnlyList<string[]>? switchedSkin = null, string[]? cap = null,
-                                   string[]? clothTags = null)
+                                   string[]? clothTags = null, bool untaggedPenis = false, bool mergedUntaggedPenis = false,
+                                   bool switchedPastWindow = false, bool liftedSwitched = false, bool kneeSkin = false,
+                                   string[]? setTaggedPiercing = null)
     {
         var parts = ModelPartReader.Read(body)!;
         var skin = ModelSkinReader.Read(body, null, null)!;
@@ -85,12 +95,14 @@ public partial class BulgeRefitTests
         where = null;   // the extras sit over the dome whatever the cloth's band
         if (switchedSkin != null)
         {
-            var main = MeshOf(SyntheticBulge.Skin, parts.Parts.Where(p => p.Island < 0 && p.Label == "1.1"), 0f);
+            var main = MeshOf(SyntheticBulge.Skin, parts.Parts.Where(p => p.Island < 0 && p.Label == "1.1"), liftedSwitched ? 0.02f : 0f);
             var domeMesh = MeshOf(SyntheticBulge.Skin, dome, 0f);
             int n0 = main.Positions.Length;
             var domeTris = domeMesh.Submeshes[0].Triangles.Select(i => i + n0).ToArray();
-            var subs = new List<(uint, int[])> { (0u, main.Submeshes[0].Triangles) };
+            var subs = new List<(uint, int[])> { (0u, mergedUntaggedPenis ? [.. main.Submeshes[0].Triangles, .. domeTris] : main.Submeshes[0].Triangles) };
             foreach (var set in switchedSkin) subs.Add((Mask(set), domeTris));
+            if (untaggedPenis) subs.Add((0u, domeTris));
+            if (switchedPastWindow) subs.Add((Mask(["atr_dv_h", "atr_dv_j"]), [.. domeTris, .. main.Submeshes[0].Triangles]));
             if (cap != null)
             {
                 // The hole's points in the dome mesh, in the hole's order, fanned from the first.
@@ -117,6 +129,17 @@ public partial class BulgeRefitTests
                 [(0u, [.. on.Submeshes[0].Triangles, .. off.Submeshes[0].Triangles.Select(i => i + n0)])]));
         }
         if (pubes) meshes.Add(MeshOf("/mt_c0101b0001_bibopube.mtrl", dome, 0.003f));
+        if (kneeSkin)
+        {
+            var knee = MeshOf(SyntheticBulge.Skin, parts.Parts.Where(p => p.Island < 0 && p.Label == "1.1"), 0f);
+            meshes.Add(knee with { Positions = [.. knee.Positions.Select(p => p - new Vector3(0, 0.6f, 0))],
+                                   Submeshes = [(Mask(["atr_hiz"]), knee.Submeshes[0].Triangles)] });
+        }
+        if (setTaggedPiercing != null)
+        {
+            var ring = MeshOf("/mt_c0101b0001_genitalpierce.mtrl", dome, 0.002f);
+            meshes.Add(ring with { Submeshes = [(Mask(setTaggedPiercing), ring.Submeshes[0].Triangles)] });
+        }
         return SyntheticModel.BuildSurface(names, [.. meshes]);
     }
 

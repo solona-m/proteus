@@ -25,15 +25,20 @@ public partial class GenitalSwitchesTests(ITestOutputHelper output)
     private static string Hash(byte[] b) => Convert.ToHexString(SHA256.HashData(b));
 
     private static (BodyRetarget.Planned Plan, List<string> Log, List<string> Warn) Run(byte[] garment, BodyRetarget.SlotPair pair,
-        bool replaceSkin = true, BodyRetarget.Tuning? tuning = null)
+        bool replaceSkin = true, BodyRetarget.Tuning? tuning = null, bool carryPiercings = false, bool acrossBodies = false)
     {
         var log = new List<string>();
         var warn = new List<string>();
         var planned = BodyRetarget.WithTuning(tuning ?? new BodyRetarget.Tuning(), () =>
             BodyRetarget.Plan(ModelPartReader.Read(garment)!, (byte[])garment.Clone(), [pair], "_dwn", replaceSkin: replaceSkin,
-                              acrossBodies: false, log: log.Add, warn: warn.Add));
+                              acrossBodies: acrossBodies, log: log.Add, warn: warn.Add, carryPiercings: carryPiercings));
         return (planned, log, warn);
     }
+
+    /// <summary>Today's output for the same refit: the switches off.</summary>
+    private static string Today(byte[] garment, BodyRetarget.SlotPair pair, bool carryPiercings = false, bool acrossBodies = false)
+        => Hash(Run(garment, pair, tuning: new BodyRetarget.Tuning(NoGenitalSwitches: true), carryPiercings: carryPiercings,
+                    acrossBodies: acrossBodies).Plan.Model);
 
     /// <summary>
     /// Today's outputs, captured before any change (Phase 0.1): the refits the switches and the re-stitch must leave
@@ -211,7 +216,7 @@ public partial class GenitalSwitchesTests(ITestOutputHelper output)
         }
     }
 
-    internal const string TodayNoGenitals ="A5D216059317C2378E137B0BE271F73065FD949E0359A44B2CF3A1617EB1FEF1";
+    internal const string TodayNoGenitals = "A5D216059317C2378E137B0BE271F73065FD949E0359A44B2CF3A1617EB1FEF1";
     internal const string TodayUntagged = "B543A152C9AE58040BB922EBA25A68294C2B81D1DFF508A366DE0A9BEAFC3E5F";
     internal const string TodaySwitchedOntoFlat = "108732396AA4BFF93EDEB503E9E2E79787FBC147352457D4F9F45A6B8159E0E6";
     internal const string TodayFeatureless = "672922D9282023FC742ED0ABC0113768A7C85329A5A89E5C4B8AB200475A023F";

@@ -140,6 +140,9 @@ public static partial class SecondSkinWriter
 
         /// <summary>Submeshes written as copies under a switch set (<see cref="ContentGeometry.Switches"/>), every copy counted.</summary>
         public int SwitchCopies { get; internal set; }
+
+        /// <summary>The triangles of those copies, every copy counted.</summary>
+        public int SwitchTriangles { get; internal set; }
     }
 
     /// <summary>
