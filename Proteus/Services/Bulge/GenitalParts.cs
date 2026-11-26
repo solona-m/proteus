@@ -117,17 +117,21 @@ internal static class GenitalParts
     internal static PointGrid PlainSkin(ModelParts body, IReadOnlyList<Genital> genitals)
         => new(body.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)
                                      && !genitals.Any(c => c.Part == p && c.Rule != "b"))
-                         .SelectMany(p => p.Triangles).Distinct().Select(v => At(body, v)).ToList(), 0.01f);
+                         .SelectMany(p => p.Triangles).Distinct().Select(v => At(body, v)).ToList(), 2f * ProtrusionReach / 3f);
+
+    /// <summary>How far a protrusion is measured out to (<see cref="PenisProtrusion"/> and 1 mm): it is only ever compared
+    /// with that, and the search for a point standing far off scans every cell out to its reach.</summary>
+    internal const float ProtrusionReach = PenisProtrusion + 0.001f;
 
     /// <summary>How far the farthest of <paramref name="verts"/> inside the crotch window stands off
-    /// <paramref name="plain"/> (searched out to 20 cm); 0 when none is in the window.</summary>
+    /// <paramref name="plain"/>, up to <see cref="ProtrusionReach"/>; 0 when none is in the window.</summary>
     internal static float Protrusion(ModelParts m, IEnumerable<int> verts, PointGrid plain, BodyRetarget.CrotchAnchor a)
     {
         float protrusion = 0f;
         foreach (int v in verts)
         {
             var p = At(m, v);
-            if (InWindow(p, a)) protrusion = MathF.Max(protrusion, plain.Nearest(p, 0.2f));
+            if (InWindow(p, a)) protrusion = MathF.Max(protrusion, plain.Nearest(p, ProtrusionReach));
         }
         return protrusion;
     }
@@ -271,12 +275,15 @@ internal static class GenitalParts
             for (int r = 0; r <= rings && best > (r - 1) * cell; r++)
                 for (int dx = -r; dx <= r; dx++)
                     for (int dy = -r; dy <= r; dy++)
-                        for (int dz = -r; dz <= r; dz++)
+                    {
+                        // Only the ring's own shell: every dz on the x or y faces, the two z faces elsewhere.
+                        bool side = Math.Abs(dx) == r || Math.Abs(dy) == r;
+                        for (int dz = side ? -r : -r; dz <= r; dz += side || r == 0 ? 1 : 2 * r)
                         {
-                            if (Math.Max(Math.Abs(dx), Math.Max(Math.Abs(dy), Math.Abs(dz))) != r) continue;
                             if (!cells.TryGetValue((c.Item1 + dx, c.Item2 + dy, c.Item3 + dz), out var list)) continue;
                             foreach (var q in list) best = MathF.Min(best, Vector3.Distance(p, q));
                         }
+                    }
             return MathF.Min(best, reach);
         }
     }

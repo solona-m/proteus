@@ -53,8 +53,13 @@ internal static class GenitalSwitches
         {
             var verts = part.Triangles.Distinct().ToArray();
             if (verts.Length == 0) continue;
-            float window = verts.Count(v => GenitalParts.InWindow(GenitalParts.At(garment, v), source.Anchor)) / (float)verts.Length;
-            float protrusion = GenitalParts.Protrusion(garment, verts, plain, source.Anchor);
+            // Each vertex measured once: how far it stands off the plain skin, for those in the window (NaN outside it).
+            var off = new Dictionary<int, float>(verts.Length);
+            foreach (int v in verts)
+                off[v] = GenitalParts.InWindow(GenitalParts.At(garment, v), source.Anchor)
+                    ? GenitalParts.Protrusion(garment, [v], plain, source.Anchor) : float.NaN;
+            float window = off.Values.Count(d => !float.IsNaN(d)) / (float)verts.Length;
+            float protrusion = off.Values.Where(d => !float.IsNaN(d)).DefaultIfEmpty(0f).Max();
             float onPenis = garmentSkin == null ? 0f : verts.Average(v => GenitalParts.OnPenis(garmentSkin, v));
             bool penis = protrusion > GenitalParts.PenisProtrusion || onPenis >= GenitalParts.PenisWeight;
             bool wholly = window >= GenitalParts.WhollyInWindow;
@@ -65,9 +70,9 @@ internal static class GenitalSwitches
                 // off the body as a penis does (not the hole's rim, which lies on it).
                 for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
                 {
-                    int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
-                    if (!new[] { a, b, c }.All(v => GenitalParts.InWindow(GenitalParts.At(garment, v), source.Anchor))) continue;
-                    if (GenitalParts.Protrusion(garment, [a, b, c], plain, source.Anchor) > GenitalParts.PenisProtrusion)
+                    float da = off[part.Triangles[t]], db = off[part.Triangles[t + 1]], dc = off[part.Triangles[t + 2]];
+                    if (float.IsNaN(da) || float.IsNaN(db) || float.IsNaN(dc)) continue;
+                    if (MathF.Max(da, MathF.Max(db, dc)) > GenitalParts.PenisProtrusion)
                     { why = "the garment draws an untagged penis"; return null; }
                 }
                 continue;
