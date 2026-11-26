@@ -9,7 +9,7 @@ namespace Proteus.Tests;
 
 /// <summary>The featureless body (plan featureless-bulge, path A): the owner's bulge drawn in place of a TBSE-like body's
 /// genital piece, on synthetic bodies built round the shipped bulge's hole.</summary>
-public class BulgeTransplantTests
+public partial class BulgeTransplantTests
 {
     private static Vector3 At(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
 

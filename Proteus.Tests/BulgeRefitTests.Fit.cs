@@ -167,7 +167,8 @@ public partial class BulgeRefitTests
                 foreach (int slot in swapped.SlotOf) { uvF[slot * 2] = f.Positions[slot * 3] + 0.5f; uvF[slot * 2 + 1] = f.Positions[slot * 3 + 1]; }
                 if (!BodyCorrespondence.TryBuild(sourceParts, BodyRetarget.Uv(source), f, uvF, "_dwn", out var fc, out string r, out _, null, true, true))
                     return (null, r);
-                return (plain with { Correspondence = fc!, Target = f, TargetModel = swapped.Model }, "");
+                // As BuildPair's factory: a re-stitched bulge's note comes back as the reason, logged beside its line.
+                return (plain with { Correspondence = fc!, Target = f, TargetModel = swapped.Model }, swapped.Restitched ?? "");
             }),
         };
     }

@@ -15,6 +15,31 @@ internal static class SyntheticBulge
 {
     internal const string Skin = "/mt_c0101b0001_b.mtrl";
 
+    /// <summary>
+    /// The bulge's hole cut to <paramref name="points"/> points as a body cut otherwise would be: fewer by leaving out the
+    /// far end of its shortest edges, more by splitting its longest at their midpoints (the hole's edges run 2–23 mm). Each
+    /// point is then moved <paramref name="jitter"/> in a fixed pattern (alternately in and out of the hole, never at
+    /// random), and the whole <paramref name="forward"/> along +z.
+    /// </summary>
+    internal static Vector3[] ResampledHole(int points, float jitter = 0f, float forward = 0f)
+    {
+        var hole = TbseBulge.Shared!.Hole.ToList();
+        int n = hole.Count;
+        var centre = hole.Aggregate(Vector3.Zero, (s, p) => s + p) / n;
+        float Edge(List<Vector3> l, int i) => Vector3.Distance(l[i], l[(i + 1) % l.Count]);
+        while (hole.Count > points)
+        {
+            int i = Enumerable.Range(0, hole.Count).MinBy(k => Edge(hole, k));
+            hole.RemoveAt((i + 1) % hole.Count);
+        }
+        while (hole.Count < points)
+        {
+            int i = Enumerable.Range(0, hole.Count).MaxBy(k => Edge(hole, k));
+            hole.Insert(i + 1, (hole[i] + hole[(i + 1) % hole.Count]) / 2);
+        }
+        return hole.Select((p, k) => p + Vector3.Normalize(p - centre) * (k % 2 == 0 ? jitter : -jitter) + new Vector3(0, 0, forward)).ToArray();
+    }
+
     /// <summary>The body; <paramref name="hole"/> null uses the bulge's own, anything else a hole the bulge does not fit.</summary>
     /// <param name="height">How far the dome stands off the hole (6 cm: a penis).</param>
     /// <param name="rings">Rings of the dome between rim and apex: 5 gives 169 vertices and 308 triangles, room for the bulge.</param>
