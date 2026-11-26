@@ -279,6 +279,27 @@ public class FreezeSlotsTests
         Assert.False(s.Observe(a, false, 5200));
         Assert.True(s.IsLearned(0, 8062));
 
+        // An action's release closes a Hold window still open: a change 200 ms after the hold is then an action.
+        var c = new FakeSlots();
+        var u = new FreezeSlots();
+        c.Start(0, 8063);
+        u.Observe(c, true, 0);
+        u.Hold(c, entry: true, nowMs: 1000);
+        u.Release(c);              // at 1100, no time: the user's own action let go
+        c.Start(0, 9001);
+        Assert.True(u.Observe(c, false, 1200));
+        Assert.False(u.IsLearned(0, 9001));
+
+        // Inside the window but not quiet (an emote, a move on the same update): never learned as idle.
+        var d = new FakeSlots();
+        var v = new FreezeSlots();
+        d.Start(0, 8063);
+        v.Observe(d, true, 0);
+        v.Hold(d, entry: true, nowMs: 1000);
+        d.Start(0, 9002);
+        Assert.True(v.Observe(d, true, 1100, quiet: false));
+        Assert.False(v.IsLearned(0, 9002));
+
         // A release with no time given (an action's release: CharacterFreeze passes none) opens no window.
         var b = new FakeSlots();
         var t = new FreezeSlots();

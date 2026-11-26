@@ -38,6 +38,26 @@ public class CharacterFreezePolicyTests
         var p = new CharacterFreezePolicy();
         Assert.Equal(FreezeState.Frozen, p.Step(In(0, Standing())));
         Assert.Equal(Chara, p.Target);
+        // Still freezable while frozen: that is when the idle timelines are learned with a tool in use.
+        Assert.True(p.Freezable);
+        Assert.Equal(FreezeState.Frozen, p.Step(In(16, Standing())));
+        Assert.True(p.Freezable);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-studio-freeze-64")]
+    public void Quiet_only_when_nothing_changed()
+    {
+        Assert.True(CharacterFreezePolicy.Quiet(Standing(), Standing()));
+        Assert.False(CharacterFreezePolicy.Quiet(null, Standing()));
+        Assert.False(CharacterFreezePolicy.Quiet(Standing(), null));
+        Assert.False(CharacterFreezePolicy.Quiet(Standing(), Standing(emote: 4)));
+        Assert.False(CharacterFreezePolicy.Quiet(Standing(), Standing(mode: 3)));
+        Assert.False(CharacterFreezePolicy.Quiet(Standing(), Standing(param: 1)));
+        Assert.False(CharacterFreezePolicy.Quiet(Standing(), Standing(hash: 5)));
+        Assert.False(CharacterFreezePolicy.Quiet(Standing(), Standing(new Vector3(0.01f, 0, 0))));
+        Assert.False(CharacterFreezePolicy.Quiet(Standing(), Standing(rot: 0.1f)));
+        Assert.True(CharacterFreezePolicy.Quiet(Standing(rot: 3.1415f), Standing(rot: -3.1415f)));
     }
 
     [Fact]

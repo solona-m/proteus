@@ -95,6 +95,7 @@ internal sealed unsafe class CharacterFreeze : IDisposable
     private bool lastFreezable;
     private volatile bool holding;  // a ledger is held; read by Dispose before it waits on the framework thread
     private FreezeOwner owner;      // whose idle timelines the ledger has learned
+    private FreezeSample? lastSample;   // the previous update's sample of the same character, for Quiet
     private nint ledgerOwner;       // the character the held slots belong to
 
     private int unknownReleases, writes, restores, restoreSkipped;
@@ -119,6 +120,8 @@ internal sealed unsafe class CharacterFreeze : IDisposable
         {
             log.Warning(e, "character freeze unavailable: animation slot functions not found");
             resolved = false;
+            framework.Update += OnUpdate;
+            return;
         }
         if (!resolved) log.Warning("character freeze unavailable: animation slot functions not found");
         framework.Update += OnUpdate;
@@ -166,6 +169,7 @@ internal sealed unsafe class CharacterFreeze : IDisposable
             var chara = Player();
             FreezeSample? sample = null;
             BusyReason = null;
+            if (chara == null) lastSample = null;
             bool busy = false, unknown = false, slot0Learned = false;
             if (chara != null)
             {
@@ -181,10 +185,14 @@ internal sealed unsafe class CharacterFreeze : IDisposable
                 if (change == OwnerChange.Reset) slots.ForgetLearned();
                 else if (change == OwnerChange.Reseed) slots.Reseed();
 
-                if (Available)
+                bool quiet = change == OwnerChange.None && CharacterFreezePolicy.Quiet(lastSample, sample);
+                lastSample = sample;
+                // Read the slots only while something is drawn: mid-redraw or loading there is nothing to freeze.
+                if (Available && chara->GameObject.DrawObject != null)
                 {
                     var access = new SequencerSlots(&chara->Timeline.TimelineSequencer);
-                    unknown = slots.Observe(access, lastFreezable, now);
+                    // Observe first: it learns the game's own idle re-pick, which UnknownRestart must then not count.
+                    unknown = slots.Observe(access, lastFreezable, now, quiet);
                     if (ledgerOwner == (nint)chara && slots.UnknownRestart(access)) unknown = true;
                     slot0Learned = slots.IsLearned(0, access.GetTimeline(0));
                 }

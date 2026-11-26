@@ -257,6 +257,15 @@ internal sealed class CharacterFreezePolicy
         return FreezeState.Frozen;
     }
 
+    /// <summary>
+    /// Nothing changed between two samples of the same character: no move or turn, and the same mode, mode param, emote
+    /// id and timeline hash. An idle re-pick after Proteus's own write is learned only on such a quiet update.
+    /// </summary>
+    public static bool Quiet(FreezeSample? before, FreezeSample? now)
+        => before is { } p && now is { } s
+        && Vector3.Distance(s.Position, p.Position) <= MoveEpsilonM && MathF.Abs(WrapAngle(s.Rotation - p.Rotation)) <= TurnEpsilonRad
+        && s.Mode == p.Mode && s.ModeParam == p.ModeParam && s.EmoteId == p.EmoteId && s.TimelineHash == p.TimelineHash;
+
     private static float WrapAngle(float a)
     {
         while (a > MathF.PI) a -= 2 * MathF.PI;

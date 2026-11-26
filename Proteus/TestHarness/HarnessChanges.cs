@@ -227,6 +227,22 @@ internal sealed partial class HarnessChanges(IHarnessGame game, SessionNames nam
     /// </summary>
     internal OutputPutBack PutBackOutput()
     {
+        // The memory-only overrides first: nothing below that can throw ever leaves one set.
+        string redraw = "none";
+        if (autoRedrawOverride != null)
+        {
+            game.SetAutoRedrawOverride(null);
+            autoRedrawOverride = null;
+            redraw = "cleared";
+        }
+        // The Studio freeze override: memory only, cleared here whether or not a Studio session is left.
+        string freeze = "none";
+        if (freezeOverride != null)
+        {
+            game.SetFreezeOverride(null);
+            freezeOverride = null;
+            freeze = "cleared";
+        }
         try
         {
             var (released, _, moveFault) = OutputLocks.ReleaseAll("put back");
@@ -237,27 +253,12 @@ internal sealed partial class HarnessChanges(IHarnessGame game, SessionNames nam
                 fault = "cleared";
             }
             shellFaultArmed = false;
-            string redraw = "none";
-            if (autoRedrawOverride != null)
-            {
-                game.SetAutoRedrawOverride(null);
-                autoRedrawOverride = null;
-                redraw = "cleared";
-            }
-            // The Studio freeze override: memory only, cleared here whether or not a Studio session is left.
-            string freeze = "none";
-            if (freezeOverride != null)
-            {
-                game.SetFreezeOverride(null);
-                freezeOverride = null;
-                freeze = "cleared";
-            }
             return new OutputPutBack(released.Select(r => new UndoEntry(r.File, r.Result)).ToList(), moveFault, fault, redraw, freeze);
         }
         catch (Exception ex)
         {
             log?.Warning(ex, "[Proteus] test harness: putting back the output routes failed");
-            return OutputPutBack.Nothing;
+            return OutputPutBack.Nothing with { AutoRedraw = redraw, Freeze = freeze };
         }
     }
 

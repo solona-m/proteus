@@ -199,7 +199,11 @@ public class CharacterFreezeWiringTests
     public void Observe_gets_the_last_freezable_and_learning_resets_on_owner_change()
     {
         var update = OnUpdate;
-        Assert.Contains("slots.Observe(access, lastFreezable, now)", update);
+        Assert.Contains("slots.Observe(access, lastFreezable, now, quiet)", update);
+        // Observe learns the game's own idle re-pick first; UnknownRestart after it must not count that as an action.
+        Assert.True(At(update, "slots.Observe(") < At(update, "slots.UnknownRestart("));
+        Assert.Contains("bool quiet = change == OwnerChange.None && CharacterFreezePolicy.Quiet(lastSample, sample);", update);
+        Assert.Contains("if (Available && chara->GameObject.DrawObject != null)", update);
         Assert.Contains("lastFreezable = policy.Freezable;", update);
         Assert.Contains("FreezeOwner.Next(owner, (nint)chara, RaceSexOf(chara), (nint)chara->GameObject.DrawObject)", update);
         Assert.Contains("if (change == OwnerChange.Reset) slots.ForgetLearned();", update);

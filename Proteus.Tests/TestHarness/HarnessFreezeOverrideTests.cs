@@ -40,6 +40,21 @@ public class HarnessFreezeOverrideTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-studio-freeze-9")]
+    [Trait("Plan", "EDGE-studio-freeze-37")]
+    public void PutBackOutput_clears_the_overrides_before_anything_that_can_throw()
+    {
+        var src = System.IO.File.ReadAllText(System.IO.Path.Combine(ProteusDir(), "TestHarness", "HarnessChanges.cs"));
+        int method = src.IndexOf("internal OutputPutBack PutBackOutput()", StringComparison.Ordinal);
+        int clear = src.IndexOf("game.SetFreezeOverride(null);", method, StringComparison.Ordinal);
+        int tryAt = src.IndexOf("try", method, StringComparison.Ordinal);
+        Assert.True(method >= 0 && clear > method && clear < tryAt, "the freeze override is cleared before the try");
+    }
+
+    private static string ProteusDir([System.Runtime.CompilerServices.CallerFilePath] string here = "")
+        => System.IO.Path.Combine(System.IO.Path.GetDirectoryName(here)!, "..", "..", "Proteus");
+
+    [Fact]
     [Trait("Plan", "EDGE-studio-freeze-41")]
     public void PutBackOutput_clears_the_two_overrides_independently()
     {

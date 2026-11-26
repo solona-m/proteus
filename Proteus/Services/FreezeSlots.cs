@@ -77,7 +77,9 @@ internal sealed class FreezeSlots
     /// answer true when a slot's timeline changed to one not learned while it plays — an action starting. The first
     /// call after <see cref="ForgetLearned"/> or <see cref="Reseed"/> only records where each slot stands.
     /// </summary>
-    public bool Observe<T>(T a, bool freezable, long nowMs) where T : ISlotAccess
+    /// <param name="quiet">Nothing else changed on the character this update (mode, emote, other timelines, position):
+    /// only then is a change inside <see cref="InducedSwapMs"/> the game's own idle re-pick rather than the user's action.</param>
+    public bool Observe<T>(T a, bool freezable, long nowMs, bool quiet = true) where T : ISlotAccess
     {
         int n = Slots(a);
         bool unknown = false;
@@ -86,8 +88,9 @@ internal sealed class FreezeSlots
             ushort id = a.GetTimeline(s);
             if (seeded && id != prev[s] && id != 0)
             {
-                // Right after our own write: the game re-picking its idle — learned, not an action.
-                if (nowMs - lastWrite[s] <= InducedSwapMs) Learn(s, id);
+                // Right after our own write, with nothing else happening: the game re-picking its idle — learned, not
+                // an action. With anything else changing it is treated like any other start.
+                if (quiet && nowMs - lastWrite[s] <= InducedSwapMs) Learn(s, id);
                 else if (a.GetSpeed(s) != 0 && !IsLearned(s, id)) unknown = true;
             }
             if (freezable && id != 0)
