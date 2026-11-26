@@ -134,7 +134,7 @@ public sealed partial class PartsPanel : IStudioHarness
                 FreezeState.Settling => "settling", _ => "frozen",
             },
             busyReason = s.BusyReason, available = s.Available, faulted = s.Faulted,
-            slotSpeeds = s.SlotSpeeds,
+            slotSpeeds = s.SlotSpeeds, slotTimelines = s.SlotTimelines,
             held = s.Held.Select(h => new { slot = h.Slot, speed = h.Speed, timeline = (int)h.Timeline }).ToList(),
             learned = s.Learned.OrderBy(kv => kv.Key)
                                .Select(kv => new { slot = kv.Key, timelines = kv.Value.Order().Select(t => (int)t).ToList() }).ToList(),

@@ -392,7 +392,8 @@ idle camera counts as one, `WatchingCutscene`). A parasol does not stop it.
   head's look-at and physics bones still move).
 - **Let go:** model view, Toggle parts, closing the window or put-back → `idle` within
   about 300 ms, `lastRelease.restored ≥ 1`, the bones moving again.
-- **Override:** `studio-set {"freeze":false}` → `state == "off"`; put-back answers
+- **Override:** `studio-set {"freeze":false}`, then re-read `GET /studio` (the set's own
+  answer is taken before the freeze's next update) → `state == "off"`; put-back answers
   `output.freeze.result == "cleared"`.
 - `learned` lists the timelines learned as idle (slot 0 within ~10 s of standing still);
   `unknownReleases` counts freezes let go for an action. A one-shot emote cannot be

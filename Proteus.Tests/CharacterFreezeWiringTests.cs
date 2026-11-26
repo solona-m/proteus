@@ -110,6 +110,7 @@ public class CharacterFreezeWiringTests
     [Fact]
     [Trait("Plan", "AC-studio-freeze-3")]
     [Trait("Plan", "EDGE-studio-freeze-19")]
+    [Trait("Plan", "EDGE-studio-freeze-20")]
     public void Plugin_disposes_freeze_after_harness_and_has_no_hook_service()
     {
         var plugin = Source("Plugin.cs");
@@ -143,8 +144,12 @@ public class CharacterFreezeWiringTests
     public void Update_fault_releases_once_then_latches_unavailable()
     {
         var update = OnUpdate;
+        // Latched: nothing more runs (and logs) once faulted.
+        Assert.StartsWith("if (faulted) return;", Regex.Replace(update.TrimStart('{'), @"//[^\n]*", "").TrimStart());
         var c = update[update.LastIndexOf("catch (Exception", StringComparison.Ordinal)..];
-        Assert.Contains("try { ReleaseNow(); } catch", c);
+        Assert.Contains("try { ReleaseNow(); }", c);
+        // A release that throws is never retried through the game: the ledger is dropped.
+        Assert.True(At(c, "try { ReleaseNow(); }") < At(c, "slots.Drop();"));
         Assert.Contains("faulted = true;", c);
         Assert.Contains("Available, unknown, slot0Learned", update);   // Ready is Available, which includes !faulted
     }
@@ -166,11 +171,15 @@ public class CharacterFreezeWiringTests
 
     [Fact]
     [Trait("Plan", "AC-studio-freeze-3")]
+    [Trait("Plan", "EDGE-studio-freeze-20")]
     [Trait("Plan", "EDGE-studio-freeze-34")]
     public void Dispose_releases_on_thread_or_through_a_bounded_hop()
     {
         var dispose = Body(Freeze, "public void Dispose(");
         Assert.True(At(dispose, "framework.Update -= OnUpdate;") < At(dispose, "try"));
+        // No look at the ledger off the framework thread: an update in flight may still be holding.
+        Assert.DoesNotContain("Held", dispose);
+        Assert.Contains("if (slots.Held.Count == 0)", Body(Freeze, "private void ReleaseNow("));
         Assert.Contains("if (framework.IsInFrameworkUpdateThread) ReleaseNow();", dispose);
         Assert.Contains("framework.RunOnFrameworkThread(ReleaseNow).Wait(TimeSpan.FromMilliseconds(500))", dispose);
         Assert.Contains("catch (Exception", dispose);
@@ -199,7 +208,9 @@ public class CharacterFreezeWiringTests
         Assert.True(At(update, "slots.UnknownRestart(access)") < step);
         Assert.True(At(update, "slot0Learned = slots.IsLearned(0,") < step);
         Assert.Contains("bool entry = before != FreezeState.Frozen;", update);
-        Assert.Contains("slots.Hold(new SequencerSlots(&chara->Timeline.TimelineSequencer), entry)", update);
+        Assert.Contains("slots.Hold(new SequencerSlots(&chara->Timeline.TimelineSequencer), entry, nowMs: now)", update);
+        Assert.Contains("slots.Release(new SequencerSlots(&chara->Timeline.TimelineSequencer), Environment.TickCount64)",
+                        Body(Freeze, "private void ReleaseNow("));
     }
 
     [Fact]

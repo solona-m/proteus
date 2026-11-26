@@ -319,7 +319,8 @@ public class CharacterFreezePolicyTests
         Assert.Equal(FreezeState.Settling, p.Step(In(15000, Standing(hash: 333))));
         Assert.True(p.AwaitingIdleTimeline);
 
-        // With no standing-idle hash yet (never frozen), there is no wait at all.
+        // With no standing-idle hash recorded yet (never frozen), a missing hash counts as matched: with slot 0 on a
+        // learned idle the armed wait holds nothing back.
         var q = new CharacterFreezePolicy();
         Assert.Equal(FreezeState.Idle, q.Step(In(0, Standing(), want: -1000)));
         Assert.Equal(FreezeState.Idle, q.Step(In(100, Standing(hash: 222), want: -1000)));
@@ -386,6 +387,37 @@ public class CharacterFreezePolicyTests
         Assert.Equal(FreezeState.Idle, q.Step(In(100, Standing(), want: -1000, unknown: true)));
         Assert.Equal(FreezeState.Settling, q.Step(In(500, Standing())));
         Assert.Equal(FreezeState.Frozen, q.Step(In(2600, Standing())));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-studio-freeze-4")]
+    [Trait("Plan", "EDGE-studio-freeze-49")]
+    [Trait("Plan", "EDGE-studio-freeze-55")]
+    public void Unknown_start_arms_the_long_timeline_wait()
+    {
+        // The shipped default: an action starting in slot 0 (nothing else changed) waits for a learned idle.
+        var p = FrozenAtZero();
+        Assert.Equal(FreezeState.Settling, p.Step(In(1000, Standing(), unknown: true, slot0: false)));
+        Assert.Equal(FreezeState.Settling, p.Step(In(4000, Standing(), slot0: false)));
+        Assert.True(p.AwaitingIdleTimeline);
+        Assert.Equal(FreezeState.Frozen, p.Step(In(5000, Standing())));
+
+        // Never back on a learned idle: frozen at the cap.
+        var q = FrozenAtZero();
+        q.Step(In(1000, Standing(), unknown: true, slot0: false));
+        Assert.Equal(FreezeState.Settling, q.Step(In(10999, Standing(), slot0: false)));
+        Assert.Equal(FreezeState.Frozen, q.Step(In(11000, Standing(), slot0: false)));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-studio-freeze-3")]
+    [Trait("Plan", "EDGE-studio-freeze-20")]
+    public void A_new_instance_starts_unfrozen()
+    {
+        // A reloaded plugin's freeze: no want yet (CharacterFreeze starts its last want long ago), so Idle, never Frozen.
+        var p = new CharacterFreezePolicy();
+        Assert.Equal(FreezeState.Idle, p.Step(In(5000, Standing(), want: long.MinValue / 2, updates: int.MaxValue)));
+        Assert.Equal((nint)0, p.Target);
     }
 
     [Fact]

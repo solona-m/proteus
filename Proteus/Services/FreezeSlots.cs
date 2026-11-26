@@ -40,11 +40,19 @@ internal sealed class FreezeSlots
     /// <summary>How long an id must stay in its slot, while a freeze could hold, before it counts as idle.</summary>
     public const long LearnSustainMs = CharacterFreezePolicy.LongTimelineCapMs;
 
+    /// <summary>
+    /// A slot's timeline changing this soon after Proteus itself wrote its speed is the game re-picking its idle variant
+    /// (seen in game: zeroing the base slot swaps 8063↔8062 within ~0.1 s; so does a write-back). Learned at once, never an
+    /// action. Entry only follows a settle, so a user's own action inside this window is not expected.
+    /// </summary>
+    public const long InducedSwapMs = 500;
+
     private readonly bool rezeroIdleSwaps;
     private readonly Dictionary<int, HashSet<ushort>> learned = [];
     private readonly ushort[] prev = new ushort[SlotCount];
     private readonly (ushort Id, long Since)?[] candidate = new (ushort, long)?[SlotCount];
     private readonly List<(int Slot, float Speed, ushort Timeline)> held = [];
+    private readonly long[] lastWrite = Enumerable.Repeat(long.MinValue / 2, SlotCount).ToArray();
     private bool seeded;
 
     public FreezeSlots() : this(RezeroIdleSwaps) { }
@@ -76,7 +84,12 @@ internal sealed class FreezeSlots
         for (int s = 0; s < n; s++)
         {
             ushort id = a.GetTimeline(s);
-            if (seeded && id != prev[s] && id != 0 && a.GetSpeed(s) != 0 && !IsLearned(s, id)) unknown = true;
+            if (seeded && id != prev[s] && id != 0)
+            {
+                // Right after our own write: the game re-picking its idle — learned, not an action.
+                if (nowMs - lastWrite[s] <= InducedSwapMs) Learn(s, id);
+                else if (a.GetSpeed(s) != 0 && !IsLearned(s, id)) unknown = true;
+            }
             if (freezable && id != 0)
             {
                 if (candidate[s] is { } c && c.Id == id)
@@ -110,8 +123,9 @@ internal sealed class FreezeSlots
         {
             if (a.GetSpeed(s) == 0) continue;
             ushort id = a.GetTimeline(s);
-            if (id != 0 && !IsLearned(s, id)) return true;
-            if (!rezeroIdleSwaps && held.Any(h => h.Slot == s)) return true;
+            if (id == 0) continue;
+            // Under the fallback nothing is stopped again, so anything playing (held or not) lets go.
+            if (!IsLearned(s, id) || !rezeroIdleSwaps) return true;
         }
         return false;
     }
@@ -136,7 +150,8 @@ internal sealed class FreezeSlots
     /// timeline (an idle variant swapped in). A slot with no timeline (id 0) plays nothing and is never touched — the
     /// game keeps an empty slot's speed at 1 by itself (seen in game). Returns how many slots were written.
     /// </summary>
-    public int Hold<T>(T a, bool entry) where T : ISlotAccess
+    /// <param name="nowMs">When, for <see cref="InducedSwapMs"/>.</param>
+    public int Hold<T>(T a, bool entry, long nowMs = long.MinValue / 2) where T : ISlotAccess
     {
         int n = Slots(a), writes = 0;
         for (int s = 0; s < n; s++)
@@ -147,6 +162,7 @@ internal sealed class FreezeSlots
             if (id == 0) continue;
             if (!entry && !(rezeroIdleSwaps && IsLearned(s, id))) continue;
             a.SetSpeed(s, 0);
+            lastWrite[s] = nowMs;
             writes++;
             int at = held.FindIndex(h => h.Slot == s);
             if (at >= 0) held[at] = (s, speed, id);
@@ -159,7 +175,7 @@ internal sealed class FreezeSlots
     /// Let go: every held slot still at 0 gets its speed back, whatever plays in it now; a slot the game has set going
     /// again is left alone. The ledger is cleared; what was learned stays.
     /// </summary>
-    public (int Restored, int Skipped) Release<T>(T a) where T : ISlotAccess
+    public (int Restored, int Skipped) Release<T>(T a, long nowMs = long.MinValue / 2) where T : ISlotAccess
     {
         int restored = 0, skipped = 0;
         foreach (var (slot, speed, _) in held)
@@ -167,6 +183,7 @@ internal sealed class FreezeSlots
             if (RestoreValue(a.GetSpeed(slot), speed) is { } v)
             {
                 a.SetSpeed(slot, v);
+                lastWrite[slot] = nowMs;
                 restored++;
             }
             else skipped++;

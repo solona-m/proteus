@@ -236,6 +236,66 @@ public class FreezeSlotsTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-studio-freeze-1")]
+    [Trait("Plan", "EDGE-studio-freeze-64")]
+    public void A_swap_right_after_our_own_write_is_the_games_idle_and_is_learned()
+    {
+        var a = new FakeSlots();
+        var s = new FreezeSlots();
+        a.Start(0, 8063);
+        s.Observe(a, true, 0);
+        s.Hold(a, entry: true, nowMs: 1000);
+        a.Start(0, 8062);                       // the game re-picks its idle 100 ms after the zeroing
+        Assert.False(s.Observe(a, true, 1100));
+        Assert.True(s.IsLearned(0, 8062));
+        Assert.False(s.UnknownRestart(a));
+        Assert.Equal(1, s.Hold(a, entry: false, nowMs: 1100));   // and it is stopped again
+
+        // 501 ms after the write: an action, not the game's idle.
+        var b = new FakeSlots();
+        var t = new FreezeSlots();
+        b.Start(0, 8063);
+        t.Observe(b, true, 0);
+        t.Hold(b, entry: true, nowMs: 1000);
+        b.Start(0, 9001);
+        Assert.True(t.Observe(b, true, 1501));
+        Assert.False(t.IsLearned(0, 9001));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-studio-freeze-3")]
+    [Trait("Plan", "EDGE-studio-freeze-65")]
+    public void A_swap_right_after_a_write_back_is_learned_too()
+    {
+        var a = new FakeSlots();
+        var s = new FreezeSlots();
+        a.Start(0, 8063);
+        s.Observe(a, true, 0);
+        s.Hold(a, entry: true, nowMs: 0);
+        s.Release(a, nowMs: 5000);
+        a.Start(0, 8062);
+        Assert.False(s.Observe(a, false, 5200));
+        Assert.True(s.IsLearned(0, 8062));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-studio-freeze-35")]
+    public void RezeroIdleSwaps_false_lets_go_for_a_learned_timeline_in_a_slot_not_held()
+    {
+        var a = new FakeSlots();
+        var s = new FreezeSlots(rezeroIdleSwaps: false);
+        a.Start(0, 8062);
+        a.Start(2, 700);
+        Stand(s, a, 0, 10000);
+        Assert.True(s.IsLearned(2, 700));
+        a.Speed[2] = 0;             // slot 2 idle at entry
+        s.Hold(a, entry: true);
+        Assert.DoesNotContain(s.Held, h => h.Slot == 2);
+        a.Start(2, 700);            // a learned timeline starts in it
+        Assert.True(s.UnknownRestart(a));
+    }
+
+    [Fact]
     [Trait("Plan", "AC-studio-freeze-3")]
     [Trait("Plan", "EDGE-studio-freeze-15")]
     [Trait("Plan", "EDGE-studio-freeze-29")]

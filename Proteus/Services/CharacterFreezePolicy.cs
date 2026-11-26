@@ -236,8 +236,8 @@ internal sealed class CharacterFreezePolicy
         var s = i.Sample.GetValueOrDefault();
         bool busy = i.Busy || !AllowedMode(s.Mode);
         // A missing idle hash counts as matched; slot 0 must still be on a learned idle timeline.
-        bool waiting = present && i.NowMs < awaitIdleUntil
-                    && ((idleHash is { } idle && s.TimelineHash != idle) || !i.Slot0Learned);
+        bool notIdle = (idleHash is { } idle && s.TimelineHash != idle) || !i.Slot0Learned;
+        bool waiting = present && i.NowMs < awaitIdleUntil && notIdle;
         Freezable = present && !i.GPosing && !busy && i.NowMs >= settleUntil && !waiting;
 
         if (!i.Ready) return FreezeState.Unavailable;

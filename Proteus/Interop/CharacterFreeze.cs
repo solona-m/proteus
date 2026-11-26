@@ -13,7 +13,7 @@ namespace Proteus.Interop;
 
 /// <summary>What the harness reads about the freeze (dev builds only; the pose is added by the harness itself).</summary>
 internal readonly record struct FreezeSnapshot(
-    FreezeState State, string? BusyReason, bool Available, bool Faulted, float[]? SlotSpeeds,
+    FreezeState State, string? BusyReason, bool Available, bool Faulted, float[]? SlotSpeeds, int[]? SlotTimelines,
     IReadOnlyList<(int Slot, float Speed, ushort Timeline)> Held, IReadOnlyDictionary<int, IReadOnlySet<ushort>> Learned,
     int UnknownReleases, int Writes, int Restores, int RestoreSkipped, (int Restored, int Skipped)? LastRelease,
     bool AwaitingIdleTimeline, ushort[][]? TimelineIds, int DrawObjectChanged, int Releases);
@@ -154,6 +154,8 @@ internal sealed unsafe class CharacterFreeze : IDisposable
 
     private void OnUpdate(IFramework _)
     {
+        // A failed update latched the freeze off: nothing more runs, so nothing logs again.
+        if (faulted) return;
         try
         {
             if (updatesSinceWant < int.MaxValue) updatesSinceWant++;
@@ -196,7 +198,7 @@ internal sealed unsafe class CharacterFreeze : IDisposable
                 if (ledgerOwner != 0 && ledgerOwner != (nint)chara) slots.Drop();
                 bool entry = before != FreezeState.Frozen;
                 if (entry) writes = restores = restoreSkipped = 0;
-                writes += slots.Hold(new SequencerSlots(&chara->Timeline.TimelineSequencer), entry);
+                writes += slots.Hold(new SequencerSlots(&chara->Timeline.TimelineSequencer), entry, nowMs: now);
                 ledgerOwner = (nint)chara;
             }
             else if (slots.Held.Count > 0)
@@ -209,7 +211,12 @@ internal sealed unsafe class CharacterFreeze : IDisposable
         catch (Exception e)
         {
             // One attempt to hand the slots back, then the freeze is off for the session.
-            try { ReleaseNow(); } catch { /* the slots self-heal on their next timeline */ }
+            try { ReleaseNow(); }
+            catch
+            {
+                slots.Drop();   // never retried through the game: the slots self-heal on their next timeline
+                ledgerOwner = 0;
+            }
             faulted = true;
             log.Error(e, "character freeze: an update failed; freezing is off for this session");
         }
@@ -221,10 +228,15 @@ internal sealed unsafe class CharacterFreeze : IDisposable
     /// </summary>
     private void ReleaseNow()
     {
+        if (slots.Held.Count == 0)
+        {
+            ledgerOwner = 0;
+            return;
+        }
         var chara = Player();
         if (chara != null && (nint)chara == ledgerOwner && !BetweenAreas)
         {
-            var r = slots.Release(new SequencerSlots(&chara->Timeline.TimelineSequencer));
+            var r = slots.Release(new SequencerSlots(&chara->Timeline.TimelineSequencer), Environment.TickCount64);
             lastRelease = r;
             restores += r.Restored;
             restoreSkipped += r.Skipped;
@@ -293,6 +305,7 @@ internal sealed unsafe class CharacterFreeze : IDisposable
         var chara = Player();
         ushort[][]? ids = null;
         float[]? speeds = null;
+        int[]? timelines = null;
         if (chara != null)
         {
             var seq = &chara->Timeline.TimelineSequencer;
@@ -302,9 +315,10 @@ internal sealed unsafe class CharacterFreeze : IDisposable
             {
                 var access = new SequencerSlots(seq);
                 speeds = Enumerable.Range(0, FreezeSlots.SlotCount).Select(access.GetSpeed).ToArray();
+                timelines = Enumerable.Range(0, FreezeSlots.SlotCount).Select(sl => (int)access.GetTimeline(sl)).ToArray();
             }
         }
-        return new FreezeSnapshot(State, BusyReason, Available, faulted, speeds, slots.Held.ToList(), slots.Learned,
+        return new FreezeSnapshot(State, BusyReason, Available, faulted, speeds, timelines, slots.Held.ToList(), slots.Learned,
                                   unknownReleases, writes, restores, restoreSkipped, lastRelease,
                                   policy.AwaitingIdleTimeline, ids, policy.DrawObjectChanges, policy.Releases);
     }
@@ -314,7 +328,7 @@ internal sealed unsafe class CharacterFreeze : IDisposable
         framework.Update -= OnUpdate;
         try
         {
-            if (slots.Held.Count == 0) return;
+            // Always through the framework thread, where the ledger lives: an update in flight may still be holding.
             if (framework.IsInFrameworkUpdateThread) ReleaseNow();
             else if (!framework.RunOnFrameworkThread(ReleaseNow).Wait(TimeSpan.FromMilliseconds(500)))
                 log.Information("character freeze: release left to self-heal");
