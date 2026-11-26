@@ -44,6 +44,7 @@ public class FreezeSlotsTests
     [Trait("Plan", "EDGE-studio-freeze-14")]
     [Trait("Plan", "EDGE-studio-freeze-56")]
     [Trait("Plan", "EDGE-studio-freeze-57")]
+    [Trait("Plan", "EDGE-studio-freeze-70")]
     public void Entry_holds_unlearned_slots_and_their_restart_releases()
     {
         var a = new FakeSlots(16);
@@ -238,6 +239,7 @@ public class FreezeSlotsTests
     [Fact]
     [Trait("Plan", "AC-studio-freeze-1")]
     [Trait("Plan", "EDGE-studio-freeze-64")]
+    [Trait("Plan", "EDGE-studio-freeze-65")]
     public void A_swap_right_after_our_own_write_is_the_games_idle_and_is_learned()
     {
         var a = new FakeSlots();
@@ -264,7 +266,7 @@ public class FreezeSlotsTests
 
     [Fact]
     [Trait("Plan", "AC-studio-freeze-3")]
-    [Trait("Plan", "EDGE-studio-freeze-65")]
+    [Trait("Plan", "EDGE-studio-freeze-66")]
     public void A_swap_right_after_a_write_back_is_learned_too()
     {
         var a = new FakeSlots();
@@ -276,6 +278,17 @@ public class FreezeSlotsTests
         a.Start(0, 8062);
         Assert.False(s.Observe(a, false, 5200));
         Assert.True(s.IsLearned(0, 8062));
+
+        // A release with no time given (an action's release: CharacterFreeze passes none) opens no window.
+        var b = new FakeSlots();
+        var t = new FreezeSlots();
+        b.Start(0, 8063);
+        t.Observe(b, true, 0);
+        t.Hold(b, entry: true, nowMs: 0);
+        t.Release(b);
+        b.Start(0, 9001);
+        Assert.True(t.Observe(b, false, 5200));
+        Assert.False(t.IsLearned(0, 9001));
     }
 
     [Fact]

@@ -141,8 +141,11 @@ public class CharacterFreezeWiringTests
     [Fact]
     [Trait("Plan", "AC-studio-freeze-10")]
     [Trait("Plan", "EDGE-studio-freeze-17")]
+    [Trait("Plan", "EDGE-studio-freeze-69")]
     public void Update_fault_releases_once_then_latches_unavailable()
     {
+        // The toggle says "unavailable" from then on: State maps the latch, whatever the policy last answered.
+        Assert.Contains("public FreezeState State => faulted ? FreezeState.Unavailable : policy.State;", Freeze);
         var update = OnUpdate;
         // Latched: nothing more runs (and logs) once faulted.
         Assert.StartsWith("if (faulted) return;", Regex.Replace(update.TrimStart('{'), @"//[^\n]*", "").TrimStart());
@@ -151,6 +154,7 @@ public class CharacterFreezeWiringTests
         // A release that throws is never retried through the game: the ledger is dropped.
         Assert.True(At(c, "try { ReleaseNow(); }") < At(c, "slots.Drop();"));
         Assert.Contains("faulted = true;", c);
+        Assert.Contains("BusyReason = null;", c);
         Assert.Contains("Available, unknown, slot0Learned", update);   // Ready is Available, which includes !faulted
     }
 
@@ -177,11 +181,12 @@ public class CharacterFreezeWiringTests
     {
         var dispose = Body(Freeze, "public void Dispose(");
         Assert.True(At(dispose, "framework.Update -= OnUpdate;") < At(dispose, "try"));
-        // No look at the ledger off the framework thread: an update in flight may still be holding.
+        // No look at the ledger itself off the framework thread; only the volatile holding flag.
         Assert.DoesNotContain("Held", dispose);
+        Assert.Contains("if (!holding) return;", dispose);
         Assert.Contains("if (slots.Held.Count == 0)", Body(Freeze, "private void ReleaseNow("));
         Assert.Contains("if (framework.IsInFrameworkUpdateThread) ReleaseNow();", dispose);
-        Assert.Contains("framework.RunOnFrameworkThread(ReleaseNow).Wait(TimeSpan.FromMilliseconds(500))", dispose);
+        Assert.Contains("framework.RunOnFrameworkThread(() => ReleaseNow()).Wait(TimeSpan.FromMilliseconds(500))", dispose);
         Assert.Contains("catch (Exception", dispose);
     }
 
@@ -209,8 +214,10 @@ public class CharacterFreezeWiringTests
         Assert.True(At(update, "slot0Learned = slots.IsLearned(0,") < step);
         Assert.Contains("bool entry = before != FreezeState.Frozen;", update);
         Assert.Contains("slots.Hold(new SequencerSlots(&chara->Timeline.TimelineSequencer), entry, nowMs: now)", update);
-        Assert.Contains("slots.Release(new SequencerSlots(&chara->Timeline.TimelineSequencer), Environment.TickCount64)",
-                        Body(Freeze, "private void ReleaseNow("));
+        // Only a plain let-go opens the induced-swap window after a write-back; an action's release never does.
+        Assert.Contains("plainLetGo ? Environment.TickCount64 : long.MinValue / 2", Body(Freeze, "private void ReleaseNow("));
+        Assert.Contains("ReleaseNow(plainLetGo: state is FreezeState.Idle or FreezeState.Off);", update);
+        Assert.Single(Regex.Matches(Freeze, @"plainLetGo: "));
     }
 
     [Fact]

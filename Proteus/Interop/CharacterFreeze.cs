@@ -93,6 +93,7 @@ internal sealed unsafe class CharacterFreeze : IDisposable
     private int updatesSinceWant = int.MaxValue;
     private bool faulted;
     private bool lastFreezable;
+    private volatile bool holding;  // a ledger is held; read by Dispose before it waits on the framework thread
     private FreezeOwner owner;      // whose idle timelines the ledger has learned
     private nint ledgerOwner;       // the character the held slots belong to
 
@@ -132,7 +133,8 @@ internal sealed unsafe class CharacterFreeze : IDisposable
     /// <summary>The setting in effect: the harness override if there is one, else the user's choice.</summary>
     public bool Enabled => SessionOverride ?? enabled();
 
-    public FreezeState State => policy.State;
+    /// <summary>Where the freeze stands; Unavailable for the rest of the session once an update has faulted.</summary>
+    public FreezeState State => faulted ? FreezeState.Unavailable : policy.State;
 
     /// <summary>The first reason the character counts as busy, while <see cref="State"/> is Busy.</summary>
     public string? BusyReason { get; private set; }
@@ -200,11 +202,14 @@ internal sealed unsafe class CharacterFreeze : IDisposable
                 if (entry) writes = restores = restoreSkipped = 0;
                 writes += slots.Hold(new SequencerSlots(&chara->Timeline.TimelineSequencer), entry, nowMs: now);
                 ledgerOwner = (nint)chara;
+                holding = slots.Held.Count > 0;
             }
             else if (slots.Held.Count > 0)
             {
                 if (unknown) unknownReleases++;
-                ReleaseNow();
+                // Only a plain let-go (the Studio stopped asking, or the setting went off) opens the game's idle re-pick
+                // window: a release caused by the user's own action must never learn what that action plays.
+                ReleaseNow(plainLetGo: state is FreezeState.Idle or FreezeState.Off);
             }
             lastFreezable = policy.Freezable;
         }
@@ -216,8 +221,10 @@ internal sealed unsafe class CharacterFreeze : IDisposable
             {
                 slots.Drop();   // never retried through the game: the slots self-heal on their next timeline
                 ledgerOwner = 0;
+                holding = false;
             }
             faulted = true;
+            BusyReason = null;
             log.Error(e, "character freeze: an update failed; freezing is off for this session");
         }
     }
@@ -226,8 +233,11 @@ internal sealed unsafe class CharacterFreeze : IDisposable
     /// Hand the held slots back. Framework thread only: written back only on the same character outside a zone
     /// transition; otherwise the ledger is dropped without a write (the slots self-heal on their next timeline).
     /// </summary>
-    private void ReleaseNow()
+    /// <param name="plainLetGo">The release is the Studio no longer asking (or the setting off), not an action of the
+    /// user's: only then does a timeline change right after the write-back count as the game re-picking its idle.</param>
+    private void ReleaseNow(bool plainLetGo = false)
     {
+        holding = false;
         if (slots.Held.Count == 0)
         {
             ledgerOwner = 0;
@@ -236,7 +246,8 @@ internal sealed unsafe class CharacterFreeze : IDisposable
         var chara = Player();
         if (chara != null && (nint)chara == ledgerOwner && !BetweenAreas)
         {
-            var r = slots.Release(new SequencerSlots(&chara->Timeline.TimelineSequencer), Environment.TickCount64);
+            var r = slots.Release(new SequencerSlots(&chara->Timeline.TimelineSequencer),
+                                  plainLetGo ? Environment.TickCount64 : long.MinValue / 2);
             lastRelease = r;
             restores += r.Restored;
             restoreSkipped += r.Skipped;
@@ -328,9 +339,11 @@ internal sealed unsafe class CharacterFreeze : IDisposable
         framework.Update -= OnUpdate;
         try
         {
-            // Always through the framework thread, where the ledger lives: an update in flight may still be holding.
+            // Nothing held: no wait (on game exit the framework may no longer tick to run a hop).
+            if (!holding) return;
+            // Through the framework thread, where the ledger lives.
             if (framework.IsInFrameworkUpdateThread) ReleaseNow();
-            else if (!framework.RunOnFrameworkThread(ReleaseNow).Wait(TimeSpan.FromMilliseconds(500)))
+            else if (!framework.RunOnFrameworkThread(() => ReleaseNow()).Wait(TimeSpan.FromMilliseconds(500)))
                 log.Information("character freeze: release left to self-heal");
         }
         catch (Exception e)
