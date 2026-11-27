@@ -51,3 +51,8 @@ routes = [
 directory = "./static"
 html_handling = "none"
 not_found_handling = "none"
+
+# Unlisted plugins (src/index.js serveUnlisted). The path key is the UNLISTED_KEY secret (wrangler secret put UNLISTED_KEY).
+[[r2_buckets]]
+binding = "UNLISTED"
+bucket_name = "unlisted-plugins"

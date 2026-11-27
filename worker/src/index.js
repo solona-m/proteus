@@ -30,10 +30,47 @@ const PICKLES_REPO = 'Pickles-Playlist-Editor';
 // Milieu (solona-m/milieu), own prefix like Camera Tools: its plugin zips and the pre-converted bundled scenes
 // that tools/publish-backdrops.ps1 publishes under backdrops-v<N> (pinned by size and SHA-256 in BackdropPins.cs).
 const MILIEU_REPO = 'milieu';
-// Unlisted plugins (solona-m/unlisted-plugins): one public repo holding the release zips of plugins whose source
-// is private, tagged `<plugin>-v<version>`, plus VFX Browser's thumbnail packs (`thumbs-v<N>`, kept in sync with
-// VfxBrowser's PackAssets and PackFormat.ShardName). Its listing is that repo's own repo.json, not this worker's.
-const UNLISTED_REPO = 'unlisted-plugins';
+// Unlisted plugins: builds of private plugins, kept in the UNLISTED R2 bucket (not GitHub, so nothing is public) and
+// served only under /u/<UNLISTED_KEY>/, where UNLISTED_KEY is a worker secret (32 hex). The key is a shared
+// secret, not authentication: anyone given the repo.json URL can install. Object keys: `repo.json`,
+// `<plugin>-v<version>/latest.zip`, and VFX Browser's packs `vfxbrowser/thumbs-v<N>/(manifest.json|shard-<hex>.vfxp)`
+// (kept in sync with VfxBrowser's Configuration.DefaultMirror and PackFormat.ShardName).
+const UNLISTED_RX =
+  /^\/u\/([0-9a-f]{32})\/(repo\.json|[a-z0-9]{1,24}-v[0-9][0-9.]{0,30}\/latest\.zip|vfxbrowser\/thumbs-v[0-9]{1,6}\/(?:manifest\.json|shard-[0-9a-f]\.vfxp))$/;
+
+function sameSecret(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+async function serveUnlisted(request, env, key, file) {
+  const notFound = () => new Response('Not found', { status: 404 });
+  if (!env?.UNLISTED || !sameSecret(key, env.UNLISTED_KEY)) return notFound();
+  const head = request.method === 'HEAD';
+  const obj = head ? await env.UNLISTED.head(file) : await env.UNLISTED.get(file, { range: request.headers });
+  if (!obj) return notFound();
+  const headers = new Headers();
+  headers.set('etag', obj.httpEtag);
+  headers.set('accept-ranges', 'bytes');
+  headers.set('content-type', file.endsWith('.json') ? 'application/json' : 'application/octet-stream');
+  // repo.json changes on every release; builds and packs never change under their versioned key.
+  headers.set('cache-control', file === 'repo.json' ? 'private, max-age=300' : 'private, max-age=31536000, immutable');
+  headers.set('x-proteus-mirror', 'unlisted');
+  let status = 200;
+  const r = obj.range;
+  if (!head && r && request.headers.has('range')) {
+    const start = 'suffix' in r ? obj.size - r.suffix : r.offset;
+    const length = 'suffix' in r ? r.suffix : (r.length ?? obj.size - r.offset);
+    headers.set('content-range', `bytes ${start}-${start + length - 1}/${obj.size}`);
+    headers.set('content-length', String(length));
+    status = 206;
+  } else {
+    headers.set('content-length', String(obj.size));
+  }
+  return new Response(head ? null : obj.body, { status, headers });
+}
 
 // Anchored, and each segment is a tight character class rather than a wildcard: the path decides
 // which upstream URL we build, so a loose pattern here would be an open proxy for any GitHub file.
@@ -73,10 +110,6 @@ const ROUTES = [
   // Milieu: release zips, and the bundled scene textures (lowercase stems, .atex only).
   { rx: /^\/milieu\/(v[0-9][0-9.]{0,30}|testing-[0-9]{1,10})\/(latest\.zip)$/, repo: MILIEU_REPO },
   { rx: /^\/milieu\/(backdrops-v[0-9]{1,6})\/([a-z0-9]{1,40}\.atex)$/, repo: MILIEU_REPO },
-  // Unlisted plugins: release zips under `<plugin>-v<version>` or `<plugin>-testing-<n>` tags.
-  { rx: /^\/unlisted\/([a-z0-9]{1,24}-(?:v[0-9][0-9.]{0,30}|testing-[0-9]{1,10}))\/(latest\.zip)$/, repo: UNLISTED_REPO },
-  // VFX Browser's thumbnail packs (a manifest plus up to 16 shards, one per hex nibble), under the plugin's mirror base.
-  { rx: /^\/vfxbrowser\/(thumbs-v[0-9]{1,6})\/(manifest\.json|shard-[0-9a-f]\.vfxp)$/, repo: UNLISTED_REPO },
 ];
 
 const YEAR = 31536000;
@@ -265,12 +298,15 @@ export function pickLanguage(header) {
 }
 
 export default {
-  async fetch(request, _env, ctx) {
+  async fetch(request, env, ctx) {
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
     }
 
     const url = new URL(request.url);
+
+    const unlisted = UNLISTED_RX.exec(url.pathname);
+    if (unlisted) return serveUnlisted(request, env, unlisted[1], unlisted[2]);
 
     // A browser asks for text/html and gets a rendered page; curl and every script send */* and keep
     // getting the markdown source, so nothing that consumes these URLs programmatically changes.
