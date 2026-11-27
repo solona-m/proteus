@@ -120,6 +120,21 @@ await check('milieu rejects hyphenated stem', '/milieu/backdrops-v2/living-room.
 await check('milieu rejects atex under a zip tag', '/milieu/v1.0/moon.atex', 404, null);
 await check('milieu rejects zip under a backdrops tag', '/milieu/backdrops-v2/latest.zip', 404, null);
 await check('milieu rejects over-long backdrops tag', '/milieu/backdrops-v1234567/moon.atex', 404, null);
+
+const VFX = 'https://github.com/solona-m/vfxbrowser-releases/releases/download';
+console.log('vfxbrowser (releases-only repo):');
+await check('vfxbrowser stable zip', '/vfxbrowser/v2611.47.0.0/latest.zip', 200, `${VFX}/v2611.47.0.0/latest.zip`);
+await check('vfxbrowser testing zip', '/vfxbrowser/testing-3/latest.zip', 200, `${VFX}/testing-3/latest.zip`);
+await check('vfxbrowser pack manifest', '/vfxbrowser/thumbs-v1/manifest.json', 200, `${VFX}/thumbs-v1/manifest.json`);
+await check('vfxbrowser pack shard', '/vfxbrowser/thumbs-v1/shard-a.vfxp', 200, `${VFX}/thumbs-v1/shard-a.vfxp`);
+await check('vfxbrowser rejects two-digit shard', '/vfxbrowser/thumbs-v1/shard-10.vfxp', 404, null);
+await check('vfxbrowser rejects uppercase shard', '/vfxbrowser/thumbs-v1/shard-A.vfxp', 404, null);
+await check('vfxbrowser rejects other pack files', '/vfxbrowser/thumbs-v1/pins.txt', 404, null);
+await check('vfxbrowser rejects zip under a pack tag', '/vfxbrowser/thumbs-v1/latest.zip', 404, null);
+await check('vfxbrowser rejects shard under a zip tag', '/vfxbrowser/v1.0/shard-0.vfxp', 404, null);
+await check('vfxbrowser rejects bad tag', '/vfxbrowser/random/latest.zip', 404, null);
+await check('vfxbrowser rejects over-long pack tag', '/vfxbrowser/thumbs-v1234567/manifest.json', 404, null);
+await check('bare thumbs tag is not vfxbrowser', '/thumbs-v1/manifest.json', 404, null);
 await check('milieu rejects traversal', '/milieu/backdrops-v2/../../etc/passwd', 404, null);
 await check('milieu rejects encoded traversal', '/milieu/backdrops-v2/%2e%2e/moon.atex', 404, null);
 await check('milieu rejects encoded slash', '/milieu/backdrops-v2%2Fmoon.atex', 404, null);

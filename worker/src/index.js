@@ -30,6 +30,9 @@ const PICKLES_REPO = 'Pickles-Playlist-Editor';
 // Milieu (solona-m/milieu), own prefix like Camera Tools: its plugin zips and the pre-converted bundled scenes
 // that tools/publish-backdrops.ps1 publishes under backdrops-v<N> (pinned by size and SHA-256 in BackdropPins.cs).
 const MILIEU_REPO = 'milieu';
+// VFX Browser: its source repo is private, so plugin zips and thumbnail packs are released from the public
+// releases-only repo solona-m/vfxbrowser-releases. Kept in sync with VfxBrowser's PackAssets and PackFormat.ShardName.
+const VFXBROWSER_REPO = 'vfxbrowser-releases';
 
 // Anchored, and each segment is a tight character class rather than a wildcard: the path decides
 // which upstream URL we build, so a loose pattern here would be an open proxy for any GitHub file.
@@ -69,6 +72,9 @@ const ROUTES = [
   // Milieu: release zips, and the bundled scene textures (lowercase stems, .atex only).
   { rx: /^\/milieu\/(v[0-9][0-9.]{0,30}|testing-[0-9]{1,10})\/(latest\.zip)$/, repo: MILIEU_REPO },
   { rx: /^\/milieu\/(backdrops-v[0-9]{1,6})\/([a-z0-9]{1,40}\.atex)$/, repo: MILIEU_REPO },
+  // VFX Browser: release zips, and thumbnail packs (a manifest plus up to 16 shards, one per hex nibble).
+  { rx: /^\/vfxbrowser\/(v[0-9][0-9.]{0,30}|testing-[0-9]{1,10})\/(latest\.zip)$/, repo: VFXBROWSER_REPO },
+  { rx: /^\/vfxbrowser\/(thumbs-v[0-9]{1,6})\/(manifest\.json|shard-[0-9a-f]\.vfxp)$/, repo: VFXBROWSER_REPO },
 ];
 
 const YEAR = 31536000;
