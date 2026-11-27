@@ -121,22 +121,51 @@ await check('milieu rejects atex under a zip tag', '/milieu/v1.0/moon.atex', 404
 await check('milieu rejects zip under a backdrops tag', '/milieu/backdrops-v2/latest.zip', 404, null);
 await check('milieu rejects over-long backdrops tag', '/milieu/backdrops-v1234567/moon.atex', 404, null);
 
-const UNL = 'https://github.com/solona-m/unlisted-plugins/releases/download';
-console.log('unlisted-plugins (shared repo):');
-await check('unlisted stable zip', '/unlisted/vfxbrowser-v2611.47.0.0/latest.zip', 200, `${UNL}/vfxbrowser-v2611.47.0.0/latest.zip`);
-await check('unlisted testing zip', '/unlisted/vfxbrowser-testing-3/latest.zip', 200, `${UNL}/vfxbrowser-testing-3/latest.zip`);
-await check('unlisted rejects untagged plugin', '/unlisted/v2611.47.0.0/latest.zip', 404, null);
-await check('unlisted rejects uppercase plugin', '/unlisted/VfxBrowser-v1.0/latest.zip', 404, null);
-await check('unlisted rejects other files', '/unlisted/vfxbrowser-v1.0/payload.exe', 404, null);
-await check('unlisted rejects pack tags', '/unlisted/thumbs-v1/manifest.json', 404, null);
-await check('vfxbrowser pack manifest', '/vfxbrowser/thumbs-v1/manifest.json', 200, `${UNL}/thumbs-v1/manifest.json`);
-await check('vfxbrowser pack shard', '/vfxbrowser/thumbs-v1/shard-a.vfxp', 200, `${UNL}/thumbs-v1/shard-a.vfxp`);
-await check('vfxbrowser rejects two-digit shard', '/vfxbrowser/thumbs-v1/shard-10.vfxp', 404, null);
-await check('vfxbrowser rejects uppercase shard', '/vfxbrowser/thumbs-v1/shard-A.vfxp', 404, null);
-await check('vfxbrowser rejects other pack files', '/vfxbrowser/thumbs-v1/pins.txt', 404, null);
-await check('vfxbrowser serves no zips', '/vfxbrowser/v1.0/latest.zip', 404, null);
-await check('vfxbrowser rejects over-long pack tag', '/vfxbrowser/thumbs-v1234567/manifest.json', 404, null);
-await check('bare thumbs tag is not vfxbrowser', '/thumbs-v1/manifest.json', 404, null);
+// Unlisted plugins come from R2 under the secret key, never from GitHub.
+const KEY = '0123456789abcdef0123456789abcdef';
+const objects = new Map([
+  ['repo.json', '[{"InternalName":"VfxBrowser"}]'],
+  ['vfxbrowser-v2611.53.0.0/latest.zip', 'ZIPBYTES'],
+  ['vfxbrowser/thumbs-v1/shard-a.vfxp', '0123456789'],
+]);
+const bucket = {
+  async head(k) { return objects.has(k) ? { size: objects.get(k).length, httpEtag: '"e"' } : null; },
+  async get(k, opts) {
+    if (!objects.has(k)) return null;
+    const v = objects.get(k);
+    const m = /bytes=(\d+)-(\d*)/.exec(opts?.range?.get?.('range') ?? '');
+    const range = m ? { offset: +m[1], length: (m[2] ? +m[2] : v.length - 1) - +m[1] + 1 } : undefined;
+    const body = range ? v.slice(range.offset, range.offset + range.length) : v;
+    return { size: v.length, httpEtag: '"e"', range, body };
+  },
+};
+const env = { UNLISTED: bucket, UNLISTED_KEY: KEY };
+async function unl(name, path, want, { headers = {}, method = 'GET', e = env, body, range } = {}) {
+  fetched = [];
+  const res = await worker.fetch(new Request('https://dl.example.com' + path, { method, headers }), e, ctx);
+  const text = method === 'HEAD' ? '' : await res.text();
+  const ok = res.status === want && fetched.length === 0 && (body === undefined || text === body)
+    && (range === undefined || res.headers.get('content-range') === range);
+  if (ok) { pass++; console.log(`  ok   ${name}`); }
+  else { fail++; console.log(`  FAIL ${name}: status ${res.status} (want ${want}), body ${text}, range ${res.headers.get('content-range')}, fetched ${fetched.length}`); }
+}
+console.log('unlisted plugins (R2, secret prefix):');
+await unl('unlisted repo.json', `/u/${KEY}/repo.json`, 200, { body: '[{"InternalName":"VfxBrowser"}]' });
+await unl('unlisted zip', `/u/${KEY}/vfxbrowser-v2611.53.0.0/latest.zip`, 200, { body: 'ZIPBYTES' });
+await unl('unlisted pack shard', `/u/${KEY}/vfxbrowser/thumbs-v1/shard-a.vfxp`, 200, { body: '0123456789' });
+await unl('unlisted range', `/u/${KEY}/vfxbrowser/thumbs-v1/shard-a.vfxp`, 206, { headers: { range: 'bytes=2-5' }, body: '2345', range: 'bytes 2-5/10' });
+await unl('unlisted head', `/u/${KEY}/repo.json`, 200, { method: 'HEAD' });
+await unl('unlisted wrong key', `/u/${'f'.repeat(32)}/repo.json`, 404);
+await unl('unlisted short key', `/u/0123/repo.json`, 404);
+await unl('unlisted no bucket bound', `/u/${KEY}/repo.json`, 404, { e: {} });
+await unl('unlisted no key configured', `/u/${KEY}/repo.json`, 404, { e: { UNLISTED: bucket } });
+await unl('unlisted missing object', `/u/${KEY}/vfxbrowser-v1.0/latest.zip`, 404);
+await unl('unlisted rejects other files', `/u/${KEY}/secrets.txt`, 404);
+await unl('unlisted rejects encoded slash', `/u/${KEY}/vfxbrowser%2Fthumbs-v1%2Fshard-a.vfxp`, 404);
+await unl('unlisted rejects pins.txt', `/u/${KEY}/vfxbrowser/thumbs-v1/pins.txt`, 404);
+await unl('unlisted rejects untagged zip', `/u/${KEY}/v1.0/latest.zip`, 404);
+await check('old github unlisted route is gone', '/unlisted/vfxbrowser-v1.0/latest.zip', 404, null);
+await check('old github pack route is gone', '/vfxbrowser/thumbs-v1/manifest.json', 404, null);
 await check('milieu rejects traversal', '/milieu/backdrops-v2/../../etc/passwd', 404, null);
 await check('milieu rejects encoded traversal', '/milieu/backdrops-v2/%2e%2e/moon.atex', 404, null);
 await check('milieu rejects encoded slash', '/milieu/backdrops-v2%2Fmoon.atex', 404, null);
