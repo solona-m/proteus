@@ -32,11 +32,12 @@ const PICKLES_REPO = 'Pickles-Playlist-Editor';
 const MILIEU_REPO = 'milieu';
 // Unlisted plugins: builds of private plugins, kept in the UNLISTED R2 bucket (not GitHub, so nothing is public) and
 // served only under /u/<UNLISTED_KEY>/, where UNLISTED_KEY is a worker secret (32 hex). The key is a shared
-// secret, not authentication: anyone given the repo.json URL can install. Object keys: `repo.json`,
+// secret, not authentication: anyone given the repo.json URL can install. Object keys: `repo.json`, `README.md`
+// (rendered as a page for browsers),
 // `<plugin>-v<version>/latest.zip`, and VFX Browser's packs `vfxbrowser/thumbs-v<N>/(manifest.json|shard-<hex>.vfxp)`
 // (kept in sync with VfxBrowser's Configuration.DefaultMirror and PackFormat.ShardName).
 const UNLISTED_RX =
-  /^\/u\/([0-9a-f]{32})\/(repo\.json|[a-z0-9]{1,24}-v[0-9][0-9.]{0,30}\/latest\.zip|vfxbrowser\/thumbs-v[0-9]{1,6}\/(?:manifest\.json|shard-[0-9a-f]\.vfxp))$/;
+  /^\/u\/([0-9a-f]{32})\/(repo\.json|README\.md|[a-z0-9]{1,24}-v[0-9][0-9.]{0,30}\/latest\.zip|vfxbrowser\/thumbs-v[0-9]{1,6}\/(?:manifest\.json|shard-[0-9a-f]\.vfxp))$/;
 
 function sameSecret(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
@@ -45,7 +46,7 @@ function sameSecret(a, b) {
   return diff === 0;
 }
 
-async function serveUnlisted(request, env, key, file) {
+async function serveUnlisted(request, env, key, file, wantsHtml) {
   const notFound = () => new Response('Not found', { status: 404 });
   if (!env?.UNLISTED || !sameSecret(key, env.UNLISTED_KEY)) return notFound();
   const head = request.method === 'HEAD';
@@ -54,10 +55,19 @@ async function serveUnlisted(request, env, key, file) {
   const headers = new Headers();
   headers.set('etag', obj.httpEtag);
   headers.set('accept-ranges', 'bytes');
-  headers.set('content-type', file.endsWith('.json') ? 'application/json' : 'application/octet-stream');
-  // repo.json changes on every release; builds and packs never change under their versioned key.
-  headers.set('cache-control', file === 'repo.json' ? 'private, max-age=300' : 'private, max-age=31536000, immutable');
+  headers.set('content-type', file.endsWith('.json') ? 'application/json'
+    : file.endsWith('.md') ? 'text/markdown; charset=utf-8' : 'application/octet-stream');
+  // repo.json and the readme change on every release; builds and packs never change under their versioned key.
+  const mutable = file === 'repo.json' || file === 'README.md';
+  headers.set('cache-control', mutable ? 'private, max-age=300' : 'private, max-age=31536000, immutable');
+  headers.set('x-robots-tag', 'noindex, nofollow');   // unlisted: keep the path out of search results
   headers.set('x-proteus-mirror', 'unlisted');
+  if (file === 'README.md' && wantsHtml && !head) {
+    const html = renderMarkdown(await new Response(obj.body).text(), 'Unlisted plugins', { docPath: 'README.md', icon: 'data:,' });
+    headers.set('content-type', 'text/html; charset=utf-8');
+    headers.delete('content-length');
+    return new Response(html, { status: 200, headers });
+  }
   let status = 200;
   const r = obj.range;
   if (!head && r && request.headers.has('range')) {
@@ -306,7 +316,9 @@ export default {
     const url = new URL(request.url);
 
     const unlisted = UNLISTED_RX.exec(url.pathname);
-    if (unlisted) return serveUnlisted(request, env, unlisted[1], unlisted[2]);
+    if (unlisted) {
+      return serveUnlisted(request, env, unlisted[1], unlisted[2], (request.headers.get('accept') ?? '').includes('text/html'));
+    }
 
     // A browser asks for text/html and gets a rendered page; curl and every script send */* and keep
     // getting the markdown source, so nothing that consumes these URLs programmatically changes.

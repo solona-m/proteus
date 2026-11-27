@@ -127,6 +127,7 @@ const objects = new Map([
   ['repo.json', '[{"InternalName":"VfxBrowser"}]'],
   ['vfxbrowser-v2611.53.0.0/latest.zip', 'ZIPBYTES'],
   ['vfxbrowser/thumbs-v1/shard-a.vfxp', '0123456789'],
+  ['README.md', '# Unlisted plugins\n\nHello **friend**.'],
 ]);
 const bucket = {
   async head(k) { return objects.has(k) ? { size: objects.get(k).length, httpEtag: '"e"' } : null; },
@@ -155,6 +156,17 @@ await unl('unlisted zip', `/u/${KEY}/vfxbrowser-v2611.53.0.0/latest.zip`, 200, {
 await unl('unlisted pack shard', `/u/${KEY}/vfxbrowser/thumbs-v1/shard-a.vfxp`, 200, { body: '0123456789' });
 await unl('unlisted range', `/u/${KEY}/vfxbrowser/thumbs-v1/shard-a.vfxp`, 206, { headers: { range: 'bytes=2-5' }, body: '2345', range: 'bytes 2-5/10' });
 await unl('unlisted head', `/u/${KEY}/repo.json`, 200, { method: 'HEAD' });
+await unl('unlisted readme as markdown', `/u/${KEY}/README.md`, 200, { body: '# Unlisted plugins\n\nHello **friend**.' });
+{
+  const res = await worker.fetch(new Request(`https://dl.example.com/u/${KEY}/README.md`, { headers: { accept: 'text/html' } }), env, ctx);
+  const html = await res.text();
+  const ok = res.status === 200 && res.headers.get('content-type').startsWith('text/html') && html.includes('<strong>friend</strong>')
+    && res.headers.get('x-robots-tag') === 'noindex, nofollow';
+  if (ok) { pass++; console.log('  ok   unlisted readme rendered for browsers, noindex'); }
+  else { fail++; console.log(`  FAIL unlisted readme rendered: ${res.status} ${res.headers.get('content-type')}`); }
+}
+await unl('unlisted readme wrong key', `/u/${'f'.repeat(32)}/README.md`, 404);
+await unl('unlisted rejects lowercase readme', `/u/${KEY}/readme.md`, 404);
 await unl('unlisted wrong key', `/u/${'f'.repeat(32)}/repo.json`, 404);
 await unl('unlisted short key', `/u/0123/repo.json`, 404);
 await unl('unlisted no bucket bound', `/u/${KEY}/repo.json`, 404, { e: {} });
